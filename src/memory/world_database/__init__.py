@@ -1,5 +1,6 @@
 """SQLite-backed worldbuilding database with NetworkX integration."""
 
+import hashlib
 import json
 import logging
 import sqlite3
@@ -17,17 +18,7 @@ if TYPE_CHECKING:
 from src.memory.entities import Entity, EntityVersion, EventParticipant, Relationship, WorldEvent
 from src.utils.exceptions import DatabaseClosedError, RelationshipValidationError
 
-from . import (
-    _cycles,
-    _embeddings,
-    _entities,
-    _events,
-    _graph,
-    _io,
-    _relationships,
-    _schema,
-    _versions,
-)
+from . import _embeddings, _entities, _events, _graph, _io, _relationships, _versions
 
 logger = logging.getLogger(__name__)
 
@@ -189,8 +180,218 @@ class WorldDatabase:
                 logger.debug("Error during WorldDatabase cleanup in __del__: %s", e)
 
     def _init_schema(self) -> None:
-        """Initialize database schema with versioning (delegated to _schema)."""
-        _schema.init_schema(self)
+        """Initialize database schema with versioning."""
+        with self._lock:
+            cursor = self.conn.cursor()
+
+            # Schema version table
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS schema_version (
+                    version INTEGER PRIMARY KEY
+                )
+            """
+            )
+
+            # Check current version
+            cursor.execute("SELECT version FROM schema_version ORDER BY version DESC LIMIT 1")
+            row = cursor.fetchone()
+            current_version = row[0] if row else 0
+
+            # Core entity table
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS entities (
+                    id TEXT PRIMARY KEY,
+                    type TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    description TEXT DEFAULT '',
+                    attributes TEXT DEFAULT '{}',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            """
+            )
+
+            # Entity versions table for tracking changes
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS entity_versions (
+                    id TEXT PRIMARY KEY,
+                    entity_id TEXT NOT NULL,
+                    version_number INTEGER NOT NULL,
+                    data_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    change_type TEXT NOT NULL CHECK(change_type IN ('created', 'refined', 'edited', 'regenerated')),
+                    change_reason TEXT DEFAULT '',
+                    quality_score REAL DEFAULT NULL,
+                    FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
+                )
+            """
+            )
+
+            # Indexes for entity versions
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_entity_versions_entity_id ON entity_versions(entity_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_entity_versions_created_at ON entity_versions(created_at)"
+            )
+            cursor.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_versions_entity_version "
+                "ON entity_versions(entity_id, version_number)"
+            )
+
+            # Set schema version
+            if current_version < SCHEMA_VERSION:
+                logger.info(
+                    "Upgrading database schema from version %d to %d: %s",
+                    current_version,
+                    SCHEMA_VERSION,
+                    self.db_path,
+                )
+                cursor.execute(
+                    "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
+                    (SCHEMA_VERSION,),
+                )
+
+            # World settings table
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS world_settings (
+                    id TEXT PRIMARY KEY,
+                    calendar_json TEXT,
+                    timeline_start_year INTEGER,
+                    timeline_end_year INTEGER,
+                    validate_temporal_consistency INTEGER DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS historical_eras (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    start_year INTEGER NOT NULL,
+                    end_year INTEGER,
+                    description TEXT DEFAULT '',
+                    display_order INTEGER DEFAULT 0
+                )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_historical_eras_start "
+                "ON historical_eras(start_year)"
+            )
+
+            # Embedding metadata table
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS embedding_metadata (
+                    source_id TEXT PRIMARY KEY,
+                    content_type TEXT NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    embedding_model TEXT NOT NULL,
+                    embedded_at TEXT NOT NULL,
+                    embedding_dim INTEGER NOT NULL
+                )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_embedding_metadata_type "
+                "ON embedding_metadata(content_type)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_embedding_metadata_model "
+                "ON embedding_metadata(embedding_model)"
+            )
+
+            # vec_embeddings virtual table (sqlite-vec is mandatory)
+            cursor.execute(
+                """
+                CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
+                    embedding float[1024],
+                    content_type text partition key,
+                    +source_id text,
+                    +entity_type text,
+                    +chapter_number integer,
+                    +display_text text,
+                    +embedding_model text,
+                    +embedded_at text
+                )
+                """
+            )
+
+            # Relationships table
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS relationships (
+                    id TEXT PRIMARY KEY,
+                    source_id TEXT NOT NULL,
+                    target_id TEXT NOT NULL,
+                    relation_type TEXT NOT NULL,
+                    description TEXT DEFAULT '',
+                    strength REAL DEFAULT 1.0,
+                    bidirectional INTEGER DEFAULT 0,
+                    attributes TEXT DEFAULT '{}',
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (source_id) REFERENCES entities(id) ON DELETE CASCADE,
+                    FOREIGN KEY (target_id) REFERENCES entities(id) ON DELETE CASCADE
+                )
+            """
+            )
+
+            # Events table
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS events (
+                    id TEXT PRIMARY KEY,
+                    description TEXT NOT NULL,
+                    chapter_number INTEGER,
+                    timestamp_in_story TEXT DEFAULT '',
+                    consequences TEXT DEFAULT '[]',
+                    created_at TEXT NOT NULL
+                )
+            """
+            )
+
+            # Event participants (many-to-many)
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_participants (
+                    event_id TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    PRIMARY KEY (event_id, entity_id),
+                    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+                    FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
+                )
+            """
+            )
+
+            # Accepted cycles table (for dismissing circular chains as intentional)
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS accepted_cycles (
+                    cycle_hash TEXT PRIMARY KEY,
+                    accepted_at TEXT NOT NULL
+                )
+            """
+            )
+
+            # Indexes for fast queries
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_rel_source ON relationships(source_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_rel_target ON relationships(target_id)")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_rel_type ON relationships(relation_type)"
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_entity_type ON entities(type)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_entity_name ON entities(name)")
+
+            self.conn.commit()
+            logger.debug(f"Database schema initialized: {self.db_path}")
 
     def _ensure_open(self) -> None:
         """Check that the database connection is still open.
@@ -229,97 +430,27 @@ class WorldDatabase:
         description: str = "",
         attributes: dict[str, Any] | None = None,
     ) -> str:
-        """Add a new entity to the world database.
-
-        Args:
-            entity_type: Type of entity (e.g. 'character', 'location').
-            name: Display name for the entity.
-            description: Optional description text.
-            attributes: Optional key-value attributes dict.
-
-        Returns:
-            The generated entity ID.
-        """
         return _entities.add_entity(self, entity_type, name, description, attributes)
 
     def get_entity(self, entity_id: str) -> Entity | None:
-        """Retrieve an entity by its ID.
-
-        Args:
-            entity_id: The entity's unique identifier.
-
-        Returns:
-            Entity instance or None if not found.
-        """
         return _entities.get_entity(self, entity_id)
 
     def get_entity_by_name(self, name: str, entity_type: str | None = None) -> Entity | None:
-        """Retrieve an entity by name, optionally filtering by type.
-
-        Args:
-            name: Entity name to search for.
-            entity_type: Optional type filter.
-
-        Returns:
-            Entity instance or None if not found.
-        """
         return _entities.get_entity_by_name(self, name, entity_type)
 
     def update_entity(self, entity_id: str, **updates: Any) -> bool:
-        """Update an existing entity's fields.
-
-        Args:
-            entity_id: The entity's unique identifier.
-            **updates: Field names and new values to apply.
-
-        Returns:
-            True if the entity was updated, False if not found.
-        """
         return _entities.update_entity(self, entity_id, **updates)
 
     def delete_entity(self, entity_id: str) -> bool:
-        """Delete an entity and its associated data.
-
-        Args:
-            entity_id: The entity's unique identifier.
-
-        Returns:
-            True if the entity was deleted, False if not found.
-        """
         return _entities.delete_entity(self, entity_id)
 
     def list_entities(self, entity_type: str | None = None) -> list[Entity]:
-        """List all entities, optionally filtered by type.
-
-        Args:
-            entity_type: Optional type filter (e.g. 'character').
-
-        Returns:
-            List of Entity instances.
-        """
         return _entities.list_entities(self, entity_type)
 
     def count_entities(self, entity_type: str | None = None) -> int:
-        """Count entities, optionally filtered by type.
-
-        Args:
-            entity_type: Optional type filter.
-
-        Returns:
-            Number of matching entities.
-        """
         return _entities.count_entities(self, entity_type)
 
     def search_entities(self, query: str, entity_type: str | None = None) -> list[Entity]:
-        """Search entities by name or description text.
-
-        Args:
-            query: Search query string.
-            entity_type: Optional type filter.
-
-        Returns:
-            List of matching Entity instances.
-        """
         return _entities.search_entities(self, query, entity_type)
 
     # =========================================================================
@@ -333,43 +464,14 @@ class WorldDatabase:
         change_reason: str = "",
         quality_score: float | None = None,
     ) -> str | None:
-        """Save a versioned snapshot of an entity's current state.
-
-        Args:
-            entity_id: The entity to snapshot.
-            change_type: Type of change (e.g. 'created', 'updated', 'quality_improved').
-            change_reason: Optional human-readable reason for the change.
-            quality_score: Optional quality score at time of snapshot.
-
-        Returns:
-            The version ID, or None if the entity was not found.
-        """
         return _versions.save_entity_version(
             self, entity_id, change_type, change_reason, quality_score
         )
 
     def get_entity_versions(self, entity_id: str, limit: int | None = None) -> list[EntityVersion]:
-        """Get version history for an entity.
-
-        Args:
-            entity_id: The entity's unique identifier.
-            limit: Optional maximum number of versions to return.
-
-        Returns:
-            List of EntityVersion instances, newest first.
-        """
         return _versions.get_entity_versions(self, entity_id, limit)
 
     def revert_entity_to_version(self, entity_id: str, version_number: int) -> bool:
-        """Revert an entity to a previous version.
-
-        Args:
-            entity_id: The entity's unique identifier.
-            version_number: The version number to revert to.
-
-        Returns:
-            True if reverted successfully, False if entity or version not found.
-        """
         return _versions.revert_entity_to_version(self, entity_id, version_number)
 
     # =========================================================================
@@ -387,21 +489,6 @@ class WorldDatabase:
         attributes: dict[str, Any] | None = None,
         validate: bool = True,
     ) -> str:
-        """Add a relationship between two entities.
-
-        Args:
-            source_id: Source entity ID.
-            target_id: Target entity ID.
-            relation_type: Type of relationship (e.g. 'ally_of', 'parent_of').
-            description: Optional description of the relationship.
-            strength: Relationship strength from 0.0 to 1.0.
-            bidirectional: Whether the relationship goes both ways.
-            attributes: Optional key-value attributes dict.
-            validate: Whether to validate that both entities exist.
-
-        Returns:
-            The generated relationship ID.
-        """
         return _relationships.add_relationship(
             self,
             source_id,
@@ -415,38 +502,12 @@ class WorldDatabase:
         )
 
     def get_relationships(self, entity_id: str, direction: str = "both") -> list[Relationship]:
-        """Get all relationships for an entity.
-
-        Args:
-            entity_id: The entity's unique identifier.
-            direction: Filter direction — 'outgoing', 'incoming', or 'both'.
-
-        Returns:
-            List of Relationship instances.
-        """
         return _relationships.get_relationships(self, entity_id, direction)
 
     def get_relationship_between(self, source_id: str, target_id: str) -> Relationship | None:
-        """Get the relationship between two specific entities.
-
-        Args:
-            source_id: Source entity ID.
-            target_id: Target entity ID.
-
-        Returns:
-            Relationship instance or None if no relationship exists.
-        """
         return _relationships.get_relationship_between(self, source_id, target_id)
 
     def delete_relationship(self, rel_id: str) -> bool:
-        """Delete a relationship by its ID.
-
-        Args:
-            rel_id: The relationship's unique identifier.
-
-        Returns:
-            True if the relationship was deleted, False if not found.
-        """
         return _relationships.delete_relationship(self, rel_id)
 
     def update_relationship(
@@ -458,29 +519,11 @@ class WorldDatabase:
         bidirectional: bool | None = None,
         attributes: dict[str, Any] | None = None,
     ) -> bool:
-        """Update an existing relationship's fields.
-
-        Args:
-            relationship_id: The relationship's unique identifier.
-            relation_type: New relation type, or None to keep current.
-            description: New description, or None to keep current.
-            strength: New strength value, or None to keep current.
-            bidirectional: New bidirectional flag, or None to keep current.
-            attributes: New attributes dict, or None to keep current.
-
-        Returns:
-            True if the relationship was updated, False if not found.
-        """
         return _relationships.update_relationship(
             self, relationship_id, relation_type, description, strength, bidirectional, attributes
         )
 
     def list_relationships(self) -> list[Relationship]:
-        """List all relationships in the world database.
-
-        Returns:
-            List of all Relationship instances.
-        """
         return _relationships.list_relationships(self)
 
     # =========================================================================
@@ -495,64 +538,20 @@ class WorldDatabase:
         timestamp_in_story: str = "",
         consequences: list[str] | None = None,
     ) -> str:
-        """Add a world event.
-
-        Args:
-            description: What happened in the event.
-            participants: Optional list of (entity_id, role) tuples.
-            chapter_number: Optional chapter where the event occurs.
-            timestamp_in_story: Optional in-story timestamp.
-            consequences: Optional list of consequence descriptions.
-
-        Returns:
-            The generated event ID.
-        """
         return _events.add_event(
             self, description, participants, chapter_number, timestamp_in_story, consequences
         )
 
     def get_events_for_entity(self, entity_id: str) -> list[WorldEvent]:
-        """Get all events involving a specific entity.
-
-        Args:
-            entity_id: The entity's unique identifier.
-
-        Returns:
-            List of WorldEvent instances.
-        """
         return _events.get_events_for_entity(self, entity_id)
 
     def get_events_for_chapter(self, chapter_number: int) -> list[WorldEvent]:
-        """Get all events in a specific chapter.
-
-        Args:
-            chapter_number: The chapter number to filter by.
-
-        Returns:
-            List of WorldEvent instances.
-        """
         return _events.get_events_for_chapter(self, chapter_number)
 
     def get_event_participants(self, event_id: str) -> list[EventParticipant]:
-        """Get all participants of a specific event.
-
-        Args:
-            event_id: The event's unique identifier.
-
-        Returns:
-            List of EventParticipant instances.
-        """
         return _events.get_event_participants(self, event_id)
 
     def list_events(self, limit: int | None = None) -> list[WorldEvent]:
-        """List all world events.
-
-        Args:
-            limit: Optional maximum number of events to return.
-
-        Returns:
-            List of WorldEvent instances.
-        """
         return _events.list_events(self, limit)
 
     # =========================================================================
@@ -560,11 +559,9 @@ class WorldDatabase:
     # =========================================================================
 
     def _invalidate_graph(self) -> None:
-        """Invalidate the cached NetworkX graph, forcing a rebuild on next access."""
         _graph.invalidate_graph(self)
 
     def invalidate_graph_cache(self) -> None:
-        """Public API to invalidate the graph cache after external data changes."""
         _graph.invalidate_graph_cache(self)
 
     def _update_entity_in_graph(
@@ -575,102 +572,32 @@ class WorldDatabase:
         description: str | None = None,
         attributes: dict[str, Any] | None = None,
     ) -> None:
-        """Update a single entity's attributes in the cached graph without full rebuild.
-
-        Args:
-            entity_id: The entity's unique identifier.
-            name: New name, or None to keep current.
-            entity_type: New type, or None to keep current.
-            description: New description, or None to keep current.
-            attributes: New attributes dict, or None to keep current.
-        """
         _graph.update_entity_in_graph(self, entity_id, name, entity_type, description, attributes)
 
     def get_graph(self) -> DiGraph[Any]:
-        """Get the NetworkX directed graph representation of the world.
-
-        Builds the graph from the database on first access, then caches it.
-
-        Returns:
-            NetworkX DiGraph with entities as nodes and relationships as edges.
-        """
         return _graph.get_graph(self)
 
     def find_path(self, source_id: str, target_id: str) -> list[str]:
-        """Find the shortest path between two entities in the graph.
-
-        Args:
-            source_id: Starting entity ID.
-            target_id: Destination entity ID.
-
-        Returns:
-            List of entity IDs forming the path, or empty list if no path exists.
-        """
         return _graph.find_path(self, source_id, target_id)
 
     def find_all_paths(
         self, source_id: str, target_id: str, max_length: int = 5
     ) -> list[list[str]]:
-        """Find all simple paths between two entities up to a maximum length.
-
-        Args:
-            source_id: Starting entity ID.
-            target_id: Destination entity ID.
-            max_length: Maximum path length (number of hops).
-
-        Returns:
-            List of paths, where each path is a list of entity IDs.
-        """
         return _graph.find_all_paths(self, source_id, target_id, max_length)
 
     def get_connected_entities(self, entity_id: str, max_depth: int = 2) -> list[Entity]:
-        """Get all entities connected to a given entity within a depth limit.
-
-        Args:
-            entity_id: The entity's unique identifier.
-            max_depth: Maximum traversal depth from the starting entity.
-
-        Returns:
-            List of connected Entity instances.
-        """
         return _graph.get_connected_entities(self, entity_id, max_depth)
 
     def get_communities(self) -> list[list[str]]:
-        """Detect communities (clusters) of related entities in the graph.
-
-        Returns:
-            List of communities, where each community is a list of entity IDs.
-        """
         return _graph.get_communities(self)
 
     def get_entity_centrality(self) -> dict[str, float]:
-        """Calculate centrality scores for all entities in the graph.
-
-        Returns:
-            Dict mapping entity ID to its centrality score.
-        """
         return _graph.get_entity_centrality(self)
 
     def get_most_connected(self, limit: int = 10) -> list[tuple[Entity, int]]:
-        """Get the most connected entities by relationship count.
-
-        Args:
-            limit: Maximum number of entities to return.
-
-        Returns:
-            List of (Entity, connection_count) tuples, sorted by count descending.
-        """
         return _graph.get_most_connected(self, limit)
 
     def find_orphans(self, entity_type: str | None = None) -> list[Entity]:
-        """Find entities with no relationships (orphans).
-
-        Args:
-            entity_type: Optional type filter.
-
-        Returns:
-            List of orphan Entity instances.
-        """
         return _graph.find_orphans(self, entity_type)
 
     def find_circular_relationships(
@@ -678,57 +605,117 @@ class WorldDatabase:
         relation_types: list[str] | None = None,
         max_cycle_length: int = 10,
     ) -> list[list[tuple[str, str, str]]]:
-        """Detect circular relationship chains in the graph.
-
-        Args:
-            relation_types: Optional list of relation types to check.
-            max_cycle_length: Maximum cycle length to detect.
-
-        Returns:
-            List of cycles, where each cycle is a list of
-            (source_id, relation_type, target_id) edge tuples.
-        """
         return _graph.find_circular_relationships(self, relation_types, max_cycle_length)
 
     # =========================================================================
-    # Accepted Cycles (delegated to _cycles)
+    # Accepted Cycles (dismiss circular chains as intentional)
     # =========================================================================
 
     @staticmethod
     def compute_cycle_hash(cycle_edges: list[tuple[str, str, str]]) -> str:
-        """Compute a deterministic hash for a cycle independent of traversal start."""
-        return _cycles.compute_cycle_hash(cycle_edges)
+        """Compute a deterministic hash for a cycle independent of traversal start edge.
+
+        Edges are sorted lexicographically, so rotations of the same directed cycle
+        produce the same hash. A cycle traversed in reverse direction is treated as a
+        distinct cycle (different edge directions = different hash).
+
+        Args:
+            cycle_edges: List of (source_id, relation_type, target_id) tuples.
+
+        Returns:
+            16-character hex hash string.
+        """
+        logger.debug("Computing cycle hash for %d edges", len(cycle_edges))
+        sorted_edges = sorted(cycle_edges, key=lambda e: (e[0], e[1], e[2]))
+        edge_str = "|".join(f"{src},{rel},{tgt}" for src, rel, tgt in sorted_edges)
+        digest = hashlib.sha256(edge_str.encode()).hexdigest()[:16]
+        logger.debug("Computed cycle hash: %s", digest)
+        return digest
+
+    @staticmethod
+    def _validate_cycle_hash(cycle_hash: str) -> None:
+        """Validate that a cycle hash is exactly 16 hex characters.
+
+        Args:
+            cycle_hash: Hash string to validate.
+
+        Raises:
+            ValueError: If cycle_hash is not exactly 16 hex characters.
+        """
+        if not cycle_hash or len(cycle_hash) != 16:
+            raise ValueError(f"Invalid cycle hash (expected 16 hex chars): {cycle_hash!r}")
+        try:
+            int(cycle_hash, 16)
+        except ValueError as exc:
+            raise ValueError(f"Invalid cycle hash (expected 16 hex chars): {cycle_hash!r}") from exc
 
     def accept_cycle(self, cycle_hash: str) -> None:
-        """Mark a circular chain as accepted/intentional."""
-        _cycles.accept_cycle(self, cycle_hash)
+        """Mark a circular chain as accepted/intentional.
+
+        Args:
+            cycle_hash: Hash of the cycle (from compute_cycle_hash).
+
+        Raises:
+            ValueError: If cycle_hash is not exactly 16 hex characters.
+        """
+        self._validate_cycle_hash(cycle_hash)
+        logger.info("Accepting cycle with hash: %s", cycle_hash)
+        with self._lock:
+            self._ensure_open()
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "INSERT OR REPLACE INTO accepted_cycles (cycle_hash, accepted_at) VALUES (?, ?)",
+                (cycle_hash, datetime.now().isoformat()),
+            )
+            self.conn.commit()
 
     def remove_accepted_cycle(self, cycle_hash: str) -> bool:
-        """Remove a previously accepted cycle, returning True if it was found."""
-        return _cycles.remove_accepted_cycle(self, cycle_hash)
+        """Remove a previously accepted cycle.
+
+        Args:
+            cycle_hash: Hash of the cycle to un-accept.
+
+        Returns:
+            True if the cycle was removed, False if it wasn't found.
+
+        Raises:
+            ValueError: If cycle_hash is not exactly 16 hex characters.
+        """
+        self._validate_cycle_hash(cycle_hash)
+        logger.info("Removing accepted cycle with hash: %s", cycle_hash)
+        with self._lock:
+            self._ensure_open()
+            cursor = self.conn.cursor()
+            cursor.execute("DELETE FROM accepted_cycles WHERE cycle_hash = ?", (cycle_hash,))
+            self.conn.commit()
+            removed = cursor.rowcount > 0
+        logger.debug("Cycle %s removal result: %s", cycle_hash, removed)
+        return removed
 
     def get_accepted_cycles(self) -> set[str]:
-        """Get all accepted cycle hashes."""
-        return _cycles.get_accepted_cycles(self)
+        """Get all accepted cycle hashes.
+
+        Returns:
+            Set of accepted cycle hash strings.
+        """
+        logger.debug("Loading accepted cycles from database")
+        with self._lock:
+            self._ensure_open()
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT cycle_hash FROM accepted_cycles")
+            rows = cursor.fetchall()
+        accepted = {row[0] for row in rows}
+        logger.debug("Loaded %d accepted cycles", len(accepted))
+        return accepted
 
     # =========================================================================
     # Export/Import (delegated to _io)
     # =========================================================================
 
     def export_to_json(self) -> dict[str, Any]:
-        """Export the entire world database to a JSON-serializable dict.
-
-        Returns:
-            Dict containing all entities, relationships, events, and settings.
-        """
         return _io.export_to_json(self)
 
     def import_from_json(self, data: dict[str, Any]) -> None:
-        """Import world data from a JSON dict, merging into the current database.
-
-        Args:
-            data: Dict containing entities, relationships, events, and settings.
-        """
         _io.import_from_json(self, data)
 
     # =========================================================================
@@ -825,33 +812,11 @@ class WorldDatabase:
         entity_type: str = "",
         chapter_number: int | None = None,
     ) -> bool:
-        """Insert or update a vector embedding for a content source.
-
-        Args:
-            source_id: Identifier for the content being embedded.
-            content_type: Type of content (e.g. 'entity', 'relationship').
-            text: The text that was embedded (stored for display).
-            embedding: The vector embedding as a list of floats.
-            model: Name of the embedding model used.
-            entity_type: Optional entity type for filtering.
-            chapter_number: Optional chapter number for filtering.
-
-        Returns:
-            True if the embedding was inserted/updated successfully.
-        """
         return _embeddings.upsert_embedding(
             self, source_id, content_type, text, embedding, model, entity_type, chapter_number
         )
 
     def delete_embedding(self, source_id: str) -> bool:
-        """Delete the embedding for a content source.
-
-        Args:
-            source_id: Identifier for the content whose embedding to delete.
-
-        Returns:
-            True if the embedding was deleted, False if not found.
-        """
         return _embeddings.delete_embedding(self, source_id)
 
     def search_similar(
@@ -862,51 +827,20 @@ class WorldDatabase:
         entity_type: str | None = None,
         chapter_number: int | None = None,
     ) -> list[dict[str, Any]]:
-        """Search for content with similar vector embeddings (KNN search).
-
-        Args:
-            query_embedding: The query vector to search against.
-            k: Maximum number of results to return.
-            content_type: Optional filter by content type.
-            entity_type: Optional filter by entity type.
-            chapter_number: Optional filter by chapter number.
-
-        Returns:
-            List of result dicts with source_id, distance, and metadata.
-        """
         return _embeddings.search_similar(
             self, query_embedding, k, content_type, entity_type, chapter_number
         )
 
     def get_embedding_stats(self) -> dict[str, Any]:
-        """Get statistics about stored embeddings.
-
-        Returns:
-            Dict with counts by content type, model info, and total count.
-        """
         return _embeddings.get_embedding_stats(self)
 
     def needs_reembedding(self, current_model: str) -> bool:
-        """Check if existing embeddings were created with a different model.
-
-        Args:
-            current_model: The embedding model currently configured.
-
-        Returns:
-            True if any embeddings use a different model and need regeneration.
-        """
         return _embeddings.needs_reembedding(self, current_model)
 
     def clear_all_embeddings(self) -> None:
-        """Delete all vector embeddings and their metadata."""
         _embeddings.clear_all_embeddings(self)
 
     def recreate_vec_table(self, dimensions: int) -> None:
-        """Drop and recreate the vec_embeddings virtual table with new dimensions.
-
-        Args:
-            dimensions: Number of dimensions for the new embedding vectors.
-        """
         _embeddings.recreate_vec_table(self, dimensions)
 
     def save_world_settings(self, settings: WorldSettings) -> None:
@@ -915,6 +849,8 @@ class WorldDatabase:
         Args:
             settings: WorldSettings instance to save.
         """
+        from datetime import datetime
+
         logger.debug(f"Saving world settings: id={settings.id}")
         calendar_json = json.dumps(settings.calendar.to_dict()) if settings.calendar else None
         now = datetime.now().isoformat()
