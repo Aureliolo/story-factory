@@ -212,8 +212,9 @@ class FactionQualityScores(BaseQualityScores):
         Return a mapping of this faction's quality dimensions, computed average, and feedback suitable for storage.
 
         Returns:
-            dict[str, float | str]: Dictionary with keys for each dimension,
-                'temporal_plausibility', 'average', and 'feedback'.
+            dict[str, float | str]: Dictionary containing 'coherence', 'influence',
+                'conflict_potential', 'distinctiveness', 'temporal_plausibility',
+                'average', and 'feedback'.
         """
         return {
             "coherence": self.coherence,
@@ -288,8 +289,9 @@ class ItemQualityScores(BaseQualityScores):
         Serialize the item's quality scores into a dictionary formatted for storing on an entity.
 
         Returns:
-            dict[str, float | str]: Mapping with keys for each dimension,
-                'temporal_plausibility', 'average', and 'feedback'.
+            dict[str, float | str]: Mapping containing 'story_significance', 'uniqueness',
+                'narrative_potential', 'integration', 'temporal_plausibility',
+                'average', and 'feedback'.
         """
         return {
             "story_significance": self.significance,
@@ -362,8 +364,9 @@ class ConceptQualityScores(BaseQualityScores):
         Return a mapping of concept quality dimensions and metadata suitable for storing on an entity.
 
         Returns:
-            dict[str, float | str]: Dictionary with keys for each dimension,
-                'temporal_plausibility', 'average', and 'feedback'.
+            dict[str, float | str]: Dictionary containing 'relevance', 'depth',
+                'manifestation', 'resonance', 'temporal_plausibility',
+                'average', and 'feedback'.
         """
         return {
             "relevance": self.relevance,

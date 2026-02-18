@@ -266,7 +266,7 @@ def _build_character_judge_prompt(character: Character, genre: str) -> str:
     Constructs the textual prompt used by the judge model to evaluate a character's quality within a genre context.
 
     Parameters:
-        character (Character): The character to be evaluated; the prompt will include name, role, description, traits, goals, and arc notes.
+        character (Character): The character to be evaluated; the prompt will include name, role, description, traits, goals, arc notes, and temporal data.
         genre (str): The story genre used to frame evaluation criteria and tone.
 
     Returns:
@@ -283,7 +283,9 @@ Traits: {", ".join(character.trait_names)}
 Goals: {", ".join(character.goals)}
 Arc Notes: {character.arc_notes}
 Birth Year: {character.birth_year if character.birth_year is not None else "N/A"}
+Death Year: {character.death_year if character.death_year is not None else "N/A"}
 Birth Era: {character.birth_era or "N/A"}
+Temporal Notes: {character.temporal_notes or "N/A"}
 
 {JUDGE_CALIBRATION_BLOCK}
 
@@ -353,7 +355,9 @@ Traits: {", ".join(character.trait_names)}
 Goals: {", ".join(character.goals)}
 Arc Notes: {character.arc_notes}
 Birth Year: {character.birth_year if character.birth_year is not None else "N/A"}
+Death Year: {character.death_year if character.death_year is not None else "N/A"}
 Birth Era: {character.birth_era or "N/A"}
+Temporal Notes: {character.temporal_notes or "N/A"}
 
 CURRENT SCORES (need {threshold}+ in all areas):
 - Depth: {scores.depth}/10

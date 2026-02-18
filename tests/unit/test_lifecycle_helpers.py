@@ -194,7 +194,7 @@ class TestBuildEntityLifecycle:
     def test_unknown_entity_type(self):
         """Unknown entity type returns empty dict."""
         entity = {"name": "Mystery", "founding_year": 100}
-        result = build_entity_lifecycle(entity, "unknown")
+        result = build_entity_lifecycle(entity, "unknown")  # type: ignore[arg-type]
         assert result == {}
 
     def test_item_temporal_notes_only(self):
@@ -277,6 +277,26 @@ class TestBuildEntityLifecycle:
         result = build_entity_lifecycle(entity, "concept")
         assert "lifecycle" in result
         assert result["lifecycle"]["birth"] == {"era_name": "Forgotten Age"}
+
+    def test_concept_emergence_without_era(self):
+        """Concept with emergence_year but no era has birth with year only."""
+        entity = {
+            "name": "Raw Power",
+            "emergence_year": 75,
+        }
+        result = build_entity_lifecycle(entity, "concept")
+        assert "lifecycle" in result
+        assert result["lifecycle"]["birth"] == {"year": 75}
+
+    def test_location_destruction_only(self):
+        """Location with only destruction_year produces lifecycle."""
+        entity = {
+            "name": "Fallen City",
+            "destruction_year": 600,
+        }
+        result = build_entity_lifecycle(entity, "location")
+        assert "lifecycle" in result
+        assert result["lifecycle"]["destruction_year"] == 600
 
     def test_faction_dissolution_only(self):
         """Faction with only dissolution_year produces lifecycle."""

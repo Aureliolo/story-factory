@@ -758,8 +758,8 @@ def _generate_relationships(
             target_entity = _find_entity_by_name(all_entities, rel["target"])
 
             if source_entity and target_entity:
-                # relation_type is already normalized by world_quality_service;
-                # just use it directly with a safety default.
+                # relation_type may be absent if the LLM omits it;
+                # default to "related_to" as a fallback.
                 relation_type = rel.get("relation_type")
                 if not relation_type:
                     logger.debug(

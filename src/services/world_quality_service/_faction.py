@@ -382,10 +382,16 @@ Return ONLY the improved faction."""
             temperature=temperature,
         )
 
-        # Ensure name is preserved from original faction
+        # Ensure name and temporal fields are preserved from original faction
         result = refined.model_dump()
         result["name"] = faction.get("name", "Unknown")
         result["type"] = "faction"
+        for key in ("founding_year", "dissolution_year", "founding_era", "temporal_notes"):
+            if result.get(key) in (None, "") and faction.get(key) not in (None, ""):
+                result[key] = faction[key]
+                logger.debug(
+                    "Preserved temporal field '%s' from original faction '%s'", key, result["name"]
+                )
         return result
     except Exception as e:
         summary = summarize_llm_error(e)

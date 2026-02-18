@@ -159,7 +159,7 @@ def _judge_location_quality(
     """
     Evaluate a generated location's quality across the defined dimensions.
 
-    Uses the configured judge model to produce numeric scores for atmosphere, narrative_significance, story_relevance, and distinctiveness, and returns targeted improvement feedback. Honors multi-call averaging when enabled in the judge configuration.
+    Uses the configured judge model to produce numeric scores for atmosphere, narrative_significance, story_relevance, distinctiveness, and temporal_plausibility, and returns targeted improvement feedback. Honors multi-call averaging when enabled in the judge configuration.
 
     Parameters:
         svc: Service client providing model resolution and settings.
@@ -299,10 +299,16 @@ Return ONLY the improved location."""
             temperature=temperature,
         )
 
-        # Ensure name is preserved from original location
+        # Ensure name and temporal fields are preserved from original location
         result = refined.model_dump()
         result["name"] = location.get("name", "Unknown")
         result["type"] = "location"
+        for key in ("founding_year", "destruction_year", "founding_era", "temporal_notes"):
+            if result.get(key) in (None, "") and location.get(key) not in (None, ""):
+                result[key] = location[key]
+                logger.debug(
+                    "Preserved temporal field '%s' from original location '%s'", key, result["name"]
+                )
         return result
     except Exception as e:
         summary = summarize_llm_error(e)

@@ -166,7 +166,7 @@ def _judge_item_quality(
         temperature (float): Sampling temperature for the judge model (lower values favor consistency).
 
     Returns:
-        ItemQualityScores: Scores for `story_significance`, `uniqueness`, `narrative_potential`, `integration`, and a `feedback` field.
+        ItemQualityScores: Scores for `story_significance`, `uniqueness`, `narrative_potential`, `integration`, `temporal_plausibility`, and a `feedback` field.
 
     Raises:
         WorldGenerationError: If judgment fails or returns invalid data.
@@ -299,10 +299,16 @@ Return ONLY the improved item."""
             temperature=temperature,
         )
 
-        # Ensure name is preserved from original item
+        # Ensure name and temporal fields are preserved from original item
         result = refined.model_dump()
         result["name"] = item.get("name", "Unknown")
         result["type"] = "item"
+        for key in ("creation_year", "creation_era", "temporal_notes"):
+            if result.get(key) in (None, "") and item.get(key) not in (None, ""):
+                result[key] = item[key]
+                logger.debug(
+                    "Preserved temporal field '%s' from original item '%s'", key, result["name"]
+                )
         return result
     except Exception as e:
         summary = summarize_llm_error(e)

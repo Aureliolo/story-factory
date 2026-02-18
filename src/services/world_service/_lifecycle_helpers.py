@@ -1,12 +1,15 @@
 """Lifecycle attribute builders for world entity generation.
 
-Convert temporal fields from Pydantic entity models into lifecycle dicts
-compatible with `extract_lifecycle_from_attributes()` in timeline_types.py.
-The output is merged into entity attributes during `build_world()`.
+Convert temporal fields into lifecycle dicts compatible with
+``extract_lifecycle_from_attributes()`` in timeline_types.py.
+``build_character_lifecycle`` operates on a typed Character model;
+``build_entity_lifecycle`` operates on raw entity dicts (location,
+faction, item, concept).  The output is merged into entity attributes
+during ``build_world()``.
 """
 
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from src.memory.story_state import Character
 
@@ -61,13 +64,19 @@ def build_character_lifecycle(char: Character) -> dict[str, Any]:
     return {"lifecycle": lifecycle}
 
 
-def build_entity_lifecycle(entity_dict: dict[str, Any], entity_type: str) -> dict[str, Any]:
+def build_entity_lifecycle(
+    entity_dict: dict[str, Any],
+    entity_type: Literal["location", "faction", "item", "concept"],
+) -> dict[str, Any]:
     """Build a lifecycle attributes dict from an entity dict's temporal fields.
 
     Handles location, faction, item, and concept entity types.  Each type uses
     different field names for its temporal data (e.g. ``founding_year`` for
     locations/factions, ``creation_year`` for items, ``emergence_year`` for
     concepts).
+
+    Note: faction ``dissolution_year`` is mapped to ``destruction_year`` in
+    the lifecycle dict to match the ``EntityLifecycle`` schema.
 
     Args:
         entity_dict: Entity data dict with optional temporal fields.
@@ -131,10 +140,6 @@ def build_entity_lifecycle(entity_dict: dict[str, Any], entity_type: str) -> dic
             lifecycle["birth"] = birth_data
         if notes:
             lifecycle["temporal_notes"] = notes
-
-    else:
-        logger.warning("Unknown entity type '%s' for lifecycle building", entity_type)
-        return {}
 
     if not lifecycle:
         logger.debug("No temporal data for %s '%s'", entity_type, entity_dict.get("name", "?"))

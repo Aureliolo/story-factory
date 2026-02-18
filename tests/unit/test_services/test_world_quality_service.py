@@ -1403,6 +1403,41 @@ class TestRefineLocation:
         assert "atmospheric" in refined["description"]
 
     @patch("src.services.world_quality_service._location.generate_structured")
+    def test_refine_location_preserves_temporal_fields(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test that refinement preserves temporal fields from original when LLM omits them."""
+        mock_location = Location(
+            name="Dark Forest",
+            type="location",
+            description="An improved forest",
+            significance="Very important",
+        )
+        mock_generate_structured.return_value = mock_location
+
+        original = {
+            "name": "Dark Forest",
+            "description": "A forest",
+            "significance": "Unknown",
+            "founding_year": 500,
+            "founding_era": "Golden Age",
+            "temporal_notes": "Ancient place",
+        }
+        scores = LocationQualityScores(
+            atmosphere=5.0,
+            significance=5.0,
+            story_relevance=6.0,
+            distinctiveness=5.0,
+            temporal_plausibility=5.0,
+        )
+
+        refined = service._refine_location(original, scores, story_state, temperature=0.7)
+
+        assert refined["founding_year"] == 500
+        assert refined["founding_era"] == "Golden Age"
+        assert refined["temporal_notes"] == "Ancient place"
+
+    @patch("src.services.world_quality_service._location.generate_structured")
     def test_refine_location_invalid_json_raises_error(
         self, mock_generate_structured, service, story_state
     ):
@@ -2043,6 +2078,45 @@ class TestRefineFaction:
         assert "influential" in refined["description"]
 
     @patch("src.services.world_quality_service._faction.generate_structured")
+    def test_refine_faction_preserves_temporal_fields(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test that refinement preserves temporal fields from original when LLM omits them."""
+        mock_faction = Faction(
+            name="Ignored",
+            type="faction",
+            description="An improved guild",
+            leader="Grand Master",
+        )
+        mock_generate_structured.return_value = mock_faction
+
+        original = {
+            "name": "Test Guild",
+            "description": "A guild",
+            "leader": "Boss",
+            "goals": ["power"],
+            "values": ["honor"],
+            "founding_year": 200,
+            "founding_era": "Iron Age",
+            "dissolution_year": 800,
+            "temporal_notes": "Rose and fell",
+        }
+        scores = FactionQualityScores(
+            coherence=5.0,
+            influence=5.0,
+            conflict_potential=6.0,
+            distinctiveness=5.0,
+            temporal_plausibility=5.0,
+        )
+
+        refined = service._refine_faction(original, scores, story_state, temperature=0.7)
+
+        assert refined["founding_year"] == 200
+        assert refined["founding_era"] == "Iron Age"
+        assert refined["dissolution_year"] == 800
+        assert refined["temporal_notes"] == "Rose and fell"
+
+    @patch("src.services.world_quality_service._faction.generate_structured")
     def test_refine_faction_error_raises(self, mock_generate_structured, service, story_state):
         """Test refinement raises error on generation failure."""
         mock_generate_structured.side_effect = Exception("Generation failed")
@@ -2265,6 +2339,42 @@ class TestRefineItem:
         assert "legendary" in refined["description"]
 
     @patch("src.services.world_quality_service._item.generate_structured")
+    def test_refine_item_preserves_temporal_fields(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test that refinement preserves temporal fields from original when LLM omits them."""
+        mock_item = Item(
+            name="Magic Sword",
+            type="item",
+            description="A much improved legendary blade",
+            significance="Critical to the quest",
+        )
+        mock_generate_structured.return_value = mock_item
+
+        original = {
+            "name": "Magic Sword",
+            "description": "A sword",
+            "significance": "Important",
+            "properties": ["sharp"],
+            "creation_year": 150,
+            "creation_era": "Bronze Age",
+            "temporal_notes": "Forged in ancient times",
+        }
+        scores = ItemQualityScores(
+            significance=5.0,
+            uniqueness=5.0,
+            narrative_potential=6.0,
+            integration=5.0,
+            temporal_plausibility=5.0,
+        )
+
+        refined = service._refine_item(original, scores, story_state, temperature=0.7)
+
+        assert refined["creation_year"] == 150
+        assert refined["creation_era"] == "Bronze Age"
+        assert refined["temporal_notes"] == "Forged in ancient times"
+
+    @patch("src.services.world_quality_service._item.generate_structured")
     def test_refine_item_invalid_json_raises_error(
         self, mock_generate_structured, service, story_state
     ):
@@ -2485,6 +2595,41 @@ class TestRefineConcept:
 
         assert refined["name"] == "Redemption"
         assert "profound" in refined["description"]
+
+    @patch("src.services.world_quality_service._concept.generate_structured")
+    def test_refine_concept_preserves_temporal_fields(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test that refinement preserves temporal fields from original when LLM omits them."""
+        mock_concept = Concept(
+            name="Redemption",
+            type="concept",
+            description="An improved concept of moral growth",
+            manifestations="Deep character transformations",
+        )
+        mock_generate_structured.return_value = mock_concept
+
+        original = {
+            "name": "Redemption",
+            "description": "Getting better",
+            "manifestations": "Changes",
+            "emergence_year": 1,
+            "emergence_era": "Dawn Era",
+            "temporal_notes": "As old as time",
+        }
+        scores = ConceptQualityScores(
+            relevance=5.0,
+            depth=5.0,
+            manifestation=6.0,
+            resonance=5.0,
+            temporal_plausibility=5.0,
+        )
+
+        refined = service._refine_concept(original, scores, story_state, temperature=0.7)
+
+        assert refined["emergence_year"] == 1
+        assert refined["emergence_era"] == "Dawn Era"
+        assert refined["temporal_notes"] == "As old as time"
 
     @patch("src.services.world_quality_service._concept.generate_structured")
     def test_refine_concept_invalid_json_raises_error(

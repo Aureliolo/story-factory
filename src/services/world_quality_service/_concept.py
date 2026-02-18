@@ -298,10 +298,16 @@ Return ONLY the improved concept."""
             temperature=temperature,
         )
 
-        # Ensure name is preserved from original concept
+        # Ensure name and temporal fields are preserved from original concept
         result = refined.model_dump()
         result["name"] = concept.get("name", "Unknown")
         result["type"] = "concept"
+        for key in ("emergence_year", "emergence_era", "temporal_notes"):
+            if result.get(key) in (None, "") and concept.get(key) not in (None, ""):
+                result[key] = concept[key]
+                logger.debug(
+                    "Preserved temporal field '%s' from original concept '%s'", key, result["name"]
+                )
         return result
     except Exception as e:
         summary = summarize_llm_error(e)

@@ -1759,6 +1759,58 @@ class TestFuzzyEntityNameMatching:
         assert count == 1
 
 
+class TestNormalizeName:
+    """Tests for _normalize_name in _name_matching module."""
+
+    def test_lowercase(self):
+        """Name is lowercased."""
+        from src.services.world_service._name_matching import _normalize_name
+
+        assert _normalize_name("Dark Forest") == "dark forest"
+
+    def test_strip_leading_the(self):
+        """Leading 'The' article is stripped."""
+        from src.services.world_service._name_matching import _normalize_name
+
+        assert _normalize_name("The Dark Forest") == "dark forest"
+
+    def test_strip_leading_a(self):
+        """Leading 'A' article is stripped."""
+        from src.services.world_service._name_matching import _normalize_name
+
+        assert _normalize_name("A Dark Forest") == "dark forest"
+
+    def test_strip_leading_an(self):
+        """Leading 'An' article is stripped."""
+        from src.services.world_service._name_matching import _normalize_name
+
+        assert _normalize_name("An Ancient Ruin") == "ancient ruin"
+
+    def test_collapse_whitespace(self):
+        """Multiple spaces are collapsed to single space."""
+        from src.services.world_service._name_matching import _normalize_name
+
+        assert _normalize_name("Dark   Forest") == "dark   forest".replace("   ", " ")
+
+    def test_no_article_no_change(self):
+        """Name without leading article is only lowercased."""
+        from src.services.world_service._name_matching import _normalize_name
+
+        assert _normalize_name("dark forest") == "dark forest"
+
+    def test_internal_article_preserved(self):
+        """Articles inside the name are not stripped."""
+        from src.services.world_service._name_matching import _normalize_name
+
+        assert _normalize_name("Echoes of the Network") == "echoes of the network"
+
+    def test_empty_string(self):
+        """Empty string returns empty string."""
+        from src.services.world_service._name_matching import _normalize_name
+
+        assert _normalize_name("") == ""
+
+
 class TestFindEntityByNameAmbiguity:
     """Tests for _find_entity_by_name ambiguity guard."""
 
