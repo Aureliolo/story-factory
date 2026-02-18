@@ -523,13 +523,14 @@ def _create_relationship(
             "\nChoose a compelling partner from the other available entities.\n"
         )
 
+    calendar_context = svc.get_calendar_context()
+
     prompt = f"""Create a compelling relationship between entities for a {brief.genre} story.
 
 STORY PREMISE: {brief.premise}
 TONE: {brief.tone}
 THEMES: {", ".join(brief.themes)}
-
-AVAILABLE ENTITIES: {", ".join(entity_names)}
+{calendar_context}AVAILABLE ENTITIES: {", ".join(entity_names)}
 
 FORBIDDEN ENTITY PAIRS (you MUST NOT use any of these pairs in either direction):
 {existing_pairs_block}{unused_pairs_block}

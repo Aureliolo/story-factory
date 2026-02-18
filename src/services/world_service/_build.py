@@ -6,7 +6,9 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from src.memory.story_state import PlotOutline, StoryState
+from src.memory.world_calendar import WorldCalendar
 from src.memory.world_database import WorldDatabase
+from src.memory.world_settings import WorldSettings
 from src.utils.exceptions import GenerationCancelledError, WorldGenerationError
 from src.utils.validation import validate_not_none, validate_type
 
@@ -62,6 +64,7 @@ def build_world(
 
     options = options or WorldBuildOptions.full()
     counts: dict[str, int] = {
+        "calendar": 0,
         "characters": 0,
         "locations": 0,
         "factions": 0,
@@ -109,6 +112,35 @@ def build_world(
         report_progress("Clearing existing world data...")
         _clear_world_db(world_db)
         logger.info("Cleared existing world data")
+
+    # Step 1a: Generate calendar if requested and enabled in settings
+    if options.generate_calendar and svc.settings.generate_calendar_on_world_build:
+        check_cancelled()
+        report_progress("Generating calendar system...", "calendar")
+        try:
+            calendar_dict, calendar_scores, calendar_iterations = (
+                services.world_quality.generate_calendar_with_quality(state)
+            )
+            # Convert dict back to WorldCalendar and save to world settings
+            calendar = WorldCalendar.from_dict(calendar_dict)
+            world_settings = world_db.get_world_settings()
+            if world_settings:
+                world_settings.calendar = calendar
+            else:
+                world_settings = WorldSettings(calendar=calendar)
+            world_db.save_world_settings(world_settings)
+            counts["calendar"] = 1
+            # Set calendar context for downstream entity generation prompts
+            services.world_quality.set_calendar_context(calendar_dict)
+            logger.info(
+                "Generated calendar '%s' after %d iteration(s), quality: %.1f",
+                calendar.current_era_name,
+                calendar_iterations,
+                calendar_scores.average,
+            )
+        except Exception as e:
+            logger.error("Calendar generation failed (non-fatal): %s", e)
+            report_progress("Warning: Calendar generation failed. Continuing without calendar.")
 
     # Step 2: Generate story structure (characters, chapters) if requested
     if options.generate_structure:
@@ -280,6 +312,9 @@ def build_world(
         logger.error("World embedding failed (non-fatal): %s", e)
         report_progress("Warning: World embedding failed. RAG context will be unavailable.")
 
+    # Clear calendar context from quality service (avoid stale context in future runs)
+    services.world_quality.set_calendar_context(None)
+
     report_progress("World build complete!")
     total_rels = counts["relationships"] + counts["implicit_relationships"]
     logger.info(
@@ -297,6 +332,8 @@ def _calculate_total_steps(options: WorldBuildOptions) -> int:
     """Calculate total number of steps for progress reporting."""
     steps = 3  # Character extraction + embedding + completion
     if options.clear_existing:
+        steps += 1
+    if options.generate_calendar:
         steps += 1
     if options.generate_structure:
         steps += 1

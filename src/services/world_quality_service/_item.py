@@ -87,14 +87,15 @@ def _create_item(
     # Format existing names with explicit warnings
     existing_names_formatted = svc._format_existing_names_warning(existing_names, "item")
 
+    calendar_context = svc.get_calendar_context()
+
     prompt = f"""Create a significant item/object for a {brief.genre} story.
 
 STORY PREMISE: {brief.premise}
 SETTING: {brief.setting_place}, {brief.setting_time}
 TONE: {brief.tone}
 THEMES: {", ".join(brief.themes)}
-
-=== CRITICAL: UNIQUENESS REQUIREMENTS ===
+{calendar_context}=== CRITICAL: UNIQUENESS REQUIREMENTS ===
 {existing_names_formatted}
 
 STRICT RULES:

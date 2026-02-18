@@ -89,13 +89,14 @@ def _create_location(
     # Format existing names with explicit warnings
     existing_names_formatted = svc._format_existing_names_warning(existing_names, "location")
 
+    calendar_context = svc.get_calendar_context()
+
     prompt = f"""Create a compelling location for a {brief.genre} story.
 
 STORY PREMISE: {brief.premise}
 SETTING: {brief.setting_place}, {brief.setting_time}
 TONE: {brief.tone}
-
-=== CRITICAL: UNIQUENESS REQUIREMENTS ===
+{calendar_context}=== CRITICAL: UNIQUENESS REQUIREMENTS ===
 {existing_names_formatted}
 
 STRICT RULES:

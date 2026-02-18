@@ -41,6 +41,7 @@ class WorldBuildOptions:
 
     Attributes:
         clear_existing: Whether to clear existing world data first.
+        generate_calendar: Whether to generate a calendar system.
         generate_structure: Whether to generate story structure (characters, chapters).
         generate_locations: Whether to generate location entities.
         generate_factions: Whether to generate faction entities.
@@ -52,6 +53,7 @@ class WorldBuildOptions:
     """
 
     clear_existing: bool = False
+    generate_calendar: bool = True
     generate_structure: bool = True
     generate_locations: bool = True
     generate_factions: bool = True
@@ -74,6 +76,7 @@ class WorldBuildOptions:
         """Create options for full world build (everything, keeping existing data)."""
         return cls(
             clear_existing=False,
+            generate_calendar=True,
             generate_structure=True,
             generate_locations=True,
             generate_factions=True,
@@ -93,6 +96,7 @@ class WorldBuildOptions:
         """Create options for full world rebuild (everything, clearing existing first)."""
         return cls(
             clear_existing=True,
+            generate_calendar=True,
             generate_structure=True,
             generate_locations=True,
             generate_factions=True,

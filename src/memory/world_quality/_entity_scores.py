@@ -334,3 +334,72 @@ class ConceptQualityScores(BaseQualityScores):
         if self.resonance < threshold:
             weak.append("resonance")
         return weak
+
+
+class CalendarQualityScores(BaseQualityScores):
+    """Quality scores for a calendar system (0-10 scale).
+
+    All score fields are required - no defaults.
+    """
+
+    internal_consistency: float = Field(
+        ge=0.0, le=10.0, description="Internal logic and coherence of the calendar system"
+    )
+    thematic_fit: float = Field(
+        ge=0.0, le=10.0, description="How well the calendar fits the story's genre and setting"
+    )
+    completeness: float = Field(
+        ge=0.0, le=10.0, description="Thoroughness of months, eras, and day names"
+    )
+    uniqueness: float = Field(
+        ge=0.0, le=10.0, description="Distinctiveness from real-world or generic calendars"
+    )
+
+    @property
+    def average(self) -> float:
+        """Compute the mean of the calendar's four quality dimensions.
+
+        Returns:
+            average (float): Mean of `internal_consistency`, `thematic_fit`,
+                `completeness`, and `uniqueness`.
+        """
+        return (
+            self.internal_consistency + self.thematic_fit + self.completeness + self.uniqueness
+        ) / 4.0
+
+    def to_dict(self) -> dict[str, float | str]:
+        """Serialize the calendar quality scores into a dictionary for storage.
+
+        Returns:
+            dict[str, float | str]: Dictionary with keys 'internal_consistency',
+                'thematic_fit', 'completeness', 'uniqueness', 'average', and 'feedback'.
+        """
+        return {
+            "internal_consistency": self.internal_consistency,
+            "thematic_fit": self.thematic_fit,
+            "completeness": self.completeness,
+            "uniqueness": self.uniqueness,
+            "average": self.average,
+            "feedback": self.feedback,
+        }
+
+    def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
+        """Identify calendar quality dimensions whose scores are below the given threshold.
+
+        Parameters:
+            threshold (float): Cutoff value; dimensions below this are considered weak.
+                Defaults to 7.0.
+
+        Returns:
+            list[str]: Names of dimensions with scores below `threshold`.
+        """
+        weak = []
+        if self.internal_consistency < threshold:
+            weak.append("internal_consistency")
+        if self.thematic_fit < threshold:
+            weak.append("thematic_fit")
+        if self.completeness < threshold:
+            weak.append("completeness")
+        if self.uniqueness < threshold:
+            weak.append("uniqueness")
+        return weak

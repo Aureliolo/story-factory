@@ -157,25 +157,22 @@ def _display_calendar_info(page: WorldPage, calendar: Any) -> None:
 
 
 async def _generate_calendar(page: WorldPage) -> None:
-    """Generate a calendar for the current world.
+    """Generate a calendar for the current world using the quality refinement loop.
 
     Args:
         page: WorldPage instance.
     """
     from nicegui import run
 
+    from src.memory.world_calendar import WorldCalendar
     from src.memory.world_settings import WorldSettings
 
-    logger.info("Generating calendar for world")
+    logger.info("Generating calendar for world via quality loop")
 
     # Check if story state has a brief
     story_state = getattr(page.state, "story_state", None)
     if not story_state or not getattr(story_state, "brief", None):
         ui.notify("No story brief available. Complete the interview first.", type="warning")
-        return
-
-    if not hasattr(page.services, "calendar"):
-        ui.notify("Calendar service not available.", type="negative")
         return
 
     if not page.state.world_db:
@@ -188,10 +185,13 @@ async def _generate_calendar(page: WorldPage) -> None:
 
     page.state.begin_background_task("generate_calendar")
     try:
-        # Generate calendar using service - run off event loop to avoid blocking
-        calendar = await run.io_bound(page.services.calendar.generate_calendar, story_state.brief)
+        # Generate calendar using quality service - run off event loop to avoid blocking
+        calendar_dict, scores, iterations = await run.io_bound(
+            page.services.world_quality.generate_calendar_with_quality, story_state
+        )
 
-        # Save calendar to world settings
+        # Convert dict to WorldCalendar and save to world settings
+        calendar = WorldCalendar.from_dict(calendar_dict)
         world_settings = page.state.world_db.get_world_settings()
         if world_settings:
             world_settings.calendar = calendar
@@ -199,10 +199,16 @@ async def _generate_calendar(page: WorldPage) -> None:
             world_settings = WorldSettings(calendar=calendar)
         page.state.world_db.save_world_settings(world_settings)
 
-        logger.info(f"Generated and saved calendar: {calendar.current_era_name}")
+        logger.info(
+            "Generated and saved calendar: %s (quality: %.1f, iterations: %d)",
+            calendar.current_era_name,
+            scores.average,
+            iterations,
+        )
 
         ui.notify(
-            f"Generated calendar: {calendar.current_era_name} ({calendar.era_abbreviation})",
+            f"Generated calendar: {calendar.current_era_name} "
+            f"({calendar.era_abbreviation}) - quality: {scores.average:.1f}/10",
             type="positive",
         )
 

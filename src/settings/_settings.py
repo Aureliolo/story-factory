@@ -32,6 +32,7 @@ PER_ENTITY_QUALITY_DEFAULTS: dict[str, float] = {
     "faction": 7.5,
     "item": 8.0,
     "concept": 7.5,
+    "calendar": 7.5,
     "relationship": 7.5,
     "plot": 7.5,
     "chapter": 7.5,
@@ -408,6 +409,9 @@ class Settings:
     llm_tokens_concept_create: int = 500
     llm_tokens_concept_judge: int = 200
     llm_tokens_concept_refine: int = 500
+    llm_tokens_calendar_create: int = 600
+    llm_tokens_calendar_judge: int = 300
+    llm_tokens_calendar_refine: int = 600
     llm_tokens_relationship_create: int = 1200
     llm_tokens_relationship_judge: int = 200
     llm_tokens_relationship_refine: int = 500
