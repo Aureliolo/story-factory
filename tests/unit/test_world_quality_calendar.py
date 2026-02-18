@@ -195,6 +195,31 @@ class TestCreateCalendar:
         ):
             _create_calendar(mock_svc, story_state, 0.9)
 
+    def test_defaults_missing_month_days_and_era_start_year(self, mock_svc, story_state):
+        """Test fallback defaults for month without days and era without start_year."""
+        data = GeneratedCalendarData(
+            era_name="Test Era",
+            era_abbreviation="TE",
+            current_year=100,
+            months=[{"name": "Frostmoon", "description": "Cold"}],  # No "days" key
+            day_names=["Day1"],
+            historical_eras=[
+                {"name": "First Era", "end_year": None, "description": "Ancient"},  # No start_year
+            ],
+        )
+        with patch(
+            "src.services.world_quality_service._calendar.generate_structured",
+            return_value=data,
+        ):
+            result = _create_calendar(mock_svc, story_state, 0.9)
+
+        # Months missing "days" get default 30
+        assert result["months"][0]["days"] == 30
+        assert result["months"][0]["name"] == "Frostmoon"
+        # Eras missing "start_year" get default 1
+        assert result["eras"][0]["start_year"] == 1
+        assert result["eras"][0]["name"] == "First Era"
+
 
 class TestJudgeCalendarQuality:
     """Tests for _judge_calendar_quality function."""
