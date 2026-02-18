@@ -699,11 +699,6 @@ class WorldDatabase:
         """Compute a deterministic hash for a cycle independent of traversal start."""
         return _cycles.compute_cycle_hash(cycle_edges)
 
-    @staticmethod
-    def _validate_cycle_hash(cycle_hash: str) -> None:
-        """Validate that a cycle hash is exactly 16 hex characters."""
-        _cycles.validate_cycle_hash(cycle_hash)
-
     def accept_cycle(self, cycle_hash: str) -> None:
         """Mark a circular chain as accepted/intentional."""
         _cycles.accept_cycle(self, cycle_hash)
