@@ -5,6 +5,9 @@ Settings are stored in settings.json and can be modified via the web UI.
 
 import json
 import logging
+import os
+import shutil
+import tempfile
 from dataclasses import asdict, dataclass, field, fields
 from typing import Any, ClassVar
 
@@ -33,6 +36,147 @@ PER_ENTITY_QUALITY_DEFAULTS: dict[str, float] = {
     "plot": 7.5,
     "chapter": 7.5,
 }
+
+# Dict fields with fixed expected sub-keys — merged on load so that
+# new sub-keys get defaults and removed ones are cleaned up.
+# MAINTAINERS: Add any new Settings dict field with a fixed key set here.
+# Free-form user dicts (e.g. custom_model_tags) are intentionally excluded.
+_STRUCTURED_DICT_FIELDS = ("agent_models", "agent_temperatures", "world_quality_thresholds")
+_NESTED_DICT_FIELDS = ("relationship_minimums",)
+
+
+def _merge_with_defaults(data: dict[str, Any], settings_cls: type[Settings]) -> bool:
+    """Merge loaded JSON data with dataclass defaults.
+
+    - Adds missing top-level keys with their default values
+    - Removes top-level keys that no longer exist in the dataclass
+    - For dict fields with fixed sub-keys, adds missing and removes obsolete sub-keys
+
+    Modifies *data* in place.
+
+    Returns:
+        True if any changes were made, False otherwise.
+    """
+    default_instance = settings_cls()
+    default_dict = asdict(default_instance)
+    known_fields = {f.name for f in fields(settings_cls)}
+    changed = False
+
+    # Remove obsolete top-level keys
+    for key in list(data):
+        if key not in known_fields:
+            logger.info("Removing obsolete setting: %s", key)
+            del data[key]
+            changed = True
+
+    # Add missing top-level keys with defaults
+    for key in known_fields:
+        if key not in data:
+            logger.info("Adding new setting with default: %s", key)
+            data[key] = default_dict[key]
+            changed = True
+
+    # Merge structured dict fields (fixed sub-keys)
+    for field_name in _STRUCTURED_DICT_FIELDS:
+        default_sub = default_dict[field_name]
+        current_sub = data[field_name]
+        if not isinstance(current_sub, dict):
+            logger.warning(
+                "Resetting %s to default (expected dict, got %s)",
+                field_name,
+                type(current_sub).__name__,
+            )
+            data[field_name] = default_sub
+            changed = True
+            continue
+        for sub_key in list(current_sub):
+            if sub_key not in default_sub:
+                logger.info("Removing obsolete %s[%s]", field_name, sub_key)
+                del current_sub[sub_key]
+                changed = True
+        for sub_key, sub_value in default_sub.items():
+            if sub_key not in current_sub:
+                logger.info("Adding new %s[%s] = %r", field_name, sub_key, sub_value)
+                current_sub[sub_key] = sub_value
+                changed = True
+
+    # Merge nested dict fields (dict of dicts, fixed keys at both levels)
+    for field_name in _NESTED_DICT_FIELDS:
+        default_outer = default_dict[field_name]
+        current_outer = data[field_name]
+        if not isinstance(current_outer, dict):
+            logger.warning(
+                "Resetting %s to default (expected dict, got %s)",
+                field_name,
+                type(current_outer).__name__,
+            )
+            data[field_name] = default_outer
+            changed = True
+            continue
+        for outer_key in list(current_outer):
+            if outer_key not in default_outer:
+                logger.info("Removing obsolete %s[%s]", field_name, outer_key)
+                del current_outer[outer_key]
+                changed = True
+        for outer_key, default_inner in default_outer.items():
+            if outer_key not in current_outer:
+                logger.info("Adding new %s[%s]", field_name, outer_key)
+                current_outer[outer_key] = default_inner
+                changed = True
+            elif isinstance(default_inner, dict) and not isinstance(current_outer[outer_key], dict):
+                logger.warning(
+                    "Resetting %s[%s] to default (expected dict, got %s)",
+                    field_name,
+                    outer_key,
+                    type(current_outer[outer_key]).__name__,
+                )
+                current_outer[outer_key] = default_inner
+                changed = True
+            elif isinstance(default_inner, dict):
+                inner = current_outer[outer_key]
+                for inner_key in list(inner):
+                    if inner_key not in default_inner:
+                        logger.info(
+                            "Removing obsolete %s[%s][%s]", field_name, outer_key, inner_key
+                        )
+                        del inner[inner_key]
+                        changed = True
+                for inner_key, inner_val in default_inner.items():
+                    if inner_key not in inner:
+                        logger.info(
+                            "Adding new %s[%s][%s] = %r",
+                            field_name,
+                            outer_key,
+                            inner_key,
+                            inner_val,
+                        )
+                        inner[inner_key] = inner_val
+                        changed = True
+
+    return changed
+
+
+def _atomic_write_json(path: Any, data: dict[str, Any]) -> None:
+    """Write JSON to *path* atomically via a temp file + rename.
+
+    Prevents partial writes from corrupting the settings file on disk
+    failure, power loss, or process kill.
+    """
+    from pathlib import Path as _Path
+
+    path = _Path(path)
+    dir_path = str(path.parent)
+    fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp_path, str(path))
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError as cleanup_err:
+            logger.warning("Failed to remove temp settings file %s: %s", tmp_path, cleanup_err)
+        raise
 
 
 @dataclass
@@ -347,8 +491,7 @@ class Settings:
         """Save settings to JSON file."""
         # Validate before saving
         self.validate()
-        with open(SETTINGS_FILE, "w") as f:
-            json.dump(asdict(self), f, indent=2)
+        _atomic_write_json(SETTINGS_FILE, asdict(self))
 
     def validate(self) -> bool:
         """Validate all settings fields. Delegates to _validation module.
@@ -369,8 +512,9 @@ class Settings:
     def load(cls, use_cache: bool = True) -> Settings:
         """Load settings from JSON file, or create defaults.
 
-        Attempts to repair invalid settings by merging valid fields with
-        defaults rather than silently overwriting the entire file.
+        Handles structural changes gracefully: new settings get default
+        values, removed settings are cleaned up, and dict sub-keys are
+        merged.  Your customized values are always preserved.
 
         Args:
             use_cache: If True, return cached instance if available. Set to False
@@ -379,7 +523,6 @@ class Settings:
         Returns:
             Settings instance.
         """
-        # Return cached instance if available and caching enabled
         if use_cache and cls._cached_instance is not None:
             return cls._cached_instance
 
@@ -387,109 +530,53 @@ class Settings:
             try:
                 with open(SETTINGS_FILE) as f:
                     data = json.load(f)
-
-                # Filter to known fields: drop removed keys, let new keys use defaults
-                known_fields = {f.name for f in fields(cls)}
-                unknown = set(data.keys()) - known_fields
-                if unknown:
-                    logger.info(f"Dropping unknown settings fields: {unknown}")
-                filtered_data = {k: v for k, v in data.items() if k in known_fields}
-                missing = known_fields - set(data.keys())
-                if missing:
-                    logger.info(f"New settings using defaults: {missing}")
-
-                settings = cls(**filtered_data)
-                # Validate loaded settings (may auto-migrate stale values)
-                changed = settings.validate()
-                if changed or unknown or missing:
-                    logger.info("Settings changed during load, saving to disk")
-                    with open(SETTINGS_FILE, "w") as f:
-                        json.dump(asdict(settings), f, indent=2)
-                cls._cached_instance = settings
-                return settings
+                if not isinstance(data, dict):
+                    logger.error(
+                        "Corrupted settings file (expected JSON object, got %s)",
+                        type(data).__name__,
+                    )
+                    backup_path = SETTINGS_FILE.with_suffix(".json.corrupt")
+                    try:
+                        shutil.copy(SETTINGS_FILE, backup_path)
+                        logger.info("Backed up corrupted settings to %s", backup_path)
+                    except OSError as copy_err:
+                        logger.warning("Failed to backup corrupted settings: %s", copy_err)
+                    data = {}
             except json.JSONDecodeError as e:
-                logger.error(f"Corrupted settings file (invalid JSON): {e}")
-                logger.warning("Creating backup and using default settings")
-                cls._backup_corrupted_settings()
-            except (TypeError, ValueError) as e:
-                logger.warning(f"Invalid setting values or types: {e}")
-                # Try partial recovery - use valid fields
-                return cls._recover_partial_settings(data)
+                logger.error("Corrupted settings file (invalid JSON): %s", e)
+                backup_path = SETTINGS_FILE.with_suffix(".json.corrupt")
+                try:
+                    shutil.copy(SETTINGS_FILE, backup_path)
+                    logger.info("Backed up corrupted settings to %s", backup_path)
+                except OSError as copy_err:
+                    logger.warning("Failed to backup corrupted settings: %s", copy_err)
+                data = {}
+        else:
+            data = {}
 
-        # Create default settings
-        settings = cls()
-        settings.save()
+        # Merge structure with defaults: add new fields, remove obsolete ones
+        changed = _merge_with_defaults(data, cls)
+
+        # Construct settings from merged data and validate value ranges.
+        # TypeError can occur during validation when comparison operators
+        # receive incompatible types (e.g. "context_size": "not_a_number"
+        # fails the `< 1024` range check) — wrap as ValueError for clarity.
+        try:
+            settings = cls(**data)
+            # Validate value ranges (may auto-migrate some values).
+            # validate() must be on the LEFT of `or` so it always runs — if
+            # `changed` were on the left, a True from _merge_with_defaults
+            # would short-circuit and silently skip value migrations.
+            changed = settings.validate() or changed
+        except TypeError as e:
+            raise ValueError(f"A setting has an invalid type: {e}") from e
+
+        if changed:
+            logger.info("Settings updated during load, saving to disk")
+            _atomic_write_json(SETTINGS_FILE, asdict(settings))
+
         cls._cached_instance = settings
         return settings
-
-    @classmethod
-    def _backup_corrupted_settings(cls) -> None:
-        """Create a backup of corrupted settings file."""
-        if SETTINGS_FILE.exists():
-            backup_path = SETTINGS_FILE.with_suffix(".json.bak")
-            try:
-                import shutil
-
-                shutil.copy(SETTINGS_FILE, backup_path)
-                logger.info(f"Backed up corrupted settings to {backup_path}")
-            except OSError as e:
-                logger.warning(f"Failed to backup settings: {e}")
-
-    @classmethod
-    def _recover_partial_settings(cls, data: dict[str, Any]) -> Settings:
-        """Attempt to recover partial settings from corrupted data.
-
-        Merges valid fields from the loaded data with default values,
-        preserving as much user configuration as possible.
-
-        Args:
-            data: The raw dict loaded from the settings file.
-
-        Returns:
-            Settings object with recovered valid fields.
-        """
-        defaults = cls()
-        default_dict = asdict(defaults)
-        recovered_fields: list[str] = []
-        invalid_fields: list[str] = []
-
-        # Try each field individually
-        for field_name, default_value in default_dict.items():
-            if field_name in data:
-                try:
-                    # Create a test settings with just this field changed
-                    test_data = default_dict.copy()
-                    test_data[field_name] = data[field_name]
-                    # Validate by attempting to construct with this field
-                    cls(**test_data)
-
-                    # If construction succeeded, the field is valid
-                    setattr(defaults, field_name, data[field_name])
-                    recovered_fields.append(field_name)
-                except TypeError, ValueError:  # pragma: no cover
-                    # Defensive: dataclasses don't type-check, but keep for safety
-                    invalid_fields.append(field_name)
-                    setattr(defaults, field_name, default_value)
-
-        if recovered_fields:
-            logger.info(f"Recovered {len(recovered_fields)} valid settings: {recovered_fields}")
-        if invalid_fields:  # pragma: no cover
-            logger.warning(
-                f"Reset {len(invalid_fields)} invalid settings to defaults: {invalid_fields}"
-            )
-
-        # Validate the recovered settings
-        try:
-            defaults.validate()
-        except ValueError as e:
-            logger.error(f"Recovery failed validation: {e}")
-            logger.warning("Falling back to complete defaults")
-            defaults = cls()
-
-        # Save the recovered/repaired settings
-        defaults.save()
-        cls._cached_instance = defaults
-        return defaults
 
     @classmethod
     def clear_cache(cls) -> None:

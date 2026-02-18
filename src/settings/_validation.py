@@ -4,7 +4,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from src.memory.mode_models import VramStrategy
-from src.settings._types import AGENT_ROLES, LOG_LEVELS, REFINEMENT_TEMP_DECAY_CURVES
+from src.settings._types import LOG_LEVELS, REFINEMENT_TEMP_DECAY_CURVES
 
 if TYPE_CHECKING:
     from src.settings._settings import Settings
@@ -25,13 +25,14 @@ def validate(settings: Settings) -> bool:
     Raises:
         ValueError: If any field contains an invalid value.
     """
+    changed = False
     _validate_log_level(settings)
     _validate_url(settings)
     _validate_numeric_ranges(settings)
     _validate_interaction_mode(settings)
     _validate_vram_strategy(settings)
-    changed = _validate_temperatures(settings)
-    changed = _validate_agent_models(settings) or changed
+    _validate_temperatures(settings)
+    _validate_dict_structure(settings)
     _validate_task_temperatures(settings)
     _validate_learning_settings(settings)
     _validate_data_integrity(settings)
@@ -132,83 +133,99 @@ def _validate_vram_strategy(settings: Settings) -> None:
         )
 
 
-def _validate_temperatures(settings: Settings) -> bool:
-    """Validate agent temperature settings.
+def _validate_temperatures(settings: Settings) -> None:
+    """Validate agent temperature values are within range.
 
-    Returns:
-        True if missing agent temperatures were backfilled, False otherwise.
+    Structural checks (missing/extra keys) are handled by the merge step in
+    Settings.load(), so this only validates value ranges.
     """
-    expected_agents = set(AGENT_ROLES)
-
-    unknown_temp_agents = set(settings.agent_temperatures) - expected_agents
-    if unknown_temp_agents:
+    if not isinstance(settings.agent_temperatures, dict):
         raise ValueError(
-            f"Unknown agent(s) in agent_temperatures: {sorted(unknown_temp_agents)}; "
-            f"expected only: {sorted(expected_agents)}"
+            f"agent_temperatures must be a dict, got {type(settings.agent_temperatures).__name__}"
         )
-
-    # Backfill missing agents from defaults (e.g., "embedding" added after settings file saved)
-    from src.settings._settings import Settings as _Settings
-
-    default_temps = _Settings().agent_temperatures
-    missing_agents = expected_agents - set(settings.agent_temperatures)
-    changed = bool(missing_agents)
-    for agent in sorted(missing_agents):
-        settings.agent_temperatures[agent] = default_temps[agent]
-        logger.warning("Added missing agent temperature: %s=%.1f", agent, default_temps[agent])
-
     for agent, temp in settings.agent_temperatures.items():
+        if not isinstance(temp, (int, float)):
+            raise ValueError(f"Temperature for {agent} must be a number, got {type(temp).__name__}")
         if not 0.0 <= temp <= 2.0:
             raise ValueError(f"Temperature for {agent} must be between 0.0 and 2.0, got {temp}")
 
-    return changed
 
+def _validate_dict_structure(settings: Settings) -> None:
+    """Validate that fixed-key dict fields have exactly the expected keys.
 
-def _validate_agent_models(settings: Settings) -> bool:
-    """Validate agent_models dict — all expected roles must be present.
-
-    Raises on truly unknown roles and on missing roles (per "No default
-    fallbacks" rule).  Roles that use separate config fields (e.g.
-    "embedding") are silently removed if found — older UI/settings files
-    may have written them here by mistake.
-
-    Returns:
-        True if stale entries were removed, False otherwise.
+    The merge step in Settings.load() handles adding/removing keys gracefully,
+    but validate() is also called from save() and the UI.  This catch-all
+    rejects unknown or missing keys so programmatic mutations that bypass
+    load() can't silently persist invalid structure.
 
     Raises:
-        ValueError: If unknown or missing agent roles are found.
+        ValueError: If any dict field has unknown or missing keys.
     """
-    from src.settings._settings import Settings as _Settings
+    logger.debug("Validating structured and nested dict settings")
+    from src.settings._settings import (
+        _NESTED_DICT_FIELDS,
+        _STRUCTURED_DICT_FIELDS,
+    )
+    from src.settings._settings import (
+        Settings as _Settings,
+    )
 
-    default_models = _Settings().agent_models
-    expected_agents = set(default_models)
+    default_instance = _Settings()
 
-    # Roles that legitimately exist in AGENT_ROLES but belong in separate
-    # config fields — not an error, just a stale entry to clean up.
-    separate_config_roles = {"embedding"}
+    for field_name in _STRUCTURED_DICT_FIELDS:
+        current = getattr(settings, field_name)
+        if not isinstance(current, dict):
+            raise ValueError(f"{field_name} must be a dict, got {type(current).__name__}")
+        expected = set(getattr(default_instance, field_name))
+        actual = set(current)
+        unknown = actual - expected
+        if unknown:
+            raise ValueError(
+                f"Unknown keys in {field_name}: {sorted(unknown)}; "
+                f"expected only: {sorted(expected)}"
+            )
+        missing = expected - actual
+        if missing:
+            raise ValueError(
+                f"Missing keys in {field_name}: {sorted(missing)}; expected: {sorted(expected)}"
+            )
 
-    current_agents = set(settings.agent_models)
-    stale_roles = current_agents & separate_config_roles
-    changed = bool(stale_roles)
-    for role in stale_roles:
-        del settings.agent_models[role]
-        logger.warning("Removed '%s' from agent_models — it uses a separate config field", role)
-
-    unknown_model_agents = set(settings.agent_models) - expected_agents - separate_config_roles
-    if unknown_model_agents:
-        raise ValueError(
-            f"Unknown agent(s) in agent_models: {sorted(unknown_model_agents)}; "
-            f"expected only: {sorted(expected_agents)}"
-        )
-
-    missing_agents = expected_agents - set(settings.agent_models)
-    if missing_agents:
-        raise ValueError(
-            f"Missing agent(s) in agent_models: {sorted(missing_agents)}; "
-            f"expected: {sorted(expected_agents)}"
-        )
-
-    return changed
+    for field_name in _NESTED_DICT_FIELDS:
+        default_outer = getattr(default_instance, field_name)
+        current_outer = getattr(settings, field_name)
+        if not isinstance(current_outer, dict):
+            raise ValueError(f"{field_name} must be a dict, got {type(current_outer).__name__}")
+        unknown_outer = set(current_outer) - set(default_outer)
+        if unknown_outer:
+            raise ValueError(
+                f"Unknown keys in {field_name}: {sorted(unknown_outer)}; "
+                f"expected only: {sorted(default_outer)}"
+            )
+        missing_outer = set(default_outer) - set(current_outer)
+        if missing_outer:
+            raise ValueError(
+                f"Missing keys in {field_name}: {sorted(missing_outer)}; "
+                f"expected: {sorted(default_outer)}"
+            )
+        for outer_key, default_inner in default_outer.items():
+            if isinstance(default_inner, dict) and outer_key in current_outer:
+                inner = current_outer[outer_key]
+                if not isinstance(inner, dict):
+                    raise ValueError(
+                        f"{field_name}[{outer_key}] must be a dict, got {type(inner).__name__}"
+                    )
+                unknown_inner = set(inner) - set(default_inner)
+                if unknown_inner:
+                    raise ValueError(
+                        f"Unknown keys in {field_name}[{outer_key}]: "
+                        f"{sorted(unknown_inner)}; expected only: {sorted(default_inner)}"
+                    )
+                missing_inner = set(default_inner) - set(inner)
+                if missing_inner:
+                    raise ValueError(
+                        f"Missing keys in {field_name}[{outer_key}]: "
+                        f"{sorted(missing_inner)}; expected: {sorted(default_inner)}"
+                    )
 
 
 def _validate_task_temperatures(settings: Settings) -> None:
@@ -801,23 +818,12 @@ def _validate_world_health(settings: Settings) -> None:
     if not all(isinstance(t, str) for t in settings.circular_relationship_types):
         raise ValueError("circular_relationship_types must contain only strings")
 
-    # Validate relationship_minimums structure
-    if not isinstance(settings.relationship_minimums, dict):
-        raise ValueError(
-            f"relationship_minimums must be a dict, got {type(settings.relationship_minimums)}"
-        )
+    # _validate_dict_structure already rejects non-dict relationship_minimums,
+    # so we only validate inner values here.
     for entity_type, roles in settings.relationship_minimums.items():
-        if not isinstance(entity_type, str):
-            raise ValueError(f"relationship_minimums keys must be strings, got {type(entity_type)}")
-        if not isinstance(roles, dict):
-            raise ValueError(
-                f"relationship_minimums[{entity_type}] must be a dict, got {type(roles)}"
-            )
+        # _validate_dict_structure ensures outer and inner key sets are correct,
+        # but does NOT validate inner value types — those checks remain below.
         for role, min_count in roles.items():
-            if not isinstance(role, str):
-                raise ValueError(
-                    f"relationship_minimums[{entity_type}] keys must be strings, got {type(role)}"
-                )
             if not isinstance(min_count, int) or min_count < 0:
                 raise ValueError(
                     f"relationship_minimums[{entity_type}][{role}] must be a non-negative "
@@ -892,32 +898,14 @@ def _validate_rag_context(settings: Settings) -> bool:
 
 
 def _validate_world_quality_thresholds(settings: Settings) -> None:
-    """Validate per-entity quality thresholds dict.
+    """Validate per-entity quality threshold values are within range.
 
-    Checks that all required entity types are present and values are in 0-10 range.
+    Structural checks (missing/extra keys) are handled by the merge step in
+    Settings.load(), so this only validates value ranges.
 
     Raises:
-        ValueError: If thresholds are invalid.
+        ValueError: If any threshold is out of range.
     """
-    from src.settings._settings import PER_ENTITY_QUALITY_DEFAULTS
-
-    expected_types = set(PER_ENTITY_QUALITY_DEFAULTS)
-    current_types = set(settings.world_quality_thresholds)
-
-    missing = expected_types - current_types
-    if missing:
-        raise ValueError(
-            f"world_quality_thresholds missing entity types: {sorted(missing)}; "
-            f"expected: {sorted(expected_types)}"
-        )
-
-    unknown = current_types - expected_types
-    if unknown:
-        raise ValueError(
-            f"world_quality_thresholds has unknown entity types: {sorted(unknown)}; "
-            f"expected only: {sorted(expected_types)}"
-        )
-
     for entity_type, threshold in settings.world_quality_thresholds.items():
         if not 0.0 <= threshold <= 10.0:
             raise ValueError(

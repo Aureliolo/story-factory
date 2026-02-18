@@ -433,6 +433,7 @@ class WorldQualityService:
         existing_names: list[str],
         custom_instructions: str | None = None,
     ) -> tuple[Character, CharacterQualityScores, int]:
+        """Generate a character using the creator-judge-refine quality loop."""
         return _generate_character_with_quality(
             self, story_state, existing_names, custom_instructions
         )
@@ -442,6 +443,7 @@ class WorldQualityService:
         character: Character,
         story_state: StoryState,
     ) -> tuple[Character, CharacterQualityScores, int]:
+        """Review and refine an existing character through the quality loop."""
         return _review_character_quality(self, character, story_state)
 
     # -- Plot --
@@ -450,6 +452,7 @@ class WorldQualityService:
         plot_outline: PlotOutline,
         story_state: StoryState,
     ) -> tuple[PlotOutline, PlotQualityScores, int]:
+        """Review and refine a plot outline through the quality loop."""
         return _review_plot_quality(self, plot_outline, story_state)
 
     # -- Chapter --
@@ -458,6 +461,7 @@ class WorldQualityService:
         chapter: Chapter,
         story_state: StoryState,
     ) -> tuple[Chapter, ChapterQualityScores, int]:
+        """Review and refine a chapter through the quality loop."""
         return _review_chapter_quality(self, chapter, story_state)
 
     # -- Location --
@@ -466,6 +470,7 @@ class WorldQualityService:
         story_state: StoryState,
         existing_names: list[str],
     ) -> tuple[dict[str, Any], LocationQualityScores, int]:
+        """Generate a location using the creator-judge-refine quality loop."""
         return _generate_location_with_quality(self, story_state, existing_names)
 
     # -- Faction --
@@ -475,6 +480,7 @@ class WorldQualityService:
         existing_names: list[str],
         existing_locations: list[str] | None = None,
     ) -> tuple[dict[str, Any], FactionQualityScores, int]:
+        """Generate a faction using the creator-judge-refine quality loop."""
         return _generate_faction_with_quality(self, story_state, existing_names, existing_locations)
 
     # -- Item --
@@ -483,6 +489,7 @@ class WorldQualityService:
         story_state: StoryState,
         existing_names: list[str],
     ) -> tuple[dict[str, Any], ItemQualityScores, int]:
+        """Generate an item using the creator-judge-refine quality loop."""
         return _generate_item_with_quality(self, story_state, existing_names)
 
     # -- Concept --
@@ -491,6 +498,7 @@ class WorldQualityService:
         story_state: StoryState,
         existing_names: list[str],
     ) -> tuple[dict[str, Any], ConceptQualityScores, int]:
+        """Generate a concept using the creator-judge-refine quality loop."""
         return _generate_concept_with_quality(self, story_state, existing_names)
 
     # -- Relationship --
@@ -527,6 +535,7 @@ class WorldQualityService:
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[dict[str, Any], FactionQualityScores]]:
+        """Generate multiple factions with quality refinement."""
         return _generate_factions_with_quality(
             self,
             story_state,
@@ -545,6 +554,7 @@ class WorldQualityService:
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[dict[str, Any], ItemQualityScores]]:
+        """Generate multiple items with quality refinement."""
         return _generate_items_with_quality(
             self, story_state, existing_names, count, cancel_check, progress_callback
         )
@@ -557,6 +567,7 @@ class WorldQualityService:
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[dict[str, Any], ConceptQualityScores]]:
+        """Generate multiple concepts with quality refinement."""
         return _generate_concepts_with_quality(
             self, story_state, existing_names, count, cancel_check, progress_callback
         )
@@ -570,6 +581,7 @@ class WorldQualityService:
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[Character, CharacterQualityScores]]:
+        """Generate multiple characters with quality refinement."""
         return _generate_characters_with_quality(
             self,
             story_state,
@@ -588,6 +600,7 @@ class WorldQualityService:
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[dict[str, Any], LocationQualityScores]]:
+        """Generate multiple locations with quality refinement."""
         return _generate_locations_with_quality(
             self, story_state, existing_names, count, cancel_check, progress_callback
         )
@@ -626,6 +639,7 @@ class WorldQualityService:
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[Character, CharacterQualityScores]]:
+        """Review and refine a batch of characters through the quality loop."""
         return _review_characters_batch(
             self, characters, story_state, cancel_check, progress_callback
         )
@@ -637,96 +651,120 @@ class WorldQualityService:
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[Chapter, ChapterQualityScores]]:
+        """Review and refine a batch of chapters through the quality loop."""
         return _review_chapters_batch(self, chapters, story_state, cancel_check, progress_callback)
 
     # -- Private: Character helpers --
     def _create_character(self, story_state, existing_names, temperature, custom_instructions=None):
+        """Create a character via LLM at the given temperature."""
         return _character._create_character(
             self, story_state, existing_names, temperature, custom_instructions
         )
 
     def _judge_character_quality(self, character, story_state, temperature):
+        """Judge character quality and return scores."""
         return _character._judge_character_quality(self, character, story_state, temperature)
 
     def _refine_character(self, character, scores, story_state, temperature):
+        """Refine a character based on quality scores."""
         return _character._refine_character(self, character, scores, story_state, temperature)
 
     # -- Private: Location helpers --
     def _create_location(self, story_state, existing_names, temperature):
+        """Create a location via LLM at the given temperature."""
         return _location._create_location(self, story_state, existing_names, temperature)
 
     def _judge_location_quality(self, location, story_state, temperature):
+        """Judge location quality and return scores."""
         return _location._judge_location_quality(self, location, story_state, temperature)
 
     def _refine_location(self, location, scores, story_state, temperature):
+        """Refine a location based on quality scores."""
         return _location._refine_location(self, location, scores, story_state, temperature)
 
     # -- Private: Faction helpers --
     def _create_faction(self, story_state, existing_names, temperature, existing_locations=None):
+        """Create a faction via LLM at the given temperature."""
         return _faction._create_faction(
             self, story_state, existing_names, temperature, existing_locations
         )
 
     def _judge_faction_quality(self, faction, story_state, temperature):
+        """Judge faction quality and return scores."""
         return _faction._judge_faction_quality(self, faction, story_state, temperature)
 
     def _refine_faction(self, faction, scores, story_state, temperature):
+        """Refine a faction based on quality scores."""
         return _faction._refine_faction(self, faction, scores, story_state, temperature)
 
     # -- Private: Item helpers --
     def _create_item(self, story_state, existing_names, temperature):
+        """Create an item via LLM at the given temperature."""
         return _item._create_item(self, story_state, existing_names, temperature)
 
     def _judge_item_quality(self, item, story_state, temperature):
+        """Judge item quality and return scores."""
         return _item._judge_item_quality(self, item, story_state, temperature)
 
     def _refine_item(self, item, scores, story_state, temperature):
+        """Refine an item based on quality scores."""
         return _item._refine_item(self, item, scores, story_state, temperature)
 
     # -- Private: Concept helpers --
     def _create_concept(self, story_state, existing_names, temperature):
+        """Create a concept via LLM at the given temperature."""
         return _concept._create_concept(self, story_state, existing_names, temperature)
 
     def _judge_concept_quality(self, concept, story_state, temperature):
+        """Judge concept quality and return scores."""
         return _concept._judge_concept_quality(self, concept, story_state, temperature)
 
     def _refine_concept(self, concept, scores, story_state, temperature):
+        """Refine a concept based on quality scores."""
         return _concept._refine_concept(self, concept, scores, story_state, temperature)
 
     # -- Private: Relationship helpers --
     @staticmethod
     def _is_duplicate_relationship(source_name, target_name, existing_rels):
+        """Check whether a relationship between source and target already exists."""
         return _relationship._is_duplicate_relationship(source_name, target_name, existing_rels)
 
     def _create_relationship(
         self, story_state, entity_names, existing_rels, temperature, required_entity=None
     ):
+        """Create a relationship via LLM at the given temperature."""
         return _relationship._create_relationship(
             self, story_state, entity_names, existing_rels, temperature, required_entity
         )
 
     def _judge_relationship_quality(self, relationship, story_state, temperature):
+        """Judge relationship quality and return scores."""
         return _relationship._judge_relationship_quality(
             self, relationship, story_state, temperature
         )
 
     def _refine_relationship(self, relationship, scores, story_state, temperature):
+        """Refine a relationship based on quality scores."""
         return _relationship._refine_relationship(
             self, relationship, scores, story_state, temperature
         )
 
     # -- Private: Plot helpers --
     def _judge_plot_quality(self, plot_outline, story_state, temperature):
+        """Judge plot outline quality and return scores."""
         return _plot._judge_plot_quality(self, plot_outline, story_state, temperature)
 
     def _refine_plot(self, plot_outline, scores, story_state, temperature):
+        """Refine a plot outline based on quality scores."""
         return _plot._refine_plot(self, plot_outline, scores, story_state, temperature)
 
     # -- Private: Chapter helpers --
     def _judge_chapter_quality(self, chapter, story_state, temperature):
+        """Judge chapter quality and return scores."""
         return _chapter_quality._judge_chapter_quality(self, chapter, story_state, temperature)
 
     def _refine_chapter_outline(self, chapter, scores, story_state, temperature):
+        """Refine a chapter outline based on quality scores."""
         return _chapter_quality._refine_chapter_outline(
             self, chapter, scores, story_state, temperature
         )
@@ -738,12 +776,14 @@ class WorldQualityService:
         entity_type: str,
         full_description: str,
     ) -> str:
+        """Generate a short mini-description for an entity."""
         return _generate_mini_description(self, name, entity_type, full_description)
 
     def generate_mini_descriptions_batch(
         self,
         entities: list[dict[str, Any]],
     ) -> dict[str, str]:
+        """Generate mini-descriptions for a batch of entities."""
         return _generate_mini_descriptions_batch(self, entities)
 
     async def refine_entity(
@@ -751,6 +791,7 @@ class WorldQualityService:
         entity: Entity | None,
         story_brief: StoryBrief | None,
     ) -> dict[str, Any] | None:
+        """Refine an entity using LLM feedback and return updated data."""
         return await _refine_entity(self, entity, story_brief)
 
     async def regenerate_entity(
@@ -759,6 +800,7 @@ class WorldQualityService:
         story_brief: StoryBrief | None,
         custom_instructions: str | None = None,
     ) -> dict[str, Any] | None:
+        """Regenerate an entity from scratch with optional custom instructions."""
         return await _regenerate_entity(self, entity, story_brief, custom_instructions)
 
     async def suggest_relationships_for_entity(
@@ -769,6 +811,7 @@ class WorldQualityService:
         story_brief: StoryBrief | None,
         num_suggestions: int = 3,
     ) -> list[dict[str, Any]]:
+        """Suggest new relationships for an entity based on available connections."""
         return await _suggest_relationships_for_entity(
             self, entity, available_entities, existing_relationships, story_brief, num_suggestions
         )
@@ -777,6 +820,7 @@ class WorldQualityService:
         self,
         entity: Entity,
     ) -> list[dict[str, str]]:
+        """Extract factual claims from an entity's description for consistency checking."""
         return await _extract_entity_claims(self, entity)
 
     async def check_contradiction(
@@ -784,6 +828,7 @@ class WorldQualityService:
         claim_a: dict[str, str],
         claim_b: dict[str, str],
     ) -> dict[str, Any] | None:
+        """Check whether two claims contradict each other."""
         return await _check_contradiction(self, claim_a, claim_b)
 
     async def validate_entity_consistency(
@@ -791,4 +836,5 @@ class WorldQualityService:
         entities: list[Entity],
         max_comparisons: int = 50,
     ) -> list[dict[str, Any]]:
+        """Validate consistency across entities by comparing claim pairs."""
         return await _validate_entity_consistency(self, entities, max_comparisons)
