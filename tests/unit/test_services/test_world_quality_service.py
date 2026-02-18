@@ -199,6 +199,7 @@ class TestCharacterQualityScores:
         result = scores.to_dict()
         assert result["depth"] == 8.0
         assert result["goal_clarity"] == 7.0
+        assert result["temporal_plausibility"] == 7.0
         assert result["average"] == 7.0
         assert result["feedback"] == "Good character, needs more flaws"
 
@@ -228,7 +229,7 @@ class TestCharacterQualityScores:
         with pytest.raises(ValidationError) as exc_info:
             CharacterQualityScores()  # type: ignore[call-arg]
 
-        # Should have errors for all 5 score fields
+        # Should have errors for all 6 score fields
         errors = exc_info.value.errors()
         missing_fields = {e["loc"][0] for e in errors if e["type"] == "missing"}
         assert missing_fields == {
@@ -282,8 +283,26 @@ class TestLocationQualityScores:
         )
         result = scores.to_dict()
         assert result["atmosphere"] == 8.0
+        assert result["temporal_plausibility"] == 7.5
         assert result["average"] == 7.5
         assert result["feedback"] == "Add more sensory details"
+
+    def test_fields_are_required(self):
+        """Test that all score fields are required (no defaults)."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as exc_info:
+            LocationQualityScores()  # type: ignore[call-arg]
+
+        errors = exc_info.value.errors()
+        missing_fields = {e["loc"][0] for e in errors if e["type"] == "missing"}
+        assert missing_fields == {
+            "atmosphere",
+            "narrative_significance",
+            "story_relevance",
+            "distinctiveness",
+            "temporal_plausibility",
+        }
 
 
 class TestRelationshipQualityScores:
@@ -369,8 +388,26 @@ class TestFactionQualityScores:
         )
         result = scores.to_dict()
         assert result["coherence"] == 8.0
+        assert result["temporal_plausibility"] == 7.5
         assert result["average"] == 7.5
         assert result["feedback"] == "More internal structure needed"
+
+    def test_fields_are_required(self):
+        """Test that all score fields are required (no defaults)."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as exc_info:
+            FactionQualityScores()  # type: ignore[call-arg]
+
+        errors = exc_info.value.errors()
+        missing_fields = {e["loc"][0] for e in errors if e["type"] == "missing"}
+        assert missing_fields == {
+            "coherence",
+            "influence",
+            "conflict_potential",
+            "distinctiveness",
+            "temporal_plausibility",
+        }
 
 
 class TestItemQualityScores:
@@ -415,8 +452,26 @@ class TestItemQualityScores:
         )
         result = scores.to_dict()
         assert result["story_significance"] == 8.0
+        assert result["temporal_plausibility"] == 7.5
         assert result["average"] == 7.5
         assert result["feedback"] == "More history needed"
+
+    def test_fields_are_required(self):
+        """Test that all score fields are required (no defaults)."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as exc_info:
+            ItemQualityScores()  # type: ignore[call-arg]
+
+        errors = exc_info.value.errors()
+        missing_fields = {e["loc"][0] for e in errors if e["type"] == "missing"}
+        assert missing_fields == {
+            "story_significance",
+            "uniqueness",
+            "narrative_potential",
+            "integration",
+            "temporal_plausibility",
+        }
 
 
 class TestConceptQualityScores:
@@ -461,8 +516,26 @@ class TestConceptQualityScores:
         )
         result = scores.to_dict()
         assert result["relevance"] == 8.0
+        assert result["temporal_plausibility"] == 7.5
         assert result["average"] == 7.5
         assert result["feedback"] == "More philosophical depth"
+
+    def test_fields_are_required(self):
+        """Test that all score fields are required (no defaults)."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as exc_info:
+            ConceptQualityScores()  # type: ignore[call-arg]
+
+        errors = exc_info.value.errors()
+        missing_fields = {e["loc"][0] for e in errors if e["type"] == "missing"}
+        assert missing_fields == {
+            "relevance",
+            "depth",
+            "manifestation",
+            "resonance",
+            "temporal_plausibility",
+        }
 
 
 class TestRefinementConfig:

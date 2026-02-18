@@ -58,12 +58,12 @@ def _find_entity_by_name(entities: list[Entity], name: str) -> Entity | None:
     matches = [e for e in entities if _normalize_name(e.name) == normalized_target]
 
     if len(matches) == 1:
-        logger.debug(f"Fuzzy matched relationship entity: '{name}' -> '{matches[0].name}'")
+        logger.debug("Fuzzy matched relationship entity: %r -> %r", name, matches[0].name)
         return matches[0]
 
     if len(matches) > 1:
         match_names = [e.name for e in matches]
-        logger.warning(f"Ambiguous fuzzy match for '{name}': {match_names}. Skipping assignment.")
+        logger.warning("Ambiguous fuzzy match for %r: %s. Skipping assignment.", name, match_names)
         return None
 
     return None

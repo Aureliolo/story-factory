@@ -282,7 +282,7 @@ Description: {character.description}
 Traits: {", ".join(character.trait_names)}
 Goals: {", ".join(character.goals)}
 Arc Notes: {character.arc_notes}
-Birth Year: {character.birth_year or "N/A"}
+Birth Year: {character.birth_year if character.birth_year is not None else "N/A"}
 Birth Era: {character.birth_era or "N/A"}
 
 {JUDGE_CALIBRATION_BLOCK}
@@ -352,7 +352,7 @@ Description: {character.description}
 Traits: {", ".join(character.trait_names)}
 Goals: {", ".join(character.goals)}
 Arc Notes: {character.arc_notes}
-Birth Year: {character.birth_year or "N/A"}
+Birth Year: {character.birth_year if character.birth_year is not None else "N/A"}
 Birth Era: {character.birth_era or "N/A"}
 
 CURRENT SCORES (need {threshold}+ in all areas):
