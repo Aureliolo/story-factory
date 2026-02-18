@@ -48,49 +48,80 @@ class TestScoreFieldAliases:
     def test_character_construct_by_field_name(self):
         """Can construct CharacterQualityScores using Python field name."""
         scores = CharacterQualityScores(
-            depth=7.0, goals=8.0, flaws=6.0, uniqueness=7.5, arc_potential=8.0
+            depth=7.0,
+            goals=8.0,
+            flaws=6.0,
+            uniqueness=7.5,
+            arc_potential=8.0,
+            temporal_plausibility=7.0,
         )
         assert scores.goals == 8.0
 
     def test_character_construct_by_alias(self):
         """Can construct CharacterQualityScores using alias name."""
         scores = CharacterQualityScores(  # type: ignore[call-arg]
-            depth=7.0, goal_clarity=8.0, flaws=6.0, uniqueness=7.5, arc_potential=8.0
+            depth=7.0,
+            goal_clarity=8.0,
+            flaws=6.0,
+            uniqueness=7.5,
+            arc_potential=8.0,
+            temporal_plausibility=7.0,
         )
         assert scores.goals == 8.0
 
     def test_location_construct_by_field_name(self):
         """Can construct LocationQualityScores using Python field name."""
         scores = LocationQualityScores(
-            atmosphere=7.0, significance=8.0, story_relevance=6.0, distinctiveness=7.5
+            atmosphere=7.0,
+            significance=8.0,
+            story_relevance=6.0,
+            distinctiveness=7.5,
+            temporal_plausibility=7.0,
         )
         assert scores.significance == 8.0
 
     def test_location_construct_by_alias(self):
         """Can construct LocationQualityScores using alias name."""
         scores = LocationQualityScores(  # type: ignore[call-arg]
-            atmosphere=7.0, narrative_significance=8.0, story_relevance=6.0, distinctiveness=7.5
+            atmosphere=7.0,
+            narrative_significance=8.0,
+            story_relevance=6.0,
+            distinctiveness=7.5,
+            temporal_plausibility=7.0,
         )
         assert scores.significance == 8.0
 
     def test_item_construct_by_field_name(self):
         """Can construct ItemQualityScores using Python field name."""
         scores = ItemQualityScores(
-            significance=8.0, uniqueness=7.0, narrative_potential=6.0, integration=7.5
+            significance=8.0,
+            uniqueness=7.0,
+            narrative_potential=6.0,
+            integration=7.5,
+            temporal_plausibility=7.0,
         )
         assert scores.significance == 8.0
 
     def test_item_construct_by_alias(self):
         """Can construct ItemQualityScores using alias name."""
         scores = ItemQualityScores(  # type: ignore[call-arg]
-            story_significance=8.0, uniqueness=7.0, narrative_potential=6.0, integration=7.5
+            story_significance=8.0,
+            uniqueness=7.0,
+            narrative_potential=6.0,
+            integration=7.5,
+            temporal_plausibility=7.0,
         )
         assert scores.significance == 8.0
 
     def test_character_to_dict_uses_alias_key(self):
         """to_dict() uses alias name 'goal_clarity' as key, not 'goals'."""
         scores = CharacterQualityScores(
-            depth=7.0, goals=8.0, flaws=6.0, uniqueness=7.5, arc_potential=8.0
+            depth=7.0,
+            goals=8.0,
+            flaws=6.0,
+            uniqueness=7.5,
+            arc_potential=8.0,
+            temporal_plausibility=7.0,
         )
         d = scores.to_dict()
         assert "goal_clarity" in d
@@ -100,7 +131,11 @@ class TestScoreFieldAliases:
     def test_location_to_dict_uses_alias_key(self):
         """to_dict() uses alias name 'narrative_significance' as key."""
         scores = LocationQualityScores(
-            atmosphere=7.0, significance=8.0, story_relevance=6.0, distinctiveness=7.5
+            atmosphere=7.0,
+            significance=8.0,
+            story_relevance=6.0,
+            distinctiveness=7.5,
+            temporal_plausibility=7.0,
         )
         d = scores.to_dict()
         assert "narrative_significance" in d
@@ -110,7 +145,11 @@ class TestScoreFieldAliases:
     def test_item_to_dict_uses_alias_key(self):
         """to_dict() uses alias name 'story_significance' as key."""
         scores = ItemQualityScores(
-            significance=8.0, uniqueness=7.0, narrative_potential=6.0, integration=7.5
+            significance=8.0,
+            uniqueness=7.0,
+            narrative_potential=6.0,
+            integration=7.5,
+            temporal_plausibility=7.0,
         )
         d = scores.to_dict()
         assert "story_significance" in d
@@ -120,7 +159,12 @@ class TestScoreFieldAliases:
     def test_character_weak_dimensions_uses_alias(self):
         """weak_dimensions() returns alias name 'goal_clarity' not 'goals'."""
         scores = CharacterQualityScores(
-            depth=9.0, goals=5.0, flaws=9.0, uniqueness=9.0, arc_potential=9.0
+            depth=9.0,
+            goals=5.0,
+            flaws=9.0,
+            uniqueness=9.0,
+            arc_potential=9.0,
+            temporal_plausibility=9.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "goal_clarity" in weak
@@ -129,7 +173,11 @@ class TestScoreFieldAliases:
     def test_location_weak_dimensions_uses_alias(self):
         """weak_dimensions() returns alias name 'narrative_significance'."""
         scores = LocationQualityScores(
-            atmosphere=9.0, significance=5.0, story_relevance=9.0, distinctiveness=9.0
+            atmosphere=9.0,
+            significance=5.0,
+            story_relevance=9.0,
+            distinctiveness=9.0,
+            temporal_plausibility=9.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "narrative_significance" in weak
@@ -138,7 +186,11 @@ class TestScoreFieldAliases:
     def test_item_weak_dimensions_uses_alias(self):
         """weak_dimensions() returns alias name 'story_significance'."""
         scores = ItemQualityScores(
-            significance=5.0, uniqueness=9.0, narrative_potential=9.0, integration=9.0
+            significance=5.0,
+            uniqueness=9.0,
+            narrative_potential=9.0,
+            integration=9.0,
+            temporal_plausibility=9.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "story_significance" in weak
@@ -147,7 +199,12 @@ class TestScoreFieldAliases:
     def test_character_average_unchanged(self):
         """Average calculation works correctly with alias fields."""
         scores = CharacterQualityScores(
-            depth=8.0, goals=7.0, flaws=6.0, uniqueness=9.0, arc_potential=5.0
+            depth=8.0,
+            goals=7.0,
+            flaws=6.0,
+            uniqueness=9.0,
+            arc_potential=5.0,
+            temporal_plausibility=7.0,
         )
         assert scores.average == 7.0
 
@@ -236,7 +293,12 @@ class TestWeakDimensionsBranchCoverage:
     def test_character_depth_and_uniqueness_weak(self):
         """Cover depth and uniqueness branches in CharacterQualityScores.weak_dimensions."""
         scores = CharacterQualityScores(
-            depth=3.0, goals=9.0, flaws=9.0, uniqueness=4.0, arc_potential=9.0
+            depth=3.0,
+            goals=9.0,
+            flaws=9.0,
+            uniqueness=4.0,
+            arc_potential=9.0,
+            temporal_plausibility=9.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "depth" in weak

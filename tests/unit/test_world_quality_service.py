@@ -752,6 +752,7 @@ class TestFactionCreationTemperatureEscalation:
                 influence=9,
                 conflict_potential=9,
                 distinctiveness=9,
+                temporal_plausibility=9,
                 feedback="Good",
             )
         )
@@ -802,6 +803,7 @@ class TestFactionCreationTemperatureEscalation:
                 influence=9,
                 conflict_potential=9,
                 distinctiveness=9,
+                temporal_plausibility=9,
                 feedback="Good",
             )
         )

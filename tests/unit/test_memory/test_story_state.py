@@ -10,6 +10,10 @@ from src.memory.story_state import (
     CharacterCreation,
     CharacterCreationList,
     CharacterList,
+    Concept,
+    Faction,
+    Item,
+    Location,
     OutlineVariation,
     PlotPoint,
     PlotPointList,
@@ -1751,3 +1755,150 @@ class TestWrapperModelValidators:
         assert len(result.chapters) == 2
         assert result.chapters[0].title == "Ch1"
         assert result.chapters[1].title == "Ch2"
+
+
+class TestCharacterTemporalFields:
+    """Tests for Character temporal/lifecycle fields."""
+
+    def test_temporal_fields_default_to_none_or_empty(self):
+        """Character with no temporal fields has correct defaults."""
+        char = Character(name="Test", role="protagonist", description="A test character")
+        assert char.birth_year is None
+        assert char.death_year is None
+        assert char.birth_era is None
+        assert char.temporal_notes == ""
+
+    def test_temporal_fields_populated(self):
+        """Character with temporal fields set stores them correctly."""
+        char = Character(
+            name="Elder",
+            role="supporting",
+            description="An ancient being",
+            birth_year=100,
+            death_year=200,
+            birth_era="First Age",
+            temporal_notes="Lived through the great war",
+        )
+        assert char.birth_year == 100
+        assert char.death_year == 200
+        assert char.birth_era == "First Age"
+        assert char.temporal_notes == "Lived through the great war"
+
+    def test_character_creation_to_character_preserves_temporal_fields(self):
+        """CharacterCreation.to_character() preserves temporal fields."""
+        cc = CharacterCreation(
+            name="Temporal Hero",
+            role="protagonist",
+            description="A hero from the past",
+            birth_year=50,
+            death_year=150,
+            birth_era="Dawn Era",
+            temporal_notes="Rose during the uprising",
+        )
+        char = cc.to_character()
+        assert char.birth_year == 50
+        assert char.death_year == 150
+        assert char.birth_era == "Dawn Era"
+        assert char.temporal_notes == "Rose during the uprising"
+
+
+class TestLocationTemporalFields:
+    """Tests for Location temporal/lifecycle fields."""
+
+    def test_location_temporal_fields(self):
+        """Location with temporal fields stores them correctly."""
+        loc = Location(
+            name="Ancient City",
+            description="A ruined city",
+            founding_year=500,
+            destruction_year=900,
+            founding_era="Golden Age",
+            temporal_notes="Destroyed in the great flood",
+        )
+        assert loc.founding_year == 500
+        assert loc.destruction_year == 900
+        assert loc.founding_era == "Golden Age"
+        assert loc.temporal_notes == "Destroyed in the great flood"
+
+    def test_location_temporal_defaults(self):
+        """Location with no temporal fields has correct defaults."""
+        loc = Location(name="Simple Place", description="Nothing special")
+        assert loc.founding_year is None
+        assert loc.destruction_year is None
+        assert loc.founding_era is None
+        assert loc.temporal_notes == ""
+
+
+class TestFactionTemporalFields:
+    """Tests for Faction temporal/lifecycle fields."""
+
+    def test_faction_temporal_fields(self):
+        """Faction with temporal fields stores them correctly."""
+        faction = Faction(
+            name="Order of Light",
+            description="A holy order",
+            founding_year=100,
+            dissolution_year=400,
+            founding_era="Silver Age",
+            temporal_notes="Disbanded after the peace treaty",
+        )
+        assert faction.founding_year == 100
+        assert faction.dissolution_year == 400
+        assert faction.founding_era == "Silver Age"
+        assert faction.temporal_notes == "Disbanded after the peace treaty"
+
+    def test_faction_temporal_defaults(self):
+        """Faction with no temporal fields has correct defaults."""
+        faction = Faction(name="Simple Guild", description="A guild")
+        assert faction.founding_year is None
+        assert faction.dissolution_year is None
+        assert faction.founding_era is None
+        assert faction.temporal_notes == ""
+
+
+class TestItemTemporalFields:
+    """Tests for Item temporal/lifecycle fields."""
+
+    def test_item_temporal_fields(self):
+        """Item with temporal fields stores them correctly."""
+        item = Item(
+            name="Enchanted Blade",
+            description="A magical sword",
+            creation_year=250,
+            creation_era="Iron Age",
+            temporal_notes="Forged during the war of shadows",
+        )
+        assert item.creation_year == 250
+        assert item.creation_era == "Iron Age"
+        assert item.temporal_notes == "Forged during the war of shadows"
+
+    def test_item_temporal_defaults(self):
+        """Item with no temporal fields has correct defaults."""
+        item = Item(name="Simple Ring", description="A plain ring")
+        assert item.creation_year is None
+        assert item.creation_era is None
+        assert item.temporal_notes == ""
+
+
+class TestConceptTemporalFields:
+    """Tests for Concept temporal/lifecycle fields."""
+
+    def test_concept_temporal_fields(self):
+        """Concept with temporal fields stores them correctly."""
+        concept = Concept(
+            name="The Awakening",
+            description="A spiritual event",
+            emergence_year=1,
+            emergence_era="Dawn",
+            temporal_notes="Changed the world forever",
+        )
+        assert concept.emergence_year == 1
+        assert concept.emergence_era == "Dawn"
+        assert concept.temporal_notes == "Changed the world forever"
+
+    def test_concept_temporal_defaults(self):
+        """Concept with no temporal fields has correct defaults."""
+        concept = Concept(name="Abstract Idea", description="Something vague")
+        assert concept.emergence_year is None
+        assert concept.emergence_era is None
+        assert concept.temporal_notes == ""

@@ -111,6 +111,7 @@ Create a concept that:
 2. Has philosophical depth
 3. Can manifest in concrete ways in the story
 4. Resonates emotionally with readers
+5. Timeline placement - emergence year and era (if calendar available)
 
 Write all text in {brief.language}."""
 
@@ -180,6 +181,7 @@ CONCEPT TO EVALUATE:
 Name: {concept.get("name", "Unknown")}
 Description: {concept.get("description", "")}
 Manifestations: {concept.get("manifestations", "")}
+Emergence Year: {concept.get("emergence_year", "N/A")}
 
 {JUDGE_CALIBRATION_BLOCK}
 
@@ -188,11 +190,12 @@ Rate each dimension 0-10:
 - depth: Philosophical richness
 - manifestation: How well it can appear in story
 - resonance: Emotional impact potential
+- temporal_plausibility: Timeline consistency, era-appropriate placement
 
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"relevance": <float 0-10>, "depth": <float 0-10>, "manifestation": <float 0-10>, "resonance": <float 0-10>, "feedback": "Your assessment..."}}
+{{"relevance": <float 0-10>, "depth": <float 0-10>, "manifestation": <float 0-10>, "resonance": <float 0-10>, "temporal_plausibility": <float 0-10>, "feedback": "Your assessment..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
@@ -254,6 +257,8 @@ def _refine_concept(
         improvement_focus.append("Provide clearer ways the concept appears in the story")
     if scores.resonance < threshold:
         improvement_focus.append("Increase emotional impact potential")
+    if scores.temporal_plausibility < threshold:
+        improvement_focus.append("Improve timeline placement and era consistency")
 
     prompt = f"""TASK: Improve this concept to score HIGHER on the weak dimensions.
 
@@ -261,12 +266,14 @@ ORIGINAL CONCEPT:
 Name: {concept.get("name", "Unknown")}
 Description: {concept.get("description", "")}
 Manifestations: {concept.get("manifestations", "")}
+Emergence Year: {concept.get("emergence_year", "N/A")}
 
 CURRENT SCORES (need {threshold}+ in all areas):
 - Relevance: {scores.relevance}/10
 - Depth: {scores.depth}/10
 - Manifestation: {scores.manifestation}/10
 - Resonance: {scores.resonance}/10
+- Temporal Plausibility: {scores.temporal_plausibility}/10
 
 JUDGE'S FEEDBACK: {scores.feedback}
 
@@ -291,10 +298,16 @@ Return ONLY the improved concept."""
             temperature=temperature,
         )
 
-        # Ensure name is preserved from original concept
+        # Ensure name and temporal fields are preserved from original concept
         result = refined.model_dump()
         result["name"] = concept.get("name", "Unknown")
         result["type"] = "concept"
+        for key in ("emergence_year", "emergence_era", "temporal_notes"):
+            if result.get(key) in (None, "") and concept.get(key) not in (None, ""):
+                result[key] = concept[key]
+                logger.debug(
+                    "Preserved temporal field '%s' from original concept '%s'", key, result["name"]
+                )
         return result
     except Exception as e:
         summary = summarize_llm_error(e)

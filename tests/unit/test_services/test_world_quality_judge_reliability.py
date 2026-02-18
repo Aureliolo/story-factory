@@ -222,6 +222,7 @@ class TestJudgeWithAveraging:
             flaws=5.0,
             uniqueness=8.0,
             arc_potential=7.0,
+            temporal_plausibility=7.0,
             feedback="Good character",
         )
         judge_fn = MagicMock(return_value=scores)
@@ -240,6 +241,7 @@ class TestJudgeWithAveraging:
             flaws=5.0,
             uniqueness=8.0,
             arc_potential=7.0,
+            temporal_plausibility=7.0,
             feedback="Good character",
         )
         judge_fn = MagicMock(return_value=scores)
@@ -258,6 +260,7 @@ class TestJudgeWithAveraging:
             flaws=5.0,
             uniqueness=8.0,
             arc_potential=7.0,
+            temporal_plausibility=7.0,
             feedback="Good character",
         )
         judge_fn = MagicMock(return_value=scores)
@@ -276,6 +279,7 @@ class TestJudgeWithAveraging:
                 flaws=6.0,
                 uniqueness=6.0,
                 arc_potential=6.0,
+                temporal_plausibility=6.0,
                 feedback="Low",
             ),
             CharacterQualityScores(
@@ -284,6 +288,7 @@ class TestJudgeWithAveraging:
                 flaws=8.0,
                 uniqueness=8.0,
                 arc_potential=8.0,
+                temporal_plausibility=8.0,
                 feedback="High",
             ),
             CharacterQualityScores(
@@ -292,6 +297,7 @@ class TestJudgeWithAveraging:
                 flaws=7.0,
                 uniqueness=7.0,
                 arc_potential=7.0,
+                temporal_plausibility=7.0,
                 feedback="Mid",
             ),
         ]
@@ -328,6 +334,7 @@ class TestJudgeWithAveraging:
             flaws=5.0,
             uniqueness=5.0,
             arc_potential=5.0,
+            temporal_plausibility=5.0,
             feedback="Fallback",
         )
 
@@ -362,6 +369,7 @@ class TestJudgeWithAveraging:
                 flaws=7.0,
                 uniqueness=7.0,
                 arc_potential=7.0,
+                temporal_plausibility=7.0,
                 feedback="OK",
             )
 
@@ -385,6 +393,7 @@ class TestJudgeWithAveraging:
             flaws=6.0,
             uniqueness=6.0,
             arc_potential=6.0,
+            temporal_plausibility=6.0,
             feedback="Only one",
         )
         call_count = 0
@@ -427,6 +436,7 @@ class TestAggregateScores:
                 influence=5.0,
                 conflict_potential=5.0,
                 distinctiveness=5.0,
+                temporal_plausibility=5.0,
                 feedback="Low",
             ),
             FactionQualityScores(
@@ -434,6 +444,7 @@ class TestAggregateScores:
                 influence=9.0,
                 conflict_potential=9.0,
                 distinctiveness=9.0,
+                temporal_plausibility=9.0,
                 feedback="High",
             ),
             FactionQualityScores(
@@ -441,6 +452,7 @@ class TestAggregateScores:
                 influence=7.0,
                 conflict_potential=7.0,
                 distinctiveness=7.0,
+                temporal_plausibility=7.0,
                 feedback="Mid",
             ),
         ]
@@ -461,6 +473,7 @@ class TestAggregateScores:
                 significance=6.0,
                 story_relevance=6.0,
                 distinctiveness=6.0,
+                temporal_plausibility=6.0,
                 feedback="A",
             ),
             LocationQualityScores(
@@ -468,6 +481,7 @@ class TestAggregateScores:
                 significance=7.0,
                 story_relevance=7.0,
                 distinctiveness=7.0,
+                temporal_plausibility=7.0,
                 feedback="B",
             ),
             LocationQualityScores(
@@ -475,6 +489,7 @@ class TestAggregateScores:
                 significance=8.0,
                 story_relevance=8.0,
                 distinctiveness=8.0,
+                temporal_plausibility=8.0,
                 feedback="C",
             ),
         ]
@@ -496,6 +511,7 @@ class TestAggregateScores:
                 uniqueness=7.0,
                 narrative_potential=7.0,
                 integration=7.0,
+                temporal_plausibility=7.0,
                 feedback="Normal 1",
             ),
             ItemQualityScores(
@@ -503,6 +519,7 @@ class TestAggregateScores:
                 uniqueness=7.0,
                 narrative_potential=7.0,
                 integration=7.0,
+                temporal_plausibility=7.0,
                 feedback="Normal 2",
             ),
             ItemQualityScores(
@@ -510,6 +527,7 @@ class TestAggregateScores:
                 uniqueness=7.0,
                 narrative_potential=7.0,
                 integration=7.0,
+                temporal_plausibility=7.0,
                 feedback="Normal 3",
             ),
             ItemQualityScores(
@@ -517,6 +535,7 @@ class TestAggregateScores:
                 uniqueness=7.0,
                 narrative_potential=7.0,
                 integration=7.0,
+                temporal_plausibility=7.0,
                 feedback="Normal 4",
             ),
             ItemQualityScores(
@@ -524,6 +543,7 @@ class TestAggregateScores:
                 uniqueness=1.0,
                 narrative_potential=1.0,
                 integration=1.0,
+                temporal_plausibility=1.0,
                 feedback="Outlier",
             ),
         ]
@@ -543,6 +563,7 @@ class TestAggregateScores:
                 depth=7.0,
                 manifestation=7.0,
                 resonance=7.0,
+                temporal_plausibility=7.0,
                 feedback="Needs more depth",
             ),
             ConceptQualityScores(
@@ -550,6 +571,7 @@ class TestAggregateScores:
                 depth=7.0,
                 manifestation=7.0,
                 resonance=7.0,
+                temporal_plausibility=7.0,
                 feedback="Improve resonance",
             ),
         ]
@@ -569,6 +591,7 @@ class TestAggregateScores:
                 depth=7.0,
                 manifestation=7.0,
                 resonance=7.0,
+                temporal_plausibility=7.0,
                 feedback="Same feedback",
             ),
             ConceptQualityScores(
@@ -576,6 +599,7 @@ class TestAggregateScores:
                 depth=7.0,
                 manifestation=7.0,
                 resonance=7.0,
+                temporal_plausibility=7.0,
                 feedback="Same feedback",
             ),
         ]
@@ -594,6 +618,7 @@ class TestAggregateScores:
                 depth=7.0,
                 manifestation=7.0,
                 resonance=7.0,
+                temporal_plausibility=7.0,
                 feedback="Only feedback",
             ),
             ConceptQualityScores(
@@ -601,6 +626,7 @@ class TestAggregateScores:
                 depth=7.0,
                 manifestation=7.0,
                 resonance=7.0,
+                temporal_plausibility=7.0,
                 feedback="",
             ),
         ]
@@ -618,6 +644,7 @@ class TestAggregateScores:
                 depth=7.0,
                 manifestation=7.0,
                 resonance=7.0,
+                temporal_plausibility=7.0,
                 feedback="",
             ),
             ConceptQualityScores(
@@ -625,6 +652,7 @@ class TestAggregateScores:
                 depth=7.0,
                 manifestation=7.0,
                 resonance=7.0,
+                temporal_plausibility=7.0,
                 feedback="",
             ),
         ]
@@ -646,6 +674,7 @@ class TestAggregateScores:
                     "flaws": 7.0,
                     "uniqueness": 7.0,
                     "arc_potential": 7.0,
+                    "temporal_plausibility": 7.0,
                     "feedback": "OK",
                 },
             ),
@@ -656,6 +685,7 @@ class TestAggregateScores:
                     "significance": 7.0,
                     "story_relevance": 7.0,
                     "distinctiveness": 7.0,
+                    "temporal_plausibility": 7.0,
                     "feedback": "OK",
                 },
             ),
@@ -666,6 +696,7 @@ class TestAggregateScores:
                     "influence": 7.0,
                     "conflict_potential": 7.0,
                     "distinctiveness": 7.0,
+                    "temporal_plausibility": 7.0,
                     "feedback": "OK",
                 },
             ),
@@ -676,6 +707,7 @@ class TestAggregateScores:
                     "uniqueness": 7.0,
                     "narrative_potential": 7.0,
                     "integration": 7.0,
+                    "temporal_plausibility": 7.0,
                     "feedback": "OK",
                 },
             ),
@@ -686,6 +718,7 @@ class TestAggregateScores:
                     "depth": 7.0,
                     "manifestation": 7.0,
                     "resonance": 7.0,
+                    "temporal_plausibility": 7.0,
                     "feedback": "OK",
                 },
             ),
@@ -870,6 +903,7 @@ class TestJudgeWithAveragingEdgeCases:
             uniqueness=7.0,
             narrative_potential=7.0,
             integration=7.0,
+            temporal_plausibility=7.0,
             feedback="OK",
         )
         judge_fn = MagicMock(return_value=scores)

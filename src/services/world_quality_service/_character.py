@@ -161,12 +161,15 @@ def _create_character(
     if custom_instructions:
         custom_section = f"\n\nSPECIFIC REQUIREMENTS:\n{custom_instructions}\n"
 
+    calendar_context = svc.get_calendar_context()
+
     prompt = f"""Create a compelling NEW character for a {brief.genre} story.
 
 STORY PREMISE: {brief.premise}
 TONE: {brief.tone}
 THEMES: {", ".join(brief.themes)}
 SETTING: {brief.setting_place}, {brief.setting_time}
+{calendar_context}
 
 EXISTING CHARACTERS IN THIS WORLD: {", ".join(existing_names) if existing_names else "None yet"}
 (Create a NEW character with a different name that complements these existing ones)
@@ -180,6 +183,7 @@ Create a character with:
 4. Uniqueness - not a genre archetype
 5. Arc potential - room for transformation
 6. Arc notes (arc_notes) - describe the character's potential transformation arc: how they might change over the story, what events could trigger growth or regression
+7. Timeline placement - birth year and era from the calendar system (if available)
 
 Write all text in {brief.language}."""
 
@@ -262,7 +266,7 @@ def _build_character_judge_prompt(character: Character, genre: str) -> str:
     Constructs the textual prompt used by the judge model to evaluate a character's quality within a genre context.
 
     Parameters:
-        character (Character): The character to be evaluated; the prompt will include name, role, description, traits, goals, and arc notes.
+        character (Character): The character to be evaluated; the prompt will include name, role, description, traits, goals, arc notes, and temporal data.
         genre (str): The story genre used to frame evaluation criteria and tone.
 
     Returns:
@@ -278,6 +282,10 @@ Description: {character.description}
 Traits: {", ".join(character.trait_names)}
 Goals: {", ".join(character.goals)}
 Arc Notes: {character.arc_notes}
+Birth Year: {character.birth_year if character.birth_year is not None else "N/A"}
+Death Year: {character.death_year if character.death_year is not None else "N/A"}
+Birth Era: {character.birth_era or "N/A"}
+Temporal Notes: {character.temporal_notes or "N/A"}
 
 {JUDGE_CALIBRATION_BLOCK}
 
@@ -287,11 +295,12 @@ Rate each dimension 0-10:
 - flaws: Meaningful vulnerabilities that drive conflict
 - uniqueness: Distinctiveness from genre archetypes
 - arc_potential: Room for transformation and growth
+- temporal_plausibility: Timeline consistency, era-appropriate placement
 
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"depth": <float 0-10>, "goal_clarity": <float 0-10>, "flaws": <float 0-10>, "uniqueness": <float 0-10>, "arc_potential": <float 0-10>, "feedback": "Your assessment..."}}
+{{"depth": <float 0-10>, "goal_clarity": <float 0-10>, "flaws": <float 0-10>, "uniqueness": <float 0-10>, "arc_potential": <float 0-10>, "temporal_plausibility": <float 0-10>, "feedback": "Your assessment..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
@@ -333,6 +342,8 @@ def _refine_character(
         improvement_focus.append("Avoid genre archetypes, add surprising traits")
     if scores.arc_potential < threshold:
         improvement_focus.append("Expand transformation potential with specific turning points")
+    if scores.temporal_plausibility < threshold:
+        improvement_focus.append("Improve timeline placement and era consistency")
 
     prompt = f"""TASK: Improve this character to score HIGHER on the weak dimensions.
 
@@ -343,6 +354,10 @@ Description: {character.description}
 Traits: {", ".join(character.trait_names)}
 Goals: {", ".join(character.goals)}
 Arc Notes: {character.arc_notes}
+Birth Year: {character.birth_year if character.birth_year is not None else "N/A"}
+Death Year: {character.death_year if character.death_year is not None else "N/A"}
+Birth Era: {character.birth_era or "N/A"}
+Temporal Notes: {character.temporal_notes or "N/A"}
 
 CURRENT SCORES (need {threshold}+ in all areas):
 - Depth: {scores.depth}/10
@@ -350,6 +365,7 @@ CURRENT SCORES (need {threshold}+ in all areas):
 - Flaws: {scores.flaws}/10
 - Uniqueness: {scores.uniqueness}/10
 - Arc Potential: {scores.arc_potential}/10
+- Temporal Plausibility: {scores.temporal_plausibility}/10
 
 JUDGE'S FEEDBACK: {scores.feedback}
 

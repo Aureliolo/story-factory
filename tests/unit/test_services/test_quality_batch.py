@@ -18,7 +18,13 @@ from src.utils.exceptions import WorldGenerationError
 def _make_scores(avg: float, feedback: str = "Test") -> CharacterQualityScores:
     """Create CharacterQualityScores where all dimensions equal avg."""
     return CharacterQualityScores(
-        depth=avg, goals=avg, flaws=avg, uniqueness=avg, arc_potential=avg, feedback=feedback
+        depth=avg,
+        goals=avg,
+        flaws=avg,
+        uniqueness=avg,
+        arc_potential=avg,
+        temporal_plausibility=avg,
+        feedback=feedback,
     )
 
 

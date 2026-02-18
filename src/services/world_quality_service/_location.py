@@ -111,6 +111,7 @@ Create a location with:
 2. Narrative significance - symbolic or plot meaning
 3. Strong story relevance - connections to themes/characters
 4. Distinctiveness - memorable unique qualities
+5. Timeline placement - founding year and era (if calendar available)
 
 Write all text in {brief.language}."""
 
@@ -158,7 +159,7 @@ def _judge_location_quality(
     """
     Evaluate a generated location's quality across the defined dimensions.
 
-    Uses the configured judge model to produce numeric scores for atmosphere, narrative_significance, story_relevance, and distinctiveness, and returns targeted improvement feedback. Honors multi-call averaging when enabled in the judge configuration.
+    Uses the configured judge model to produce numeric scores for atmosphere, narrative_significance, story_relevance, distinctiveness, and temporal_plausibility, and returns targeted improvement feedback. Honors multi-call averaging when enabled in the judge configuration.
 
     Parameters:
         svc: Service client providing model resolution and settings.
@@ -181,6 +182,7 @@ LOCATION TO EVALUATE:
 Name: {location.get("name", "Unknown")}
 Description: {location.get("description", "")}
 Significance: {location.get("significance", "")}
+Founding Year: {location.get("founding_year", "N/A")}
 
 {JUDGE_CALIBRATION_BLOCK}
 
@@ -189,11 +191,12 @@ Rate each dimension 0-10:
 - narrative_significance: Plot or symbolic meaning
 - story_relevance: Connections to themes and characters
 - distinctiveness: Memorable, unique qualities
+- temporal_plausibility: Timeline consistency, era-appropriate placement
 
 Provide specific improvement feedback in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"atmosphere": <float 0-10>, "narrative_significance": <float 0-10>, "story_relevance": <float 0-10>, "distinctiveness": <float 0-10>, "feedback": "Your assessment..."}}
+{{"atmosphere": <float 0-10>, "narrative_significance": <float 0-10>, "story_relevance": <float 0-10>, "distinctiveness": <float 0-10>, "temporal_plausibility": <float 0-10>, "feedback": "Your assessment..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
@@ -255,6 +258,8 @@ def _refine_location(
         improvement_focus.append("Strengthen connections to themes and characters")
     if scores.distinctiveness < threshold:
         improvement_focus.append("Make more memorable with unique qualities")
+    if scores.temporal_plausibility < threshold:
+        improvement_focus.append("Improve timeline placement and era consistency")
 
     prompt = f"""TASK: Improve this location to score HIGHER on the weak dimensions.
 
@@ -262,12 +267,14 @@ ORIGINAL LOCATION:
 Name: {location.get("name", "Unknown")}
 Description: {location.get("description", "")}
 Significance: {location.get("significance", "")}
+Founding Year: {location.get("founding_year", "N/A")}
 
 CURRENT SCORES (need {threshold}+ in all areas):
 - Atmosphere: {scores.atmosphere}/10
 - Narrative Significance: {scores.significance}/10
 - Story Relevance: {scores.story_relevance}/10
 - Distinctiveness: {scores.distinctiveness}/10
+- Temporal Plausibility: {scores.temporal_plausibility}/10
 
 JUDGE'S FEEDBACK: {scores.feedback}
 
@@ -292,10 +299,16 @@ Return ONLY the improved location."""
             temperature=temperature,
         )
 
-        # Ensure name is preserved from original location
+        # Ensure name and temporal fields are preserved from original location
         result = refined.model_dump()
         result["name"] = location.get("name", "Unknown")
         result["type"] = "location"
+        for key in ("founding_year", "destruction_year", "founding_era", "temporal_notes"):
+            if result.get(key) in (None, "") and location.get(key) not in (None, ""):
+                result[key] = location[key]
+                logger.debug(
+                    "Preserved temporal field '%s' from original location '%s'", key, result["name"]
+                )
         return result
     except Exception as e:
         summary = summarize_llm_error(e)

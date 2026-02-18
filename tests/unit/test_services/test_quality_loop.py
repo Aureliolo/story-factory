@@ -72,6 +72,7 @@ def _make_scores(avg: float, feedback: str = "Test") -> CharacterQualityScores:
         flaws=avg,
         uniqueness=avg,
         arc_potential=avg,
+        temporal_plausibility=avg,
         feedback=feedback,
     )
 
@@ -1126,11 +1127,16 @@ class TestQualityLoopScoreRounding:
         config.quality_threshold = 7.5
         config.quality_thresholds = _all_thresholds(7.5)
 
-        # CharacterQualityScores: average = (d + g + f + u + a) / 5
-        # To get average = 7.46: 5 * 7.46 = 37.3
-        # Use: 7.0, 7.0, 7.0, 8.0, 8.3 → sum = 37.3, avg = 7.46
+        # CharacterQualityScores: average = (d + g + f + u + a + tp) / 6
+        # To get average ≈ 7.467: sum = 44.8, avg = 44.8/6 ≈ 7.467
+        # Use: 7.0, 7.0, 7.0, 8.0, 8.3, 7.5 → sum = 44.8, avg ≈ 7.467
         scores = CharacterQualityScores(
-            depth=7.0, goals=7.0, flaws=7.0, uniqueness=8.0, arc_potential=8.3
+            depth=7.0,
+            goals=7.0,
+            flaws=7.0,
+            uniqueness=8.0,
+            arc_potential=8.3,
+            temporal_plausibility=7.5,
         )
         # Verify the average is indeed ~7.46, which would display as "7.5"
         assert round(scores.average, 1) == 7.5
@@ -1163,9 +1169,14 @@ class TestQualityLoopScoreRounding:
         config.quality_thresholds = _all_thresholds(7.5)
         config.max_iterations = 1
 
-        # 5 * 7.44 = 37.2 → 7.0, 7.0, 7.0, 8.0, 8.2 → sum = 37.2, avg = 7.44
+        # 6 * 7.433 ≈ 44.6 → 7.0, 7.0, 7.0, 8.0, 8.2, 7.4 → sum = 44.6, avg ≈ 7.433
         scores = CharacterQualityScores(
-            depth=7.0, goals=7.0, flaws=7.0, uniqueness=8.0, arc_potential=8.2
+            depth=7.0,
+            goals=7.0,
+            flaws=7.0,
+            uniqueness=8.0,
+            arc_potential=8.2,
+            temporal_plausibility=7.4,
         )
         assert round(scores.average, 1) == 7.4
         assert scores.average < 7.5
@@ -1196,13 +1207,23 @@ class TestQualityLoopScoreRounding:
         config.max_iterations = 2
         config.early_stopping_patience = 10
 
-        # avg = 7.44 rounds to 7.4 → fails in-loop, enters post-loop path
+        # avg ≈ 7.433 rounds to 7.4 → fails in-loop, enters post-loop path
         scores_below = CharacterQualityScores(
-            depth=7.0, goals=7.0, flaws=7.0, uniqueness=8.0, arc_potential=8.2
+            depth=7.0,
+            goals=7.0,
+            flaws=7.0,
+            uniqueness=8.0,
+            arc_potential=8.2,
+            temporal_plausibility=7.4,
         )
         # Second iteration even worse → post-loop returns best (iteration 1)
         scores_worse = CharacterQualityScores(
-            depth=5.0, goals=5.0, flaws=5.0, uniqueness=5.0, arc_potential=5.0
+            depth=5.0,
+            goals=5.0,
+            flaws=5.0,
+            uniqueness=5.0,
+            arc_potential=5.0,
+            temporal_plausibility=5.0,
         )
         judge_count = 0
 
@@ -1228,7 +1249,7 @@ class TestQualityLoopScoreRounding:
             story_id="test-story",
         )
 
-        # Peak was 7.44, rounds to 7.4, so threshold_met should be False
+        # Peak was ~7.433, rounds to 7.4, so threshold_met should be False
         analytics_call = mock_svc._log_refinement_analytics.call_args
         assert analytics_call.kwargs["threshold_met"] is False
 

@@ -181,6 +181,7 @@ class TestCharacterQualityScores:
             flaws=6.0,
             uniqueness=9.0,
             arc_potential=5.0,
+            temporal_plausibility=7.0,
         )
         assert scores.average == 7.0
 
@@ -192,11 +193,13 @@ class TestCharacterQualityScores:
             flaws=6.0,
             uniqueness=9.0,
             arc_potential=5.0,
+            temporal_plausibility=7.0,
             feedback="Good character, needs more flaws",
         )
         result = scores.to_dict()
         assert result["depth"] == 8.0
         assert result["goal_clarity"] == 7.0
+        assert result["temporal_plausibility"] == 7.0
         assert result["average"] == 7.0
         assert result["feedback"] == "Good character, needs more flaws"
 
@@ -208,11 +211,13 @@ class TestCharacterQualityScores:
             flaws=5.0,
             uniqueness=9.0,
             arc_potential=6.0,
+            temporal_plausibility=6.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "goal_clarity" in weak
         assert "flaws" in weak
         assert "arc_potential" in weak
+        assert "temporal_plausibility" in weak
         assert "depth" not in weak
         assert "uniqueness" not in weak
 
@@ -224,10 +229,17 @@ class TestCharacterQualityScores:
         with pytest.raises(ValidationError) as exc_info:
             CharacterQualityScores()  # type: ignore[call-arg]
 
-        # Should have errors for all 5 score fields
+        # Should have errors for all 6 score fields
         errors = exc_info.value.errors()
         missing_fields = {e["loc"][0] for e in errors if e["type"] == "missing"}
-        assert missing_fields == {"depth", "goal_clarity", "flaws", "uniqueness", "arc_potential"}
+        assert missing_fields == {
+            "depth",
+            "goal_clarity",
+            "flaws",
+            "uniqueness",
+            "arc_potential",
+            "temporal_plausibility",
+        }
 
 
 class TestLocationQualityScores:
@@ -240,6 +252,7 @@ class TestLocationQualityScores:
             significance=7.0,
             story_relevance=6.0,
             distinctiveness=9.0,
+            temporal_plausibility=7.5,
         )
         assert scores.average == 7.5
 
@@ -250,10 +263,12 @@ class TestLocationQualityScores:
             significance=5.0,
             story_relevance=6.0,
             distinctiveness=9.0,
+            temporal_plausibility=6.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "narrative_significance" in weak
         assert "story_relevance" in weak
+        assert "temporal_plausibility" in weak
         assert "atmosphere" not in weak
 
     def test_to_dict(self):
@@ -263,12 +278,31 @@ class TestLocationQualityScores:
             significance=7.0,
             story_relevance=6.0,
             distinctiveness=9.0,
+            temporal_plausibility=7.5,
             feedback="Add more sensory details",
         )
         result = scores.to_dict()
         assert result["atmosphere"] == 8.0
+        assert result["temporal_plausibility"] == 7.5
         assert result["average"] == 7.5
         assert result["feedback"] == "Add more sensory details"
+
+    def test_fields_are_required(self):
+        """Test that all score fields are required (no defaults)."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as exc_info:
+            LocationQualityScores()  # type: ignore[call-arg]
+
+        errors = exc_info.value.errors()
+        missing_fields = {e["loc"][0] for e in errors if e["type"] == "missing"}
+        assert missing_fields == {
+            "atmosphere",
+            "narrative_significance",
+            "story_relevance",
+            "distinctiveness",
+            "temporal_plausibility",
+        }
 
 
 class TestRelationshipQualityScores:
@@ -322,6 +356,7 @@ class TestFactionQualityScores:
             influence=7.0,
             conflict_potential=6.0,
             distinctiveness=9.0,
+            temporal_plausibility=7.5,
         )
         assert scores.average == 7.5
 
@@ -332,10 +367,12 @@ class TestFactionQualityScores:
             influence=5.0,
             conflict_potential=8.0,
             distinctiveness=9.0,
+            temporal_plausibility=6.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "coherence" in weak
         assert "influence" in weak
+        assert "temporal_plausibility" in weak
         assert "conflict_potential" not in weak
         assert "distinctiveness" not in weak
 
@@ -346,12 +383,31 @@ class TestFactionQualityScores:
             influence=7.0,
             conflict_potential=6.0,
             distinctiveness=9.0,
+            temporal_plausibility=7.5,
             feedback="More internal structure needed",
         )
         result = scores.to_dict()
         assert result["coherence"] == 8.0
+        assert result["temporal_plausibility"] == 7.5
         assert result["average"] == 7.5
         assert result["feedback"] == "More internal structure needed"
+
+    def test_fields_are_required(self):
+        """Test that all score fields are required (no defaults)."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as exc_info:
+            FactionQualityScores()  # type: ignore[call-arg]
+
+        errors = exc_info.value.errors()
+        missing_fields = {e["loc"][0] for e in errors if e["type"] == "missing"}
+        assert missing_fields == {
+            "coherence",
+            "influence",
+            "conflict_potential",
+            "distinctiveness",
+            "temporal_plausibility",
+        }
 
 
 class TestItemQualityScores:
@@ -364,6 +420,7 @@ class TestItemQualityScores:
             uniqueness=7.0,
             narrative_potential=6.0,
             integration=9.0,
+            temporal_plausibility=7.5,
         )
         assert scores.average == 7.5
 
@@ -374,10 +431,12 @@ class TestItemQualityScores:
             uniqueness=5.0,
             narrative_potential=8.0,
             integration=9.0,
+            temporal_plausibility=6.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "story_significance" in weak
         assert "uniqueness" in weak
+        assert "temporal_plausibility" in weak
         assert "narrative_potential" not in weak
         assert "integration" not in weak
 
@@ -388,12 +447,31 @@ class TestItemQualityScores:
             uniqueness=7.0,
             narrative_potential=6.0,
             integration=9.0,
+            temporal_plausibility=7.5,
             feedback="More history needed",
         )
         result = scores.to_dict()
         assert result["story_significance"] == 8.0
+        assert result["temporal_plausibility"] == 7.5
         assert result["average"] == 7.5
         assert result["feedback"] == "More history needed"
+
+    def test_fields_are_required(self):
+        """Test that all score fields are required (no defaults)."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as exc_info:
+            ItemQualityScores()  # type: ignore[call-arg]
+
+        errors = exc_info.value.errors()
+        missing_fields = {e["loc"][0] for e in errors if e["type"] == "missing"}
+        assert missing_fields == {
+            "story_significance",
+            "uniqueness",
+            "narrative_potential",
+            "integration",
+            "temporal_plausibility",
+        }
 
 
 class TestConceptQualityScores:
@@ -406,6 +484,7 @@ class TestConceptQualityScores:
             depth=7.0,
             manifestation=6.0,
             resonance=9.0,
+            temporal_plausibility=7.5,
         )
         assert scores.average == 7.5
 
@@ -416,10 +495,12 @@ class TestConceptQualityScores:
             depth=5.0,
             manifestation=8.0,
             resonance=9.0,
+            temporal_plausibility=6.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "relevance" in weak
         assert "depth" in weak
+        assert "temporal_plausibility" in weak
         assert "manifestation" not in weak
         assert "resonance" not in weak
 
@@ -430,12 +511,31 @@ class TestConceptQualityScores:
             depth=7.0,
             manifestation=6.0,
             resonance=9.0,
+            temporal_plausibility=7.5,
             feedback="More philosophical depth",
         )
         result = scores.to_dict()
         assert result["relevance"] == 8.0
+        assert result["temporal_plausibility"] == 7.5
         assert result["average"] == 7.5
         assert result["feedback"] == "More philosophical depth"
+
+    def test_fields_are_required(self):
+        """Test that all score fields are required (no defaults)."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as exc_info:
+            ConceptQualityScores()  # type: ignore[call-arg]
+
+        errors = exc_info.value.errors()
+        missing_fields = {e["loc"][0] for e in errors if e["type"] == "missing"}
+        assert missing_fields == {
+            "relevance",
+            "depth",
+            "manifestation",
+            "resonance",
+            "temporal_plausibility",
+        }
 
 
 class TestRefinementConfig:
@@ -751,6 +851,7 @@ class TestJudgeCharacterQuality:
             flaws=7.0,
             uniqueness=8.5,
             arc_potential=8.0,
+            temporal_plausibility=7.8,
             feedback="Strong character with good depth",
         )
 
@@ -793,6 +894,7 @@ class TestJudgeCharacterQuality:
             flaws=7.0,
             uniqueness=7.0,
             arc_potential=7.0,
+            temporal_plausibility=7.0,
             feedback="Decent character",
         )
 
@@ -852,6 +954,7 @@ class TestRefineCharacter:
             flaws=4.0,
             uniqueness=5.5,
             arc_potential=5.0,
+            temporal_plausibility=5.0,
             feedback="Needs more depth",
         )
 
@@ -886,6 +989,7 @@ class TestRefineCharacter:
             flaws=4.0,  # Below 7.0 threshold
             uniqueness=9.0,
             arc_potential=5.0,  # Below 7.0 threshold
+            temporal_plausibility=8.0,
         )
 
         service._refine_character(original_char, scores, story_state, temperature=0.7)
@@ -903,7 +1007,12 @@ class TestRefineCharacter:
 
         original_char = Character(name="Test", role="supporting", description="Test")
         scores = CharacterQualityScores(
-            depth=6.0, goals=6.0, flaws=6.0, uniqueness=6.0, arc_potential=6.0
+            depth=6.0,
+            goals=6.0,
+            flaws=6.0,
+            uniqueness=6.0,
+            arc_potential=6.0,
+            temporal_plausibility=6.0,
         )
 
         with pytest.raises(WorldGenerationError, match="refinement failed"):
@@ -925,7 +1034,12 @@ class TestRefineCharacter:
         state.brief = None
         original_char = Character(name="Test", role="supporting", description="Test")
         scores = CharacterQualityScores(
-            depth=6.0, goals=6.0, flaws=6.0, uniqueness=6.0, arc_potential=6.0
+            depth=6.0,
+            goals=6.0,
+            flaws=6.0,
+            uniqueness=6.0,
+            arc_potential=6.0,
+            temporal_plausibility=6.0,
         )
 
         service._refine_character(original_char, scores, state, temperature=0.7)
@@ -947,7 +1061,12 @@ class TestRefineCharacter:
 
         original_char = Character(name="Test", role="supporting", description="Test")
         scores = CharacterQualityScores(
-            depth=6.0, goals=6.0, flaws=6.0, uniqueness=6.0, arc_potential=6.0
+            depth=6.0,
+            goals=6.0,
+            flaws=6.0,
+            uniqueness=6.0,
+            arc_potential=6.0,
+            temporal_plausibility=6.0,
         )
 
         service._refine_character(original_char, scores, story_state, temperature=0.7)
@@ -992,7 +1111,12 @@ class TestGenerateCharacterWithQuality:
         mock_create.return_value = test_char
 
         high_scores = CharacterQualityScores(
-            depth=8.0, goals=8.0, flaws=7.5, uniqueness=8.0, arc_potential=8.5
+            depth=8.0,
+            goals=8.0,
+            flaws=7.5,
+            uniqueness=8.0,
+            arc_potential=8.5,
+            temporal_plausibility=8.0,
         )
         mock_judge.return_value = high_scores
 
@@ -1035,10 +1159,20 @@ class TestGenerateCharacterWithQuality:
 
         # First judgment returns low scores, second returns high scores
         low_scores = CharacterQualityScores(
-            depth=5.0, goals=5.0, flaws=4.0, uniqueness=6.0, arc_potential=5.0
+            depth=5.0,
+            goals=5.0,
+            flaws=4.0,
+            uniqueness=6.0,
+            arc_potential=5.0,
+            temporal_plausibility=5.0,
         )
         high_scores = CharacterQualityScores(
-            depth=8.0, goals=8.0, flaws=7.5, uniqueness=8.0, arc_potential=8.5
+            depth=8.0,
+            goals=8.0,
+            flaws=7.5,
+            uniqueness=8.0,
+            arc_potential=8.5,
+            temporal_plausibility=8.0,
         )
         mock_judge.side_effect = [low_scores, high_scores]
 
@@ -1069,7 +1203,12 @@ class TestGenerateCharacterWithQuality:
         mock_refine.return_value = test_char  # Mock refinement to prevent errors
 
         low_scores = CharacterQualityScores(
-            depth=5.0, goals=5.0, flaws=5.0, uniqueness=5.0, arc_potential=5.0
+            depth=5.0,
+            goals=5.0,
+            flaws=5.0,
+            uniqueness=5.0,
+            arc_potential=5.0,
+            temporal_plausibility=5.0,
         )
         mock_judge.return_value = low_scores
 
@@ -1207,6 +1346,7 @@ class TestJudgeLocationQuality:
             significance=7.5,
             story_relevance=8.0,
             distinctiveness=8.5,
+            temporal_plausibility=8.0,
             feedback="Rich atmosphere, could be more distinctive",
         )
 
@@ -1250,13 +1390,52 @@ class TestRefineLocation:
 
         original = {"name": "Dark Forest", "description": "A forest", "significance": "Unknown"}
         scores = LocationQualityScores(
-            atmosphere=5.0, significance=5.0, story_relevance=6.0, distinctiveness=5.0
+            atmosphere=5.0,
+            significance=5.0,
+            story_relevance=6.0,
+            distinctiveness=5.0,
+            temporal_plausibility=5.0,
         )
 
         refined = service._refine_location(original, scores, story_state, temperature=0.7)
 
         assert refined["name"] == "Dark Forest"
         assert "atmospheric" in refined["description"]
+
+    @patch("src.services.world_quality_service._location.generate_structured")
+    def test_refine_location_preserves_temporal_fields(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test that refinement preserves temporal fields from original when LLM omits them."""
+        mock_location = Location(
+            name="Dark Forest",
+            type="location",
+            description="An improved forest",
+            significance="Very important",
+        )
+        mock_generate_structured.return_value = mock_location
+
+        original = {
+            "name": "Dark Forest",
+            "description": "A forest",
+            "significance": "Unknown",
+            "founding_year": 500,
+            "founding_era": "Golden Age",
+            "temporal_notes": "Ancient place",
+        }
+        scores = LocationQualityScores(
+            atmosphere=5.0,
+            significance=5.0,
+            story_relevance=6.0,
+            distinctiveness=5.0,
+            temporal_plausibility=5.0,
+        )
+
+        refined = service._refine_location(original, scores, story_state, temperature=0.7)
+
+        assert refined["founding_year"] == 500
+        assert refined["founding_era"] == "Golden Age"
+        assert refined["temporal_notes"] == "Ancient place"
 
     @patch("src.services.world_quality_service._location.generate_structured")
     def test_refine_location_invalid_json_raises_error(
@@ -1271,7 +1450,11 @@ class TestRefineLocation:
 
         original = {"name": "Test", "description": "Test", "significance": "Test"}
         scores = LocationQualityScores(
-            atmosphere=6.0, significance=6.0, story_relevance=6.0, distinctiveness=6.0
+            atmosphere=6.0,
+            significance=6.0,
+            story_relevance=6.0,
+            distinctiveness=6.0,
+            temporal_plausibility=6.0,
         )
 
         with pytest.raises(WorldGenerationError, match="Location refinement failed"):
@@ -1284,7 +1467,11 @@ class TestRefineLocation:
 
         original = {"name": "Test", "description": "Test", "significance": "Test"}
         scores = LocationQualityScores(
-            atmosphere=6.0, significance=6.0, story_relevance=6.0, distinctiveness=6.0
+            atmosphere=6.0,
+            significance=6.0,
+            story_relevance=6.0,
+            distinctiveness=6.0,
+            temporal_plausibility=6.0,
         )
 
         with pytest.raises(WorldGenerationError, match="Location refinement failed"):
@@ -1307,7 +1494,11 @@ class TestGenerateLocationWithQuality:
         mock_create.return_value = test_loc
 
         high_scores = LocationQualityScores(
-            atmosphere=9.0, significance=8.0, story_relevance=8.5, distinctiveness=8.0
+            atmosphere=9.0,
+            significance=8.0,
+            story_relevance=8.5,
+            distinctiveness=8.0,
+            temporal_plausibility=8.5,
         )
         mock_judge.return_value = high_scores
 
@@ -1337,10 +1528,18 @@ class TestGenerateLocationWithQuality:
         mock_refine.return_value = refined_loc
 
         low_scores = LocationQualityScores(
-            atmosphere=5.0, significance=5.0, story_relevance=5.0, distinctiveness=5.0
+            atmosphere=5.0,
+            significance=5.0,
+            story_relevance=5.0,
+            distinctiveness=5.0,
+            temporal_plausibility=5.0,
         )
         high_scores = LocationQualityScores(
-            atmosphere=8.0, significance=8.0, story_relevance=8.0, distinctiveness=8.0
+            atmosphere=8.0,
+            significance=8.0,
+            story_relevance=8.0,
+            distinctiveness=8.0,
+            temporal_plausibility=8.0,
         )
         mock_judge.side_effect = [low_scores, high_scores]
 
@@ -1385,7 +1584,11 @@ class TestGenerateLocationWithQuality:
         # First judgment succeeds with low score, second raises error, third returns low score
         # Service continues after error so needs values for all iterations
         low_scores = LocationQualityScores(
-            atmosphere=5.0, significance=5.0, story_relevance=5.0, distinctiveness=5.0
+            atmosphere=5.0,
+            significance=5.0,
+            story_relevance=5.0,
+            distinctiveness=5.0,
+            temporal_plausibility=5.0,
         )
         mock_judge.side_effect = [
             low_scores,
@@ -1783,6 +1986,7 @@ class TestJudgeFactionQuality:
             influence=7.5,
             conflict_potential=8.0,
             distinctiveness=8.5,
+            temporal_plausibility=8.0,
             feedback="Strong faction with clear identity",
         )
 
@@ -1821,6 +2025,7 @@ class TestJudgeFactionQuality:
             influence=7.0,
             conflict_potential=7.0,
             distinctiveness=7.0,
+            temporal_plausibility=7.0,
             feedback="Decent faction",
         )
 
@@ -1859,7 +2064,11 @@ class TestRefineFaction:
             "values": ["money"],
         }
         scores = FactionQualityScores(
-            coherence=5.0, influence=5.0, conflict_potential=6.0, distinctiveness=5.0
+            coherence=5.0,
+            influence=5.0,
+            conflict_potential=6.0,
+            distinctiveness=5.0,
+            temporal_plausibility=5.0,
         )
 
         refined = service._refine_faction(original, scores, story_state, temperature=0.7)
@@ -1869,13 +2078,56 @@ class TestRefineFaction:
         assert "influential" in refined["description"]
 
     @patch("src.services.world_quality_service._faction.generate_structured")
+    def test_refine_faction_preserves_temporal_fields(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test that refinement preserves temporal fields from original when LLM omits them."""
+        mock_faction = Faction(
+            name="Ignored",
+            type="faction",
+            description="An improved guild",
+            leader="Grand Master",
+        )
+        mock_generate_structured.return_value = mock_faction
+
+        original = {
+            "name": "Test Guild",
+            "description": "A guild",
+            "leader": "Boss",
+            "goals": ["power"],
+            "values": ["honor"],
+            "founding_year": 200,
+            "founding_era": "Iron Age",
+            "dissolution_year": 800,
+            "temporal_notes": "Rose and fell",
+        }
+        scores = FactionQualityScores(
+            coherence=5.0,
+            influence=5.0,
+            conflict_potential=6.0,
+            distinctiveness=5.0,
+            temporal_plausibility=5.0,
+        )
+
+        refined = service._refine_faction(original, scores, story_state, temperature=0.7)
+
+        assert refined["founding_year"] == 200
+        assert refined["founding_era"] == "Iron Age"
+        assert refined["dissolution_year"] == 800
+        assert refined["temporal_notes"] == "Rose and fell"
+
+    @patch("src.services.world_quality_service._faction.generate_structured")
     def test_refine_faction_error_raises(self, mock_generate_structured, service, story_state):
         """Test refinement raises error on generation failure."""
         mock_generate_structured.side_effect = Exception("Generation failed")
 
         original = {"name": "Test", "description": "Test", "leader": "X", "goals": [], "values": []}
         scores = FactionQualityScores(
-            coherence=6.0, influence=6.0, conflict_potential=6.0, distinctiveness=6.0
+            coherence=6.0,
+            influence=6.0,
+            conflict_potential=6.0,
+            distinctiveness=6.0,
+            temporal_plausibility=6.0,
         )
 
         with pytest.raises(WorldGenerationError, match="Faction refinement failed"):
@@ -1900,7 +2152,11 @@ class TestGenerateFactionWithQuality:
         mock_create.return_value = test_faction
 
         high_scores = FactionQualityScores(
-            coherence=8.0, influence=8.0, conflict_potential=8.0, distinctiveness=8.0
+            coherence=8.0,
+            influence=8.0,
+            conflict_potential=8.0,
+            distinctiveness=8.0,
+            temporal_plausibility=8.0,
         )
         mock_judge.return_value = high_scores
 
@@ -1995,6 +2251,7 @@ class TestJudgeItemQuality:
             uniqueness=7.5,
             narrative_potential=8.0,
             integration=8.5,
+            temporal_plausibility=8.0,
             feedback="Strong item with good story potential",
         )
 
@@ -2032,6 +2289,7 @@ class TestJudgeItemQuality:
             uniqueness=7.0,
             narrative_potential=7.0,
             integration=7.0,
+            temporal_plausibility=7.0,
             feedback="Decent item",
         )
 
@@ -2068,13 +2326,53 @@ class TestRefineItem:
             "properties": ["sharp"],
         }
         scores = ItemQualityScores(
-            significance=5.0, uniqueness=5.0, narrative_potential=6.0, integration=5.0
+            significance=5.0,
+            uniqueness=5.0,
+            narrative_potential=6.0,
+            integration=5.0,
+            temporal_plausibility=5.0,
         )
 
         refined = service._refine_item(original, scores, story_state, temperature=0.7)
 
         assert refined["name"] == "Magic Sword"
         assert "legendary" in refined["description"]
+
+    @patch("src.services.world_quality_service._item.generate_structured")
+    def test_refine_item_preserves_temporal_fields(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test that refinement preserves temporal fields from original when LLM omits them."""
+        mock_item = Item(
+            name="Magic Sword",
+            type="item",
+            description="A much improved legendary blade",
+            significance="Critical to the quest",
+        )
+        mock_generate_structured.return_value = mock_item
+
+        original = {
+            "name": "Magic Sword",
+            "description": "A sword",
+            "significance": "Important",
+            "properties": ["sharp"],
+            "creation_year": 150,
+            "creation_era": "Bronze Age",
+            "temporal_notes": "Forged in ancient times",
+        }
+        scores = ItemQualityScores(
+            significance=5.0,
+            uniqueness=5.0,
+            narrative_potential=6.0,
+            integration=5.0,
+            temporal_plausibility=5.0,
+        )
+
+        refined = service._refine_item(original, scores, story_state, temperature=0.7)
+
+        assert refined["creation_year"] == 150
+        assert refined["creation_era"] == "Bronze Age"
+        assert refined["temporal_notes"] == "Forged in ancient times"
 
     @patch("src.services.world_quality_service._item.generate_structured")
     def test_refine_item_invalid_json_raises_error(
@@ -2089,7 +2387,11 @@ class TestRefineItem:
 
         original = {"name": "Test", "description": "Test", "significance": "X", "properties": []}
         scores = ItemQualityScores(
-            significance=6.0, uniqueness=6.0, narrative_potential=6.0, integration=6.0
+            significance=6.0,
+            uniqueness=6.0,
+            narrative_potential=6.0,
+            integration=6.0,
+            temporal_plausibility=6.0,
         )
 
         with pytest.raises(WorldGenerationError, match="Item refinement failed"):
@@ -2113,7 +2415,11 @@ class TestGenerateItemWithQuality:
         mock_create.return_value = test_item
 
         high_scores = ItemQualityScores(
-            significance=8.0, uniqueness=8.0, narrative_potential=8.0, integration=8.0
+            significance=8.0,
+            uniqueness=8.0,
+            narrative_potential=8.0,
+            integration=8.0,
+            temporal_plausibility=8.0,
         )
         mock_judge.return_value = high_scores
 
@@ -2206,6 +2512,7 @@ class TestJudgeConceptQuality:
             depth=7.5,
             manifestation=8.0,
             resonance=8.5,
+            temporal_plausibility=8.0,
             feedback="Strong thematic concept",
         )
 
@@ -2242,6 +2549,7 @@ class TestJudgeConceptQuality:
             depth=7.0,
             manifestation=7.0,
             resonance=7.0,
+            temporal_plausibility=7.0,
             feedback="Decent concept",
         )
 
@@ -2275,12 +2583,53 @@ class TestRefineConcept:
             "description": "Getting better",
             "manifestations": "Characters change",
         }
-        scores = ConceptQualityScores(relevance=5.0, depth=5.0, manifestation=6.0, resonance=5.0)
+        scores = ConceptQualityScores(
+            relevance=5.0,
+            depth=5.0,
+            manifestation=6.0,
+            resonance=5.0,
+            temporal_plausibility=5.0,
+        )
 
         refined = service._refine_concept(original, scores, story_state, temperature=0.7)
 
         assert refined["name"] == "Redemption"
         assert "profound" in refined["description"]
+
+    @patch("src.services.world_quality_service._concept.generate_structured")
+    def test_refine_concept_preserves_temporal_fields(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test that refinement preserves temporal fields from original when LLM omits them."""
+        mock_concept = Concept(
+            name="Redemption",
+            type="concept",
+            description="An improved concept of moral growth",
+            manifestations="Deep character transformations",
+        )
+        mock_generate_structured.return_value = mock_concept
+
+        original = {
+            "name": "Redemption",
+            "description": "Getting better",
+            "manifestations": "Changes",
+            "emergence_year": 1,
+            "emergence_era": "Dawn Era",
+            "temporal_notes": "As old as time",
+        }
+        scores = ConceptQualityScores(
+            relevance=5.0,
+            depth=5.0,
+            manifestation=6.0,
+            resonance=5.0,
+            temporal_plausibility=5.0,
+        )
+
+        refined = service._refine_concept(original, scores, story_state, temperature=0.7)
+
+        assert refined["emergence_year"] == 1
+        assert refined["emergence_era"] == "Dawn Era"
+        assert refined["temporal_notes"] == "As old as time"
 
     @patch("src.services.world_quality_service._concept.generate_structured")
     def test_refine_concept_invalid_json_raises_error(
@@ -2294,7 +2643,13 @@ class TestRefineConcept:
         )
 
         original = {"name": "Test", "description": "Test", "manifestations": "X"}
-        scores = ConceptQualityScores(relevance=6.0, depth=6.0, manifestation=6.0, resonance=6.0)
+        scores = ConceptQualityScores(
+            relevance=6.0,
+            depth=6.0,
+            manifestation=6.0,
+            resonance=6.0,
+            temporal_plausibility=6.0,
+        )
 
         with pytest.raises(WorldGenerationError, match="Concept refinement failed"):
             service._refine_concept(original, scores, story_state, temperature=0.7)
@@ -2316,7 +2671,11 @@ class TestGenerateConceptWithQuality:
         mock_create.return_value = test_concept
 
         high_scores = ConceptQualityScores(
-            relevance=8.0, depth=8.0, manifestation=8.0, resonance=8.0
+            relevance=8.0,
+            depth=8.0,
+            manifestation=8.0,
+            resonance=8.0,
+            temporal_plausibility=8.0,
         )
         mock_judge.return_value = high_scores
 
@@ -2347,10 +2706,20 @@ class TestBatchOperations:
         char1 = Character(name="Character One", role="protagonist", description="First")
         char2 = Character(name="Character Two", role="antagonist", description="Second")
         scores1 = CharacterQualityScores(
-            depth=8.0, goals=8.0, flaws=7.5, uniqueness=8.0, arc_potential=8.5
+            depth=8.0,
+            goals=8.0,
+            flaws=7.5,
+            uniqueness=8.0,
+            arc_potential=8.5,
+            temporal_plausibility=8.0,
         )
         scores2 = CharacterQualityScores(
-            depth=7.5, goals=8.0, flaws=8.0, uniqueness=7.5, arc_potential=8.0
+            depth=7.5,
+            goals=8.0,
+            flaws=8.0,
+            uniqueness=7.5,
+            arc_potential=8.0,
+            temporal_plausibility=7.5,
         )
 
         mock_gen.side_effect = [
@@ -2372,7 +2741,12 @@ class TestBatchOperations:
         """Test batch character generation with some failures."""
         char1 = Character(name="Character One", role="protagonist", description="First")
         scores1 = CharacterQualityScores(
-            depth=8.0, goals=8.0, flaws=7.5, uniqueness=8.0, arc_potential=8.5
+            depth=8.0,
+            goals=8.0,
+            flaws=7.5,
+            uniqueness=8.0,
+            arc_potential=8.5,
+            temporal_plausibility=8.0,
         )
 
         mock_gen.side_effect = [
@@ -2400,10 +2774,18 @@ class TestBatchOperations:
         loc1 = {"name": "Location One", "description": "First"}
         loc2 = {"name": "Location Two", "description": "Second"}
         scores1 = LocationQualityScores(
-            atmosphere=8.0, significance=8.0, story_relevance=8.0, distinctiveness=8.0
+            atmosphere=8.0,
+            significance=8.0,
+            story_relevance=8.0,
+            distinctiveness=8.0,
+            temporal_plausibility=8.0,
         )
         scores2 = LocationQualityScores(
-            atmosphere=7.5, significance=8.0, story_relevance=8.0, distinctiveness=7.5
+            atmosphere=7.5,
+            significance=8.0,
+            story_relevance=8.0,
+            distinctiveness=7.5,
+            temporal_plausibility=7.5,
         )
 
         mock_gen.side_effect = [
@@ -2432,10 +2814,18 @@ class TestBatchOperations:
         faction1 = {"name": "Faction One", "description": "First"}
         faction2 = {"name": "Faction Two", "description": "Second"}
         scores1 = FactionQualityScores(
-            coherence=8.0, influence=8.0, conflict_potential=8.0, distinctiveness=8.0
+            coherence=8.0,
+            influence=8.0,
+            conflict_potential=8.0,
+            distinctiveness=8.0,
+            temporal_plausibility=8.0,
         )
         scores2 = FactionQualityScores(
-            coherence=7.5, influence=8.0, conflict_potential=8.0, distinctiveness=7.5
+            coherence=7.5,
+            influence=8.0,
+            conflict_potential=8.0,
+            distinctiveness=7.5,
+            temporal_plausibility=7.5,
         )
 
         mock_gen.side_effect = [
@@ -2464,10 +2854,18 @@ class TestBatchOperations:
         item1 = {"name": "Item One", "description": "First"}
         item2 = {"name": "Item Two", "description": "Second"}
         scores1 = ItemQualityScores(
-            significance=8.0, uniqueness=8.0, narrative_potential=8.0, integration=8.0
+            significance=8.0,
+            uniqueness=8.0,
+            narrative_potential=8.0,
+            integration=8.0,
+            temporal_plausibility=8.0,
         )
         scores2 = ItemQualityScores(
-            significance=7.5, uniqueness=8.0, narrative_potential=8.0, integration=7.5
+            significance=7.5,
+            uniqueness=8.0,
+            narrative_potential=8.0,
+            integration=7.5,
+            temporal_plausibility=7.5,
         )
 
         mock_gen.side_effect = [
@@ -2495,8 +2893,20 @@ class TestBatchOperations:
         """Test batch concept generation."""
         concept1 = {"name": "Concept One", "description": "First"}
         concept2 = {"name": "Concept Two", "description": "Second"}
-        scores1 = ConceptQualityScores(relevance=8.0, depth=8.0, manifestation=8.0, resonance=8.0)
-        scores2 = ConceptQualityScores(relevance=7.5, depth=8.0, manifestation=8.0, resonance=7.5)
+        scores1 = ConceptQualityScores(
+            relevance=8.0,
+            depth=8.0,
+            manifestation=8.0,
+            resonance=8.0,
+            temporal_plausibility=8.0,
+        )
+        scores2 = ConceptQualityScores(
+            relevance=7.5,
+            depth=8.0,
+            manifestation=8.0,
+            resonance=7.5,
+            temporal_plausibility=7.5,
+        )
 
         mock_gen.side_effect = [
             (concept1, scores1, 1),
@@ -2852,13 +3262,28 @@ class TestEdgeCases:
 
         # Scores improve over iterations
         scores_iter1 = CharacterQualityScores(
-            depth=5.0, goals=5.0, flaws=5.0, uniqueness=5.0, arc_potential=5.0
+            depth=5.0,
+            goals=5.0,
+            flaws=5.0,
+            uniqueness=5.0,
+            arc_potential=5.0,
+            temporal_plausibility=5.0,
         )
         scores_iter2 = CharacterQualityScores(
-            depth=6.0, goals=6.0, flaws=6.0, uniqueness=6.0, arc_potential=6.0
+            depth=6.0,
+            goals=6.0,
+            flaws=6.0,
+            uniqueness=6.0,
+            arc_potential=6.0,
+            temporal_plausibility=6.0,
         )
         scores_iter3 = CharacterQualityScores(
-            depth=8.0, goals=8.0, flaws=8.0, uniqueness=8.0, arc_potential=8.0
+            depth=8.0,
+            goals=8.0,
+            flaws=8.0,
+            uniqueness=8.0,
+            arc_potential=8.0,
+            temporal_plausibility=8.0,
         )
         mock_judge.side_effect = [scores_iter1, scores_iter2, scores_iter3]
 
@@ -2886,7 +3311,11 @@ class TestEdgeCases:
         mock_refine.return_value = test_loc  # Mock refinement to prevent errors
 
         low_scores = LocationQualityScores(
-            atmosphere=5.0, significance=5.0, story_relevance=5.0, distinctiveness=5.0
+            atmosphere=5.0,
+            significance=5.0,
+            story_relevance=5.0,
+            distinctiveness=5.0,
+            temporal_plausibility=5.0,
         )
         mock_judge.return_value = low_scores
 
@@ -2916,7 +3345,12 @@ class TestEdgeCases:
         char1 = Character(name="Alice", role="protagonist", description="First")
         char2 = Character(name="Bob", role="antagonist", description="Second")
         scores = CharacterQualityScores(
-            depth=8.0, goals=8.0, flaws=8.0, uniqueness=8.0, arc_potential=8.0
+            depth=8.0,
+            goals=8.0,
+            flaws=8.0,
+            uniqueness=8.0,
+            arc_potential=8.0,
+            temporal_plausibility=8.0,
         )
 
         mock_gen.side_effect = [
@@ -3014,7 +3448,12 @@ class TestExceptionHandlingPaths:
 
         original_char = Character(name="Test", role="supporting", description="Test")
         scores = CharacterQualityScores(
-            depth=6.0, goals=6.0, flaws=6.0, uniqueness=6.0, arc_potential=6.0
+            depth=6.0,
+            goals=6.0,
+            flaws=6.0,
+            uniqueness=6.0,
+            arc_potential=6.0,
+            temporal_plausibility=6.0,
         )
 
         with pytest.raises(WorldGenerationError, match="Character refinement failed"):
@@ -3029,7 +3468,12 @@ class TestExceptionHandlingPaths:
 
         original_char = Character(name="Test", role="supporting", description="Test")
         scores = CharacterQualityScores(
-            depth=6.0, goals=6.0, flaws=6.0, uniqueness=6.0, arc_potential=6.0
+            depth=6.0,
+            goals=6.0,
+            flaws=6.0,
+            uniqueness=6.0,
+            arc_potential=6.0,
+            temporal_plausibility=6.0,
         )
 
         with pytest.raises(WorldGenerationError, match="Character refinement failed"):
@@ -3088,7 +3532,11 @@ class TestExceptionHandlingPaths:
 
         original = {"name": "Test", "description": "Test", "significance": "Test"}
         scores = LocationQualityScores(
-            atmosphere=6.0, significance=6.0, story_relevance=6.0, distinctiveness=6.0
+            atmosphere=6.0,
+            significance=6.0,
+            story_relevance=6.0,
+            distinctiveness=6.0,
+            temporal_plausibility=6.0,
         )
 
         with pytest.raises(WorldGenerationError, match="Location refinement failed"):
@@ -3101,7 +3549,11 @@ class TestExceptionHandlingPaths:
 
         original = {"name": "Test", "description": "Test", "significance": "Test"}
         scores = LocationQualityScores(
-            atmosphere=6.0, significance=6.0, story_relevance=6.0, distinctiveness=6.0
+            atmosphere=6.0,
+            significance=6.0,
+            story_relevance=6.0,
+            distinctiveness=6.0,
+            temporal_plausibility=6.0,
         )
 
         with pytest.raises(WorldGenerationError, match="Location refinement failed"):
@@ -3389,7 +3841,11 @@ class TestExceptionHandlingPaths:
 
         original = {"name": "Test", "description": "Test", "leader": "X", "goals": [], "values": []}
         scores = FactionQualityScores(
-            coherence=6.0, influence=6.0, conflict_potential=6.0, distinctiveness=6.0
+            coherence=6.0,
+            influence=6.0,
+            conflict_potential=6.0,
+            distinctiveness=6.0,
+            temporal_plausibility=6.0,
         )
 
         with pytest.raises(WorldGenerationError, match="Faction refinement failed"):
@@ -3402,7 +3858,11 @@ class TestExceptionHandlingPaths:
 
         original = {"name": "Test", "description": "Test", "leader": "X", "goals": [], "values": []}
         scores = FactionQualityScores(
-            coherence=6.0, influence=6.0, conflict_potential=6.0, distinctiveness=6.0
+            coherence=6.0,
+            influence=6.0,
+            conflict_potential=6.0,
+            distinctiveness=6.0,
+            temporal_plausibility=6.0,
         )
 
         with pytest.raises(WorldGenerationError, match="Faction refinement failed"):
@@ -3415,7 +3875,11 @@ class TestExceptionHandlingPaths:
 
         original = {"name": "Test", "description": "Test", "leader": "X", "goals": [], "values": []}
         scores = FactionQualityScores(
-            coherence=6.0, influence=6.0, conflict_potential=6.0, distinctiveness=6.0
+            coherence=6.0,
+            influence=6.0,
+            conflict_potential=6.0,
+            distinctiveness=6.0,
+            temporal_plausibility=6.0,
         )
 
         with pytest.raises(WorldGenerationError, match="Faction refinement failed"):
@@ -3472,7 +3936,11 @@ class TestExceptionHandlingPaths:
 
         original = {"name": "Test", "description": "Test", "significance": "X", "properties": []}
         scores = ItemQualityScores(
-            significance=6.0, uniqueness=6.0, narrative_potential=6.0, integration=6.0
+            significance=6.0,
+            uniqueness=6.0,
+            narrative_potential=6.0,
+            integration=6.0,
+            temporal_plausibility=6.0,
         )
 
         with pytest.raises(WorldGenerationError, match="Item refinement failed"):
@@ -3489,7 +3957,11 @@ class TestExceptionHandlingPaths:
 
         original = {"name": "Test", "description": "Test", "significance": "X", "properties": []}
         scores = ItemQualityScores(
-            significance=6.0, uniqueness=6.0, narrative_potential=6.0, integration=6.0
+            significance=6.0,
+            uniqueness=6.0,
+            narrative_potential=6.0,
+            integration=6.0,
+            temporal_plausibility=6.0,
         )
 
         with pytest.raises(WorldGenerationError, match="Item refinement failed"):
@@ -3502,7 +3974,11 @@ class TestExceptionHandlingPaths:
 
         original = {"name": "Test", "description": "Test", "significance": "X", "properties": []}
         scores = ItemQualityScores(
-            significance=6.0, uniqueness=6.0, narrative_potential=6.0, integration=6.0
+            significance=6.0,
+            uniqueness=6.0,
+            narrative_potential=6.0,
+            integration=6.0,
+            temporal_plausibility=6.0,
         )
 
         with pytest.raises(WorldGenerationError, match="Item refinement failed"):
@@ -3560,7 +4036,13 @@ class TestExceptionHandlingPaths:
         mock_generate_structured.side_effect = ollama.ResponseError("LLM error")
 
         original = {"name": "Test", "description": "Test", "manifestations": "X"}
-        scores = ConceptQualityScores(relevance=6.0, depth=6.0, manifestation=6.0, resonance=6.0)
+        scores = ConceptQualityScores(
+            relevance=6.0,
+            depth=6.0,
+            manifestation=6.0,
+            resonance=6.0,
+            temporal_plausibility=6.0,
+        )
 
         with pytest.raises(WorldGenerationError, match="Concept refinement failed"):
             service._refine_concept(original, scores, story_state, temperature=0.7)
@@ -3577,7 +4059,13 @@ class TestExceptionHandlingPaths:
         )
 
         original = {"name": "Test", "description": "Test", "manifestations": "X"}
-        scores = ConceptQualityScores(relevance=6.0, depth=6.0, manifestation=6.0, resonance=6.0)
+        scores = ConceptQualityScores(
+            relevance=6.0,
+            depth=6.0,
+            manifestation=6.0,
+            resonance=6.0,
+            temporal_plausibility=6.0,
+        )
 
         with pytest.raises(WorldGenerationError, match="Concept refinement failed"):
             service._refine_concept(original, scores, story_state, temperature=0.7)
@@ -3588,7 +4076,13 @@ class TestExceptionHandlingPaths:
         mock_generate_structured.side_effect = AttributeError("Unexpected")
 
         original = {"name": "Test", "description": "Test", "manifestations": "X"}
-        scores = ConceptQualityScores(relevance=6.0, depth=6.0, manifestation=6.0, resonance=6.0)
+        scores = ConceptQualityScores(
+            relevance=6.0,
+            depth=6.0,
+            manifestation=6.0,
+            resonance=6.0,
+            temporal_plausibility=6.0,
+        )
 
         with pytest.raises(WorldGenerationError, match="Concept refinement failed"):
             service._refine_concept(original, scores, story_state, temperature=0.7)
@@ -3679,10 +4173,18 @@ class TestRefinementLoopEdgeCases:
         mock_refine.return_value = refined_faction
 
         low_scores = FactionQualityScores(
-            coherence=5.0, influence=5.0, conflict_potential=5.0, distinctiveness=5.0
+            coherence=5.0,
+            influence=5.0,
+            conflict_potential=5.0,
+            distinctiveness=5.0,
+            temporal_plausibility=5.0,
         )
         high_scores = FactionQualityScores(
-            coherence=8.0, influence=8.0, conflict_potential=8.0, distinctiveness=8.0
+            coherence=8.0,
+            influence=8.0,
+            conflict_potential=8.0,
+            distinctiveness=8.0,
+            temporal_plausibility=8.0,
         )
         mock_judge.side_effect = [low_scores, high_scores]
 
@@ -3726,7 +4228,11 @@ class TestRefinementLoopEdgeCases:
         mock_create.return_value = test_faction
 
         low_scores = FactionQualityScores(
-            coherence=5.0, influence=5.0, conflict_potential=5.0, distinctiveness=5.0
+            coherence=5.0,
+            influence=5.0,
+            conflict_potential=5.0,
+            distinctiveness=5.0,
+            temporal_plausibility=5.0,
         )
         mock_judge.return_value = low_scores
 
@@ -3757,10 +4263,18 @@ class TestRefinementLoopEdgeCases:
         mock_refine.return_value = refined_item
 
         low_scores = ItemQualityScores(
-            significance=5.0, uniqueness=5.0, narrative_potential=5.0, integration=5.0
+            significance=5.0,
+            uniqueness=5.0,
+            narrative_potential=5.0,
+            integration=5.0,
+            temporal_plausibility=5.0,
         )
         high_scores = ItemQualityScores(
-            significance=8.0, uniqueness=8.0, narrative_potential=8.0, integration=8.0
+            significance=8.0,
+            uniqueness=8.0,
+            narrative_potential=8.0,
+            integration=8.0,
+            temporal_plausibility=8.0,
         )
         mock_judge.side_effect = [low_scores, high_scores]
 
@@ -3809,7 +4323,11 @@ class TestRefinementLoopEdgeCases:
         mock_refine.return_value = test_item  # Mock refinement to prevent errors
 
         low_scores = ItemQualityScores(
-            significance=5.0, uniqueness=5.0, narrative_potential=5.0, integration=5.0
+            significance=5.0,
+            uniqueness=5.0,
+            narrative_potential=5.0,
+            integration=5.0,
+            temporal_plausibility=5.0,
         )
         mock_judge.return_value = low_scores
 
@@ -3839,10 +4357,18 @@ class TestRefinementLoopEdgeCases:
         mock_refine.return_value = refined_concept
 
         low_scores = ConceptQualityScores(
-            relevance=5.0, depth=5.0, manifestation=5.0, resonance=5.0
+            relevance=5.0,
+            depth=5.0,
+            manifestation=5.0,
+            resonance=5.0,
+            temporal_plausibility=5.0,
         )
         high_scores = ConceptQualityScores(
-            relevance=8.0, depth=8.0, manifestation=8.0, resonance=8.0
+            relevance=8.0,
+            depth=8.0,
+            manifestation=8.0,
+            resonance=8.0,
+            temporal_plausibility=8.0,
         )
         mock_judge.side_effect = [low_scores, high_scores]
 
@@ -3891,7 +4417,11 @@ class TestRefinementLoopEdgeCases:
         mock_refine.return_value = test_concept  # Mock refinement to prevent errors
 
         low_scores = ConceptQualityScores(
-            relevance=5.0, depth=5.0, manifestation=5.0, resonance=5.0
+            relevance=5.0,
+            depth=5.0,
+            manifestation=5.0,
+            resonance=5.0,
+            temporal_plausibility=5.0,
         )
         mock_judge.return_value = low_scores
 
@@ -3917,7 +4447,11 @@ class TestBatchOperationsPartialFailure:
         """Test batch faction generation logs warning on partial failure."""
         faction1 = {"name": "Faction One", "description": "First"}
         scores1 = FactionQualityScores(
-            coherence=8.0, influence=8.0, conflict_potential=8.0, distinctiveness=8.0
+            coherence=8.0,
+            influence=8.0,
+            conflict_potential=8.0,
+            distinctiveness=8.0,
+            temporal_plausibility=8.0,
         )
 
         mock_gen.side_effect = [
@@ -3939,7 +4473,11 @@ class TestBatchOperationsPartialFailure:
         """Test batch item generation logs warning on partial failure."""
         item1 = {"name": "Item One", "description": "First"}
         scores1 = ItemQualityScores(
-            significance=8.0, uniqueness=8.0, narrative_potential=8.0, integration=8.0
+            significance=8.0,
+            uniqueness=8.0,
+            narrative_potential=8.0,
+            integration=8.0,
+            temporal_plausibility=8.0,
         )
 
         mock_gen.side_effect = [
@@ -3960,7 +4498,13 @@ class TestBatchOperationsPartialFailure:
     ):
         """Test batch concept generation logs warning on partial failure."""
         concept1 = {"name": "Concept One", "description": "First"}
-        scores1 = ConceptQualityScores(relevance=8.0, depth=8.0, manifestation=8.0, resonance=8.0)
+        scores1 = ConceptQualityScores(
+            relevance=8.0,
+            depth=8.0,
+            manifestation=8.0,
+            resonance=8.0,
+            temporal_plausibility=8.0,
+        )
 
         mock_gen.side_effect = [
             (concept1, scores1, 1),
@@ -3980,7 +4524,11 @@ class TestBatchOperationsPartialFailure:
         """Test batch location generation logs warning on partial failure."""
         loc1 = {"name": "Location One", "description": "First"}
         scores1 = LocationQualityScores(
-            atmosphere=8.0, significance=8.0, story_relevance=8.0, distinctiveness=8.0
+            atmosphere=8.0,
+            significance=8.0,
+            story_relevance=8.0,
+            distinctiveness=8.0,
+            temporal_plausibility=8.0,
         )
 
         mock_gen.side_effect = [
@@ -4024,7 +4572,12 @@ class TestBatchOperationsPartialFailure:
         """Test batch character generation logs warning on partial failure."""
         char1 = Character(name="Character One", role="protagonist", description="First")
         scores1 = CharacterQualityScores(
-            depth=8.0, goals=8.0, flaws=8.0, uniqueness=8.0, arc_potential=8.0
+            depth=8.0,
+            goals=8.0,
+            flaws=8.0,
+            uniqueness=8.0,
+            arc_potential=8.0,
+            temporal_plausibility=8.0,
         )
 
         mock_gen.side_effect = [
@@ -4098,15 +4651,27 @@ class TestFactionIterationRegression:
 
         # First judge call - high score (but below threshold)
         high_scores = FactionQualityScores(
-            coherence=8.5, influence=8.5, conflict_potential=8.5, distinctiveness=8.5
+            coherence=8.5,
+            influence=8.5,
+            conflict_potential=8.5,
+            distinctiveness=8.5,
+            temporal_plausibility=8.5,
         )
         # Second judge call - lower scores (regression)
         low_scores1 = FactionQualityScores(
-            coherence=6.0, influence=6.0, conflict_potential=6.0, distinctiveness=6.0
+            coherence=6.0,
+            influence=6.0,
+            conflict_potential=6.0,
+            distinctiveness=6.0,
+            temporal_plausibility=6.0,
         )
         # Third judge call - even lower scores
         low_scores2 = FactionQualityScores(
-            coherence=5.0, influence=5.0, conflict_potential=5.0, distinctiveness=5.0
+            coherence=5.0,
+            influence=5.0,
+            conflict_potential=5.0,
+            distinctiveness=5.0,
+            temporal_plausibility=5.0,
         )
 
         mock_judge.side_effect = [high_scores, low_scores1, low_scores2]
@@ -4146,7 +4711,11 @@ class TestFactionIterationRegression:
 
         # Single judge call with scores below threshold
         scores_below_threshold = FactionQualityScores(
-            coherence=6.0, influence=6.0, conflict_potential=6.0, distinctiveness=6.0
+            coherence=6.0,
+            influence=6.0,
+            conflict_potential=6.0,
+            distinctiveness=6.0,
+            temporal_plausibility=6.0,
         )
         mock_judge.return_value = scores_below_threshold
 

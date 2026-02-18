@@ -29,6 +29,12 @@ class Character(BaseModel):
     arc_type: str | None = None  # Reference to arc template ID (e.g., "hero_journey")
     arc_progress: dict[int, str] = Field(default_factory=dict)  # chapter_number -> arc state
 
+    # Temporal/lifecycle fields (populated during world build when calendar exists)
+    birth_year: int | None = None
+    death_year: int | None = None
+    birth_era: str | None = None
+    temporal_notes: str = ""
+
     @field_validator("personality_traits", mode="before")
     @classmethod
     def normalize_personality_traits(cls, v: Any) -> Any:
@@ -107,6 +113,12 @@ class Faction(BaseModel):
     values: list[str] = Field(default_factory=list, description="Core values of the faction")
     base_location: str = Field(default="", description="Headquarters or territory location")
 
+    # Temporal/lifecycle fields (populated during world build when calendar exists)
+    founding_year: int | None = None
+    dissolution_year: int | None = None
+    founding_era: str | None = None
+    temporal_notes: str = ""
+
 
 class Item(BaseModel):
     """A significant item or object in the story world."""
@@ -119,6 +131,11 @@ class Item(BaseModel):
         default_factory=list, description="Special properties or abilities"
     )
 
+    # Temporal/lifecycle fields (populated during world build when calendar exists)
+    creation_year: int | None = None
+    creation_era: str | None = None
+    temporal_notes: str = ""
+
 
 class Concept(BaseModel):
     """A thematic concept or idea in the story world."""
@@ -130,6 +147,11 @@ class Concept(BaseModel):
         default="", description="How this concept appears through events, characters, or symbols"
     )
 
+    # Temporal/lifecycle fields (populated during world build when calendar exists)
+    emergence_year: int | None = None
+    emergence_era: str | None = None
+    temporal_notes: str = ""
+
 
 class Location(BaseModel):
     """A location in the story world."""
@@ -138,6 +160,12 @@ class Location(BaseModel):
     type: str = Field(default="location", description="Entity type (always 'location')")
     description: str = Field(description="Detailed description with sensory details")
     significance: str = Field(default="", description="Why this place matters to the story")
+
+    # Temporal/lifecycle fields (populated during world build when calendar exists)
+    founding_year: int | None = None
+    destruction_year: int | None = None
+    founding_era: str | None = None
+    temporal_notes: str = ""
 
 
 class Relationship(BaseModel):
@@ -700,6 +728,12 @@ class CharacterCreation(BaseModel):
     goals: list[str] = Field(default_factory=list)
     relationships: dict[str, str] = Field(default_factory=dict)
     arc_notes: str = ""
+
+    # Temporal/lifecycle fields (populated during world build when calendar exists)
+    birth_year: int | None = None
+    death_year: int | None = None
+    birth_era: str | None = None
+    temporal_notes: str = ""
 
     @field_validator("personality_traits", mode="before")
     @classmethod
