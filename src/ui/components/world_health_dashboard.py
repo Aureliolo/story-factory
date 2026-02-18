@@ -6,7 +6,7 @@ from typing import Any
 
 from nicegui import ui
 
-from src.memory.world_health import WorldHealthMetrics
+from src.memory.world_health import CycleInfo, WorldHealthMetrics
 from src.ui.theme import get_entity_icon
 from src.utils.constants import get_entity_color
 
@@ -37,7 +37,7 @@ class WorldHealthDashboard:
     - Overall health score with circular progress
     - Entity count summary
     - Orphan entity warnings
-    - Circular relationship warnings with accept/dismiss
+    - Circular relationship warnings with view/accept
     - Quality distribution chart with per-entity improve buttons
     - Actionable recommendations (shown directly, not in expansion panel)
     """
@@ -46,8 +46,8 @@ class WorldHealthDashboard:
         self,
         metrics: WorldHealthMetrics,
         on_fix_orphan: Callable[[str], Any] | None = None,
-        on_view_circular: Callable[[dict], Any] | None = None,
-        on_dismiss_circular: Callable[[dict], Any] | None = None,
+        on_view_circular: Callable[[CycleInfo], Any] | None = None,
+        on_accept_circular: Callable[[CycleInfo], Any] | None = None,
         on_improve_quality: Callable[[str], Any] | None = None,
         on_refresh: Callable[[], Any] | None = None,
     ):
@@ -57,14 +57,14 @@ class WorldHealthDashboard:
             metrics: World health metrics to display.
             on_fix_orphan: Callback when user wants to fix an orphan entity.
             on_view_circular: Callback to view a single circular relationship chain.
-            on_dismiss_circular: Callback to accept/dismiss a circular chain as intentional.
+            on_accept_circular: Callback to accept a circular chain as intentional.
             on_improve_quality: Callback to improve a low-quality entity.
             on_refresh: Callback to refresh metrics after changes.
         """
         self.metrics = metrics
         self.on_fix_orphan = on_fix_orphan
         self.on_view_circular = on_view_circular
-        self.on_dismiss_circular = on_dismiss_circular
+        self.on_accept_circular = on_accept_circular
         self.on_improve_quality = on_improve_quality
         self.on_refresh = on_refresh
 
@@ -215,7 +215,7 @@ class WorldHealthDashboard:
                     ui.label(f"+{orphan_count - 5} more...").classes("text-xs text-gray-400")
 
     def _build_circular_section(self) -> None:
-        """Build circular relationship warning section with view and accept/dismiss buttons."""
+        """Build circular relationship warning section with view and accept buttons."""
         circular_count = self.metrics.circular_count
 
         if circular_count == 0:
@@ -235,15 +235,15 @@ class WorldHealthDashboard:
             # List cycles (max 3)
             with ui.column().classes("gap-1"):
                 for cycle in self.metrics.circular_relationships[:3]:
-                    edges = cycle.get("edges", [])
-                    length = cycle.get("length", len(edges))
+                    edges = cycle["edges"]
+                    length = cycle["length"]
 
                     # Build readable cycle description using entity names
                     if edges:
                         # Extract unique entity names in cycle order
                         cycle_names: list[str] = []
                         for edge in edges:
-                            source_name = edge.get("source_name", edge.get("source", "?"))
+                            source_name = edge["source_name"]
                             if not cycle_names or cycle_names[-1] != source_name:
                                 cycle_names.append(source_name)
                         # Add first name again to show it's a cycle
@@ -266,10 +266,10 @@ class WorldHealthDashboard:
                                 on_click=lambda c=cycle: self.on_view_circular(c),
                             ).props("flat round size=xs").tooltip("View cycle")
 
-                        if self.on_dismiss_circular:
+                        if self.on_accept_circular:
                             ui.button(
                                 icon="check",
-                                on_click=lambda c=cycle: self.on_dismiss_circular(c),
+                                on_click=lambda c=cycle: self.on_accept_circular(c),
                             ).props("flat round size=xs").tooltip("Accept as intentional")
 
                 if circular_count > 3:

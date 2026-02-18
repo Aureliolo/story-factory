@@ -371,7 +371,7 @@ class WorldDatabase:
             """
             )
 
-            # Accepted cycles table (for dismissing circular chains as intentional)
+            # Accepted cycles table (circular chains marked as intentional)
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS accepted_cycles (
@@ -608,7 +608,7 @@ class WorldDatabase:
         return _graph.find_circular_relationships(self, relation_types, max_cycle_length)
 
     # =========================================================================
-    # Accepted Cycles (dismiss circular chains as intentional)
+    # Accepted Cycles (circular chains marked as intentional)
     # =========================================================================
 
     @staticmethod

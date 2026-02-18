@@ -7,10 +7,33 @@ Contains Pydantic models for:
 """
 
 import logging
+from typing import TypedDict
 
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+
+# =========================================================================
+# Cycle TypedDicts (typed replacements for raw dicts in the cycle pipeline)
+# =========================================================================
+
+
+class CycleEdge(TypedDict):
+    """A single edge in a circular relationship chain."""
+
+    source: str
+    source_name: str
+    type: str
+    target: str
+    target_name: str
+
+
+class CycleInfo(TypedDict):
+    """A circular relationship chain with its edges and length."""
+
+    edges: list[CycleEdge]
+    length: int
 
 
 # =========================================================================
@@ -103,7 +126,7 @@ class WorldHealthMetrics(BaseModel):
 
     # Circular relationship detection
     circular_count: int = Field(default=0, description="Number of circular relationship chains")
-    circular_relationships: list[dict] = Field(
+    circular_relationships: list[CycleInfo] = Field(
         default_factory=list, description="Details of circular relationship chains"
     )
 

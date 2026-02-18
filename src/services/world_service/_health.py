@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from src.memory.entities import Entity
 from src.memory.world_database import WorldDatabase
+from src.memory.world_health import CycleEdge, CycleInfo
 
 if TYPE_CHECKING:
     from src.memory.world_health import WorldHealthMetrics
@@ -115,7 +116,7 @@ def get_world_health_metrics(
     entity_name_lookup = {e.id: e.name for e in all_entities}
 
     # Circular relationship detection (respects settings toggle)
-    circular_relationships: list[dict] = []
+    circular_relationships: list[CycleInfo] = []
     hierarchical_circular_count = 0
     mutual_circular_count = 0
     if svc.settings.circular_detection_enabled:
@@ -144,22 +145,22 @@ def get_world_health_metrics(
                 )
         for cycle in circular:
             # Include entity names for human-readable display
-            edges_with_names = []
+            edges_with_names: list[CycleEdge] = []
             for edge in cycle:
                 source_id, relation_type, target_id = edge[0], edge[1], edge[2]
                 edges_with_names.append(
-                    {
-                        "source": source_id,
-                        "source_name": entity_name_lookup.get(source_id, source_id),
-                        "type": relation_type,
-                        "target": target_id,
-                        "target_name": entity_name_lookup.get(target_id, target_id),
-                    }
+                    CycleEdge(
+                        source=source_id,
+                        source_name=entity_name_lookup.get(source_id, source_id),
+                        type=relation_type,
+                        target=target_id,
+                        target_name=entity_name_lookup.get(target_id, target_id),
+                    )
                 )
-            cycle_info = {
-                "edges": edges_with_names,
-                "length": len(cycle),
-            }
+            cycle_info = CycleInfo(
+                edges=edges_with_names,
+                length=len(cycle),
+            )
             circular_relationships.append(cycle_info)
         logger.debug(f"Circular detection enabled: found {len(circular_relationships)} cycles")
 
@@ -167,10 +168,8 @@ def get_world_health_metrics(
         from src.memory.conflict_types import HIERARCHICAL_RELATIONSHIP_TYPES
 
         for cycle_info in circular_relationships:
-            edges: list[dict] = cycle_info.get("edges", [])  # type: ignore[assignment]
-            is_hierarchical = any(
-                edge.get("type", "") in HIERARCHICAL_RELATIONSHIP_TYPES for edge in edges
-            )
+            edges: list[CycleEdge] = cycle_info["edges"]
+            is_hierarchical = any(edge["type"] in HIERARCHICAL_RELATIONSHIP_TYPES for edge in edges)
             if is_hierarchical:
                 hierarchical_circular_count += 1
             else:
