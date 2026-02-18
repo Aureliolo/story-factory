@@ -110,6 +110,7 @@ Create an item with:
 2. Uniqueness - distinctive appearance or properties
 3. Narrative potential - opportunities for scenes and conflict
 4. Integration - fits naturally into the world
+5. Timeline placement - creation year and era (if calendar available)
 
 Write all text in {brief.language}."""
 
@@ -182,6 +183,7 @@ Name: {item.get("name", "Unknown")}
 Description: {item.get("description", "")}
 Significance: {item.get("significance", "")}
 Properties: {formatted_properties}
+Creation Year: {item.get("creation_year", "N/A")}
 
 {JUDGE_CALIBRATION_BLOCK}
 
@@ -190,11 +192,12 @@ Rate each dimension 0-10:
 - uniqueness: Distinctive qualities
 - narrative_potential: Opportunities for scenes
 - integration: How well it fits the world
+- temporal_plausibility: Timeline consistency, era-appropriate placement
 
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"story_significance": <float 0-10>, "uniqueness": <float 0-10>, "narrative_potential": <float 0-10>, "integration": <float 0-10>, "feedback": "Your assessment..."}}
+{{"story_significance": <float 0-10>, "uniqueness": <float 0-10>, "narrative_potential": <float 0-10>, "integration": <float 0-10>, "temporal_plausibility": <float 0-10>, "feedback": "Your assessment..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
@@ -254,6 +257,8 @@ def _refine_item(
         improvement_focus.append("Add more opportunities for scenes and conflict")
     if scores.integration < threshold:
         improvement_focus.append("Improve how naturally it fits into the world")
+    if scores.temporal_plausibility < threshold:
+        improvement_focus.append("Improve timeline placement and era consistency")
 
     prompt = f"""TASK: Improve this item to score HIGHER on the weak dimensions.
 
@@ -262,12 +267,14 @@ Name: {item.get("name", "Unknown")}
 Description: {item.get("description", "")}
 Significance: {item.get("significance", "")}
 Properties: {svc._format_properties(item.get("properties", []))}
+Creation Year: {item.get("creation_year", "N/A")}
 
 CURRENT SCORES (need {threshold}+ in all areas):
 - Story Significance: {scores.significance}/10
 - Uniqueness: {scores.uniqueness}/10
 - Narrative Potential: {scores.narrative_potential}/10
 - Integration: {scores.integration}/10
+- Temporal Plausibility: {scores.temporal_plausibility}/10
 
 JUDGE'S FEEDBACK: {scores.feedback}
 

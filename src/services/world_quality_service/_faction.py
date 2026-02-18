@@ -180,6 +180,7 @@ Create a faction with:
 3. Conflict potential - natural tensions with other groups
 4. Distinctiveness - unique identity and aesthetics
 5. Spatial grounding - connection to a specific location (headquarters, base, territory)
+6. Timeline placement - founding year and era (if calendar available)
 
 Output ONLY valid JSON (all text in {brief.language}):
 {{
@@ -261,6 +262,7 @@ Description: {faction.get("description", "")}
 Leader: {faction.get("leader", "Unknown")}
 Goals: {", ".join(faction.get("goals", []))}
 Values: {", ".join(faction.get("values", []))}
+Founding Year: {faction.get("founding_year", "N/A")}
 
 {JUDGE_CALIBRATION_BLOCK}
 
@@ -269,11 +271,12 @@ Rate each dimension 0-10:
 - influence: World impact, power level
 - conflict_potential: Story conflict opportunities
 - distinctiveness: Memorable, unique qualities
+- temporal_plausibility: Timeline consistency, era-appropriate placement
 
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"coherence": <float 0-10>, "influence": <float 0-10>, "conflict_potential": <float 0-10>, "distinctiveness": <float 0-10>, "feedback": "Your assessment..."}}
+{{"coherence": <float 0-10>, "influence": <float 0-10>, "conflict_potential": <float 0-10>, "distinctiveness": <float 0-10>, "temporal_plausibility": <float 0-10>, "feedback": "Your assessment..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
@@ -335,6 +338,8 @@ def _refine_faction(
         improvement_focus.append("Add more story conflict opportunities")
     if scores.distinctiveness < threshold:
         improvement_focus.append("Make more unique and memorable")
+    if scores.temporal_plausibility < threshold:
+        improvement_focus.append("Improve timeline placement and era consistency")
 
     prompt = f"""TASK: Improve this faction to score HIGHER on the weak dimensions.
 
@@ -344,12 +349,14 @@ Description: {faction.get("description", "")}
 Leader: {faction.get("leader", "Unknown")}
 Goals: {", ".join(faction.get("goals", []))}
 Values: {", ".join(faction.get("values", []))}
+Founding Year: {faction.get("founding_year", "N/A")}
 
 CURRENT SCORES (need {threshold}+ in all areas):
 - Coherence: {scores.coherence}/10
 - Influence: {scores.influence}/10
 - Conflict Potential: {scores.conflict_potential}/10
 - Distinctiveness: {scores.distinctiveness}/10
+- Temporal Plausibility: {scores.temporal_plausibility}/10
 
 JUDGE'S FEEDBACK: {scores.feedback}
 

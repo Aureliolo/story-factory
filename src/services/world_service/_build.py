@@ -9,11 +9,15 @@ from src.memory.story_state import PlotOutline, StoryState
 from src.memory.world_calendar import WorldCalendar
 from src.memory.world_database import WorldDatabase
 from src.memory.world_settings import WorldSettings
+from src.services.world_service._lifecycle_helpers import (
+    build_character_lifecycle,
+    build_entity_lifecycle,
+)
+from src.services.world_service._name_matching import _find_entity_by_name
 from src.utils.exceptions import GenerationCancelledError, WorldGenerationError
 from src.utils.validation import validate_not_none, validate_type
 
 if TYPE_CHECKING:
-    from src.memory.entities import Entity
     from src.services import ServiceContainer
     from src.services.world_service import WorldBuildOptions, WorldBuildProgress, WorldService
 
@@ -425,6 +429,7 @@ def _extract_characters_to_world(state: StoryState, world_db: WorldDatabase) -> 
                 "personality_traits": char.trait_names,
                 "goals": char.goals,
                 "arc_notes": char.arc_notes,
+                **build_character_lifecycle(char),
             },
         )
         char_id_map[char.name] = entity_id
@@ -507,6 +512,7 @@ def _generate_locations(
                 attributes={
                     "significance": loc.get("significance", ""),
                     "quality_scores": scores.to_dict(),
+                    **build_entity_lifecycle(loc, "location"),
                 },
             )
             added_count += 1
@@ -559,6 +565,7 @@ def _generate_factions(
                     "values": faction.get("values", []),
                     "base_location": faction.get("base_location", ""),
                     "quality_scores": faction_scores.to_dict(),
+                    **build_entity_lifecycle(faction, "faction"),
                 },
             )
             added_count += 1
@@ -628,6 +635,7 @@ def _generate_items(
                     "owner": item.get("owner", ""),
                     "location": item.get("location", ""),
                     "quality_scores": item_scores.to_dict(),
+                    **build_entity_lifecycle(item, "item"),
                 },
             )
             added_count += 1
@@ -670,6 +678,7 @@ def _generate_concepts(
                     "type": concept.get("type", ""),
                     "importance": concept.get("importance", ""),
                     "quality_scores": concept_scores.to_dict(),
+                    **build_entity_lifecycle(concept, "concept"),
                 },
             )
             added_count += 1
@@ -942,57 +951,3 @@ def _recover_orphans(
         len(orphans),
     )
     return added_count
-
-
-_LEADING_ARTICLES = ("the ", "a ", "an ")
-
-
-def _normalize_name(name: str) -> str:
-    """Normalize an entity name for fuzzy comparison.
-
-    Collapses whitespace, lowercases, and strips common English articles
-    ("The", "A", "An") that LLMs frequently prepend, causing mismatches
-    (e.g., "The Echoes of the Network" vs "Echoes of the Network").
-    """
-    normalized = " ".join(name.split()).lower()
-    for article in _LEADING_ARTICLES:
-        if normalized.startswith(article):
-            normalized = normalized[len(article) :]
-            break
-    return normalized
-
-
-def _find_entity_by_name(entities: list[Entity], name: str) -> Entity | None:
-    """Find an entity by name with fuzzy matching.
-
-    Tries exact match first, then falls back to normalized comparison
-    to handle LLM name variations like added "The" prefixes or
-    case differences. If multiple entities match via fuzzy matching,
-    logs a warning and returns None to avoid ambiguous assignment.
-
-    Args:
-        entities: List of entity objects with .name attribute.
-        name: Name to search for.
-
-    Returns:
-        Matching entity, or None if not found or ambiguous.
-    """
-    # Exact match first (fast path)
-    for e in entities:
-        if e.name == name:
-            return e
-
-    # Fuzzy match: normalize both sides and collect all matches
-    normalized_target = _normalize_name(name)
-    matches = [e for e in entities if _normalize_name(e.name) == normalized_target]
-
-    if len(matches) == 1:
-        logger.debug(f"Fuzzy matched relationship entity: '{name}' -> '{matches[0].name}'")
-        return matches[0]
-
-    if len(matches) > 1:
-        match_names = [e.name for e in matches]
-        logger.warning(f"Ambiguous fuzzy match for '{name}': {match_names}. Skipping assignment.")
-        return None
-
-    return None

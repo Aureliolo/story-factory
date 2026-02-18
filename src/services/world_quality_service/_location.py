@@ -111,6 +111,7 @@ Create a location with:
 2. Narrative significance - symbolic or plot meaning
 3. Strong story relevance - connections to themes/characters
 4. Distinctiveness - memorable unique qualities
+5. Timeline placement - founding year and era (if calendar available)
 
 Write all text in {brief.language}."""
 
@@ -181,6 +182,7 @@ LOCATION TO EVALUATE:
 Name: {location.get("name", "Unknown")}
 Description: {location.get("description", "")}
 Significance: {location.get("significance", "")}
+Founding Year: {location.get("founding_year", "N/A")}
 
 {JUDGE_CALIBRATION_BLOCK}
 
@@ -189,11 +191,12 @@ Rate each dimension 0-10:
 - narrative_significance: Plot or symbolic meaning
 - story_relevance: Connections to themes and characters
 - distinctiveness: Memorable, unique qualities
+- temporal_plausibility: Timeline consistency, era-appropriate placement
 
 Provide specific improvement feedback in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"atmosphere": <float 0-10>, "narrative_significance": <float 0-10>, "story_relevance": <float 0-10>, "distinctiveness": <float 0-10>, "feedback": "Your assessment..."}}
+{{"atmosphere": <float 0-10>, "narrative_significance": <float 0-10>, "story_relevance": <float 0-10>, "distinctiveness": <float 0-10>, "temporal_plausibility": <float 0-10>, "feedback": "Your assessment..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
@@ -255,6 +258,8 @@ def _refine_location(
         improvement_focus.append("Strengthen connections to themes and characters")
     if scores.distinctiveness < threshold:
         improvement_focus.append("Make more memorable with unique qualities")
+    if scores.temporal_plausibility < threshold:
+        improvement_focus.append("Improve timeline placement and era consistency")
 
     prompt = f"""TASK: Improve this location to score HIGHER on the weak dimensions.
 
@@ -262,12 +267,14 @@ ORIGINAL LOCATION:
 Name: {location.get("name", "Unknown")}
 Description: {location.get("description", "")}
 Significance: {location.get("significance", "")}
+Founding Year: {location.get("founding_year", "N/A")}
 
 CURRENT SCORES (need {threshold}+ in all areas):
 - Atmosphere: {scores.atmosphere}/10
 - Narrative Significance: {scores.significance}/10
 - Story Relevance: {scores.story_relevance}/10
 - Distinctiveness: {scores.distinctiveness}/10
+- Temporal Plausibility: {scores.temporal_plausibility}/10
 
 JUDGE'S FEEDBACK: {scores.feedback}
 

@@ -30,6 +30,7 @@ def _make_result(
     influence: float,
     conflict_potential: float,
     distinctiveness: float,
+    temporal_plausibility: float = 7.0,
     time_val: float = 1.0,
 ) -> dict:
     """Build a single result dict matching the structure produced by run_*."""
@@ -39,6 +40,7 @@ def _make_result(
         "influence": influence,
         "conflict_potential": conflict_potential,
         "distinctiveness": distinctiveness,
+        "temporal_plausibility": temporal_plausibility,
         "time": time_val,
     }
 
@@ -79,8 +81,10 @@ class TestAnalyzeScores:
 
         assert analysis["label"] == "Single"
         assert analysis["rounds"] == 1
-        assert analysis["total_scores"] == 4  # 4 dimensions
-        assert analysis["unique_values"] == 4  # 7.0, 6.5, 8.0, 5.5
+        assert analysis["total_scores"] == 5  # 5 dimensions
+        assert (
+            analysis["unique_values"] == 4
+        )  # 7.0, 6.5, 8.0, 5.5 (temporal_plausibility=7.0 same as coherence)
 
     def test_multiple_rounds(self):
         """Multiple rounds should aggregate all scores correctly."""
@@ -92,7 +96,7 @@ class TestAnalyzeScores:
         analysis = analyze_scores(results, "Multi")
 
         assert analysis["rounds"] == 3
-        assert analysis["total_scores"] == 12  # 3 rounds * 4 dims
+        assert analysis["total_scores"] == 15  # 3 rounds * 5 dims
 
     def test_unique_value_counting(self):
         """Unique values should count distinct score values across all dimensions."""
@@ -160,7 +164,7 @@ class TestAnalyzeScores:
 
     def test_mean_and_std_dev(self):
         """Mean and std_dev should be computed over all scores."""
-        results = [_make_result(1, 5.0, 5.0, 5.0, 5.0)]
+        results = [_make_result(1, 5.0, 5.0, 5.0, 5.0, temporal_plausibility=5.0)]
         analysis = analyze_scores(results, "Uniform")
 
         assert analysis["mean"] == 5.0
@@ -183,9 +187,9 @@ class TestAnalyzeScores:
         ]
         analysis = analyze_scores(results, "Modal")
 
-        # 7.0 appears 5 times, 8.0 appears 3 times
+        # 7.0 appears 7 times (incl. temporal_plausibility), 8.0 appears 3 times
         modal = analysis["modal_scores"]
-        assert modal[0] == (7.0, 5)
+        assert modal[0] == (7.0, 7)
         assert modal[1] == (8.0, 3)
 
     def test_decimal_distribution(self):
@@ -194,8 +198,8 @@ class TestAnalyzeScores:
         analysis = analyze_scores(results, "DecDist")
 
         dec_dist = analysis["decimal_distribution"]
-        # 7.0 -> 0 decimals, 6.5 -> 1, 8.25 -> 2, 5.125 -> 3
-        assert dec_dist[0] == 1
+        # 7.0 -> 0 decimals (x2 with temporal_plausibility), 6.5 -> 1, 8.25 -> 2, 5.125 -> 3
+        assert dec_dist[0] == 2
         assert dec_dist[1] == 1
         assert dec_dist[2] == 1
         assert dec_dist[3] == 1
@@ -360,6 +364,7 @@ class TestRunConstrained:
                 "influence": 6.0,
                 "conflict_potential": 8.2,
                 "distinctiveness": 5.8,
+                "temporal_plausibility": 7.0,
                 "feedback": "Decent faction.",
             }
         )
@@ -383,6 +388,7 @@ class TestRunConstrained:
                 "influence": 6.0,
                 "conflict_potential": 8.0,
                 "distinctiveness": 5.0,
+                "temporal_plausibility": 7.0,
                 "feedback": "OK",
             }
         )
@@ -405,6 +411,7 @@ class TestRunConstrained:
                 "influence": 6.0,
                 "conflict_potential": 8.0,
                 "distinctiveness": 5.0,
+                "temporal_plausibility": 7.0,
                 "feedback": "Bad",
             }
         )
@@ -430,6 +437,7 @@ class TestRunConstrained:
                 "influence": 6.0,
                 "conflict_potential": 8.0,
                 "distinctiveness": 5.0,
+                "temporal_plausibility": 7.0,
                 "feedback": "Good",
             }
         )
@@ -461,6 +469,7 @@ class TestRunConstrained:
                 "influence": 6.0,
                 "conflict_potential": 8.0,
                 "distinctiveness": 5.0,
+                "temporal_plausibility": 7.0,
                 "feedback": "OK",
             }
         )
@@ -495,6 +504,7 @@ class TestRunUnconstrained:
                 "influence": 6.0,
                 "conflict_potential": 8.2,
                 "distinctiveness": 5.8,
+                "temporal_plausibility": 7.0,
                 "feedback": "Decent faction.",
             }
         )
@@ -518,6 +528,7 @@ class TestRunUnconstrained:
                 "influence": 6.0,
                 "conflict_potential": 8.0,
                 "distinctiveness": 5.0,
+                "temporal_plausibility": 7.0,
             }
         )
         # Use side_effect callable for fresh iterator on each round
@@ -566,6 +577,7 @@ class TestRunUnconstrained:
                 "influence": 6.0,
                 "conflict_potential": 8.2,
                 "distinctiveness": 5.8,
+                "temporal_plausibility": 7.0,
                 "feedback": "Extra stuff",
                 "unknown_field": 42,
             }
@@ -585,6 +597,7 @@ class TestRunUnconstrained:
                 "influence": "6",
                 "conflict_potential": "8.2",
                 "distinctiveness": "5.8",
+                "temporal_plausibility": "7.0",
             }
         )
         mock_client.chat.return_value = _make_chat_response(content)
@@ -603,6 +616,7 @@ class TestRunUnconstrained:
                 "influence": 6.0,
                 "conflict_potential": 8.0,
                 "distinctiveness": 5.0,
+                "temporal_plausibility": 7.0,
             }
         )
         mock_client.chat.side_effect = [
@@ -625,6 +639,7 @@ class TestRunUnconstrained:
                 "influence": 6.0,
                 "conflict_potential": 8.0,
                 "distinctiveness": 5.0,
+                "temporal_plausibility": 7.0,
             }
         )
         mock_client.chat.return_value = _make_chat_response(content)
@@ -644,6 +659,7 @@ class TestRunUnconstrained:
                 "influence": None,
                 "conflict_potential": 8.0,
                 "distinctiveness": 5.0,
+                "temporal_plausibility": 7.0,
             }
         )
         mock_client.chat.return_value = _make_chat_response(content)

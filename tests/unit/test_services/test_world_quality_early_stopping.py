@@ -322,17 +322,33 @@ class TestFactionGenerationEarlyStopping:
         # Score progression: 8.2 -> 7.9 -> 7.6 (should stop here with patience=2)
         scores = [
             FactionQualityScores(
-                coherence=8.2, influence=8.2, conflict_potential=8.2, distinctiveness=8.2
+                coherence=8.2,
+                influence=8.2,
+                conflict_potential=8.2,
+                distinctiveness=8.2,
+                temporal_plausibility=8.2,
             ),
             FactionQualityScores(
-                coherence=7.9, influence=7.9, conflict_potential=7.9, distinctiveness=7.9
+                coherence=7.9,
+                influence=7.9,
+                conflict_potential=7.9,
+                distinctiveness=7.9,
+                temporal_plausibility=7.9,
             ),
             FactionQualityScores(
-                coherence=7.6, influence=7.6, conflict_potential=7.6, distinctiveness=7.6
+                coherence=7.6,
+                influence=7.6,
+                conflict_potential=7.6,
+                distinctiveness=7.6,
+                temporal_plausibility=7.6,
             ),
             # Extra score for hail-mary fresh creation judge call
             FactionQualityScores(
-                coherence=7.0, influence=7.0, conflict_potential=7.0, distinctiveness=7.0
+                coherence=7.0,
+                influence=7.0,
+                conflict_potential=7.0,
+                distinctiveness=7.0,
+                temporal_plausibility=7.0,
             ),
         ]
         mock_judge.side_effect = scores
@@ -346,7 +362,7 @@ class TestFactionGenerationEarlyStopping:
         assert mock_judge.call_count == 4
         # Returns total iteration count and best scores (8.2)
         assert iterations == 4
-        assert final_scores.average == 8.2
+        assert final_scores.average == pytest.approx(8.2)
 
     @patch.object(WorldQualityService, "_create_faction")
     @patch.object(WorldQualityService, "_judge_faction_quality")
@@ -369,13 +385,25 @@ class TestFactionGenerationEarlyStopping:
         # Score progression: 8.0 -> 7.5 -> 9.5 (meets threshold=9.0, stops)
         scores = [
             FactionQualityScores(
-                coherence=8.0, influence=8.0, conflict_potential=8.0, distinctiveness=8.0
+                coherence=8.0,
+                influence=8.0,
+                conflict_potential=8.0,
+                distinctiveness=8.0,
+                temporal_plausibility=8.0,
             ),
             FactionQualityScores(
-                coherence=7.5, influence=7.5, conflict_potential=7.5, distinctiveness=7.5
+                coherence=7.5,
+                influence=7.5,
+                conflict_potential=7.5,
+                distinctiveness=7.5,
+                temporal_plausibility=7.5,
             ),
             FactionQualityScores(
-                coherence=9.5, influence=9.5, conflict_potential=9.5, distinctiveness=9.5
+                coherence=9.5,
+                influence=9.5,
+                conflict_potential=9.5,
+                distinctiveness=9.5,
+                temporal_plausibility=9.5,
             ),
         ]
         mock_judge.side_effect = scores
@@ -410,17 +438,33 @@ class TestFactionGenerationEarlyStopping:
         # Scores degrade consistently after peak
         scores = [
             FactionQualityScores(
-                coherence=8.0, influence=8.0, conflict_potential=8.0, distinctiveness=8.0
+                coherence=8.0,
+                influence=8.0,
+                conflict_potential=8.0,
+                distinctiveness=8.0,
+                temporal_plausibility=8.0,
             ),
             FactionQualityScores(
-                coherence=7.5, influence=7.5, conflict_potential=7.5, distinctiveness=7.5
+                coherence=7.5,
+                influence=7.5,
+                conflict_potential=7.5,
+                distinctiveness=7.5,
+                temporal_plausibility=7.5,
             ),
             FactionQualityScores(
-                coherence=7.0, influence=7.0, conflict_potential=7.0, distinctiveness=7.0
+                coherence=7.0,
+                influence=7.0,
+                conflict_potential=7.0,
+                distinctiveness=7.0,
+                temporal_plausibility=7.0,
             ),
             # Hail-mary fresh creation judge call (threshold not met after early stop)
             FactionQualityScores(
-                coherence=6.5, influence=6.5, conflict_potential=6.5, distinctiveness=6.5
+                coherence=6.5,
+                influence=6.5,
+                conflict_potential=6.5,
+                distinctiveness=6.5,
+                temporal_plausibility=6.5,
             ),
         ]
         mock_judge.side_effect = scores
@@ -461,7 +505,12 @@ class TestCharacterGenerationEarlyStopping:
 
         # All zero scores - peak_score (0.0) is never exceeded
         zero_scores = CharacterQualityScores(
-            depth=0, goals=0, flaws=0, uniqueness=0, arc_potential=0
+            depth=0,
+            goals=0,
+            flaws=0,
+            uniqueness=0,
+            arc_potential=0,
+            temporal_plausibility=0,
         )
         mock_judge.return_value = zero_scores
 
@@ -494,17 +543,37 @@ class TestCharacterGenerationEarlyStopping:
         # Score progression: 8.2 -> 7.9 -> 7.6 (should stop here with patience=2)
         scores = [
             CharacterQualityScores(
-                depth=8.2, goals=8.2, flaws=8.2, uniqueness=8.2, arc_potential=8.2
+                depth=8.2,
+                goals=8.2,
+                flaws=8.2,
+                uniqueness=8.2,
+                arc_potential=8.2,
+                temporal_plausibility=8.2,
             ),
             CharacterQualityScores(
-                depth=7.9, goals=7.9, flaws=7.9, uniqueness=7.9, arc_potential=7.9
+                depth=7.9,
+                goals=7.9,
+                flaws=7.9,
+                uniqueness=7.9,
+                arc_potential=7.9,
+                temporal_plausibility=7.9,
             ),
             CharacterQualityScores(
-                depth=7.6, goals=7.6, flaws=7.6, uniqueness=7.6, arc_potential=7.6
+                depth=7.6,
+                goals=7.6,
+                flaws=7.6,
+                uniqueness=7.6,
+                arc_potential=7.6,
+                temporal_plausibility=7.6,
             ),
             # Extra score for hail-mary fresh creation judge call
             CharacterQualityScores(
-                depth=7.0, goals=7.0, flaws=7.0, uniqueness=7.0, arc_potential=7.0
+                depth=7.0,
+                goals=7.0,
+                flaws=7.0,
+                uniqueness=7.0,
+                arc_potential=7.0,
+                temporal_plausibility=7.0,
             ),
         ]
         mock_judge.side_effect = scores
@@ -518,7 +587,7 @@ class TestCharacterGenerationEarlyStopping:
         assert mock_judge.call_count == 4
         # Returns total iteration count and best scores (8.2)
         assert iterations == 4
-        assert final_scores.average == 8.2
+        assert final_scores.average == pytest.approx(8.2)
 
     @patch.object(WorldQualityService, "_create_character")
     @patch.object(WorldQualityService, "_judge_character_quality")
@@ -538,13 +607,28 @@ class TestCharacterGenerationEarlyStopping:
         # Score progression: 8.0 -> 7.5 -> 9.5 (meets threshold=9.0, stops)
         scores = [
             CharacterQualityScores(
-                depth=8.0, goals=8.0, flaws=8.0, uniqueness=8.0, arc_potential=8.0
+                depth=8.0,
+                goals=8.0,
+                flaws=8.0,
+                uniqueness=8.0,
+                arc_potential=8.0,
+                temporal_plausibility=8.0,
             ),
             CharacterQualityScores(
-                depth=7.5, goals=7.5, flaws=7.5, uniqueness=7.5, arc_potential=7.5
+                depth=7.5,
+                goals=7.5,
+                flaws=7.5,
+                uniqueness=7.5,
+                arc_potential=7.5,
+                temporal_plausibility=7.5,
             ),
             CharacterQualityScores(
-                depth=9.5, goals=9.5, flaws=9.5, uniqueness=9.5, arc_potential=9.5
+                depth=9.5,
+                goals=9.5,
+                flaws=9.5,
+                uniqueness=9.5,
+                arc_potential=9.5,
+                temporal_plausibility=9.5,
             ),
         ]
         mock_judge.side_effect = scores
@@ -577,7 +661,11 @@ class TestLocationGenerationEarlyStopping:
         )
 
         zero_scores = LocationQualityScores(
-            atmosphere=0, significance=0, story_relevance=0, distinctiveness=0
+            atmosphere=0,
+            significance=0,
+            story_relevance=0,
+            distinctiveness=0,
+            temporal_plausibility=0,
         )
         mock_judge.return_value = zero_scores
 
@@ -607,17 +695,33 @@ class TestLocationGenerationEarlyStopping:
         # Score progression: 8.0 -> 7.5 -> 7.0 (should stop here with patience=2)
         scores = [
             LocationQualityScores(
-                atmosphere=8.0, significance=8.0, story_relevance=8.0, distinctiveness=8.0
+                atmosphere=8.0,
+                significance=8.0,
+                story_relevance=8.0,
+                distinctiveness=8.0,
+                temporal_plausibility=8.0,
             ),
             LocationQualityScores(
-                atmosphere=7.5, significance=7.5, story_relevance=7.5, distinctiveness=7.5
+                atmosphere=7.5,
+                significance=7.5,
+                story_relevance=7.5,
+                distinctiveness=7.5,
+                temporal_plausibility=7.5,
             ),
             LocationQualityScores(
-                atmosphere=7.0, significance=7.0, story_relevance=7.0, distinctiveness=7.0
+                atmosphere=7.0,
+                significance=7.0,
+                story_relevance=7.0,
+                distinctiveness=7.0,
+                temporal_plausibility=7.0,
             ),
             # Extra score for hail-mary fresh creation judge call
             LocationQualityScores(
-                atmosphere=6.5, significance=6.5, story_relevance=6.5, distinctiveness=6.5
+                atmosphere=6.5,
+                significance=6.5,
+                story_relevance=6.5,
+                distinctiveness=6.5,
+                temporal_plausibility=6.5,
             ),
         ]
         mock_judge.side_effect = scores
@@ -745,7 +849,11 @@ class TestItemGenerationEarlyStopping:
         )
 
         zero_scores = ItemQualityScores(
-            significance=0, uniqueness=0, narrative_potential=0, integration=0
+            significance=0,
+            uniqueness=0,
+            narrative_potential=0,
+            integration=0,
+            temporal_plausibility=0,
         )
         mock_judge.return_value = zero_scores
 
@@ -775,17 +883,33 @@ class TestItemGenerationEarlyStopping:
         # Score progression: 8.0 -> 7.5 -> 7.0 (should stop here with patience=2)
         scores = [
             ItemQualityScores(
-                significance=8.0, uniqueness=8.0, narrative_potential=8.0, integration=8.0
+                significance=8.0,
+                uniqueness=8.0,
+                narrative_potential=8.0,
+                integration=8.0,
+                temporal_plausibility=8.0,
             ),
             ItemQualityScores(
-                significance=7.5, uniqueness=7.5, narrative_potential=7.5, integration=7.5
+                significance=7.5,
+                uniqueness=7.5,
+                narrative_potential=7.5,
+                integration=7.5,
+                temporal_plausibility=7.5,
             ),
             ItemQualityScores(
-                significance=7.0, uniqueness=7.0, narrative_potential=7.0, integration=7.0
+                significance=7.0,
+                uniqueness=7.0,
+                narrative_potential=7.0,
+                integration=7.0,
+                temporal_plausibility=7.0,
             ),
             # Extra score for hail-mary fresh creation judge call
             ItemQualityScores(
-                significance=6.5, uniqueness=6.5, narrative_potential=6.5, integration=6.5
+                significance=6.5,
+                uniqueness=6.5,
+                narrative_potential=6.5,
+                integration=6.5,
+                temporal_plausibility=6.5,
             ),
         ]
         mock_judge.side_effect = scores
@@ -818,7 +942,13 @@ class TestConceptGenerationEarlyStopping:
             lambda n: {"name": "ZeroConcept", "description": f"Zero scores v{n}"}
         )
 
-        zero_scores = ConceptQualityScores(relevance=0, depth=0, manifestation=0, resonance=0)
+        zero_scores = ConceptQualityScores(
+            relevance=0,
+            depth=0,
+            manifestation=0,
+            resonance=0,
+            temporal_plausibility=0,
+        )
         mock_judge.return_value = zero_scores
 
         concept, final_scores, _iterations = service.generate_concept_with_quality(
@@ -846,11 +976,35 @@ class TestConceptGenerationEarlyStopping:
 
         # Score progression: 8.0 -> 7.5 -> 7.0 (should stop here with patience=2)
         scores = [
-            ConceptQualityScores(relevance=8.0, depth=8.0, manifestation=8.0, resonance=8.0),
-            ConceptQualityScores(relevance=7.5, depth=7.5, manifestation=7.5, resonance=7.5),
-            ConceptQualityScores(relevance=7.0, depth=7.0, manifestation=7.0, resonance=7.0),
+            ConceptQualityScores(
+                relevance=8.0,
+                depth=8.0,
+                manifestation=8.0,
+                resonance=8.0,
+                temporal_plausibility=8.0,
+            ),
+            ConceptQualityScores(
+                relevance=7.5,
+                depth=7.5,
+                manifestation=7.5,
+                resonance=7.5,
+                temporal_plausibility=7.5,
+            ),
+            ConceptQualityScores(
+                relevance=7.0,
+                depth=7.0,
+                manifestation=7.0,
+                resonance=7.0,
+                temporal_plausibility=7.0,
+            ),
             # Extra score for hail-mary fresh creation judge call
-            ConceptQualityScores(relevance=6.5, depth=6.5, manifestation=6.5, resonance=6.5),
+            ConceptQualityScores(
+                relevance=6.5,
+                depth=6.5,
+                manifestation=6.5,
+                resonance=6.5,
+                temporal_plausibility=6.5,
+            ),
         ]
         mock_judge.side_effect = scores
 
@@ -1084,7 +1238,11 @@ class TestLocationQualityScoresWeakDimensions:
     def test_weak_dimensions_identifies_atmosphere(self):
         """Test weak_dimensions identifies low atmosphere."""
         scores = LocationQualityScores(
-            atmosphere=5.0, significance=8.0, story_relevance=8.0, distinctiveness=8.0
+            atmosphere=5.0,
+            significance=8.0,
+            story_relevance=8.0,
+            distinctiveness=8.0,
+            temporal_plausibility=8.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "atmosphere" in weak
@@ -1093,7 +1251,11 @@ class TestLocationQualityScoresWeakDimensions:
     def test_weak_dimensions_identifies_narrative_significance(self):
         """Test weak_dimensions identifies low narrative_significance."""
         scores = LocationQualityScores(
-            atmosphere=8.0, significance=5.0, story_relevance=8.0, distinctiveness=8.0
+            atmosphere=8.0,
+            significance=5.0,
+            story_relevance=8.0,
+            distinctiveness=8.0,
+            temporal_plausibility=8.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "narrative_significance" in weak
@@ -1102,7 +1264,11 @@ class TestLocationQualityScoresWeakDimensions:
     def test_weak_dimensions_identifies_story_relevance(self):
         """Test weak_dimensions identifies low story_relevance."""
         scores = LocationQualityScores(
-            atmosphere=8.0, significance=8.0, story_relevance=5.0, distinctiveness=8.0
+            atmosphere=8.0,
+            significance=8.0,
+            story_relevance=5.0,
+            distinctiveness=8.0,
+            temporal_plausibility=8.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "story_relevance" in weak
@@ -1111,7 +1277,11 @@ class TestLocationQualityScoresWeakDimensions:
     def test_weak_dimensions_identifies_distinctiveness(self):
         """Test weak_dimensions identifies low distinctiveness."""
         scores = LocationQualityScores(
-            atmosphere=8.0, significance=8.0, story_relevance=8.0, distinctiveness=5.0
+            atmosphere=8.0,
+            significance=8.0,
+            story_relevance=8.0,
+            distinctiveness=5.0,
+            temporal_plausibility=8.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "distinctiveness" in weak
@@ -1124,7 +1294,11 @@ class TestItemQualityScoresWeakDimensions:
     def test_weak_dimensions_identifies_story_significance(self):
         """Test weak_dimensions identifies low story_significance."""
         scores = ItemQualityScores(
-            significance=5.0, uniqueness=8.0, narrative_potential=8.0, integration=8.0
+            significance=5.0,
+            uniqueness=8.0,
+            narrative_potential=8.0,
+            integration=8.0,
+            temporal_plausibility=8.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "story_significance" in weak
@@ -1133,7 +1307,11 @@ class TestItemQualityScoresWeakDimensions:
     def test_weak_dimensions_identifies_uniqueness(self):
         """Test weak_dimensions identifies low uniqueness."""
         scores = ItemQualityScores(
-            significance=8.0, uniqueness=5.0, narrative_potential=8.0, integration=8.0
+            significance=8.0,
+            uniqueness=5.0,
+            narrative_potential=8.0,
+            integration=8.0,
+            temporal_plausibility=8.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "uniqueness" in weak
@@ -1142,7 +1320,11 @@ class TestItemQualityScoresWeakDimensions:
     def test_weak_dimensions_identifies_narrative_potential(self):
         """Test weak_dimensions identifies low narrative_potential."""
         scores = ItemQualityScores(
-            significance=8.0, uniqueness=8.0, narrative_potential=5.0, integration=8.0
+            significance=8.0,
+            uniqueness=8.0,
+            narrative_potential=5.0,
+            integration=8.0,
+            temporal_plausibility=8.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "narrative_potential" in weak
@@ -1151,7 +1333,11 @@ class TestItemQualityScoresWeakDimensions:
     def test_weak_dimensions_identifies_integration(self):
         """Test weak_dimensions identifies low integration."""
         scores = ItemQualityScores(
-            significance=8.0, uniqueness=8.0, narrative_potential=8.0, integration=5.0
+            significance=8.0,
+            uniqueness=8.0,
+            narrative_potential=8.0,
+            integration=5.0,
+            temporal_plausibility=8.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "integration" in weak
@@ -1163,28 +1349,52 @@ class TestConceptQualityScoresWeakDimensions:
 
     def test_weak_dimensions_identifies_relevance(self):
         """Test weak_dimensions identifies low relevance."""
-        scores = ConceptQualityScores(relevance=5.0, depth=8.0, manifestation=8.0, resonance=8.0)
+        scores = ConceptQualityScores(
+            relevance=5.0,
+            depth=8.0,
+            manifestation=8.0,
+            resonance=8.0,
+            temporal_plausibility=8.0,
+        )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "relevance" in weak
         assert len(weak) == 1
 
     def test_weak_dimensions_identifies_depth(self):
         """Test weak_dimensions identifies low depth."""
-        scores = ConceptQualityScores(relevance=8.0, depth=5.0, manifestation=8.0, resonance=8.0)
+        scores = ConceptQualityScores(
+            relevance=8.0,
+            depth=5.0,
+            manifestation=8.0,
+            resonance=8.0,
+            temporal_plausibility=8.0,
+        )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "depth" in weak
         assert len(weak) == 1
 
     def test_weak_dimensions_identifies_manifestation(self):
         """Test weak_dimensions identifies low manifestation."""
-        scores = ConceptQualityScores(relevance=8.0, depth=8.0, manifestation=5.0, resonance=8.0)
+        scores = ConceptQualityScores(
+            relevance=8.0,
+            depth=8.0,
+            manifestation=5.0,
+            resonance=8.0,
+            temporal_plausibility=8.0,
+        )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "manifestation" in weak
         assert len(weak) == 1
 
     def test_weak_dimensions_identifies_resonance(self):
         """Test weak_dimensions identifies low resonance."""
-        scores = ConceptQualityScores(relevance=8.0, depth=8.0, manifestation=8.0, resonance=5.0)
+        scores = ConceptQualityScores(
+            relevance=8.0,
+            depth=8.0,
+            manifestation=8.0,
+            resonance=5.0,
+            temporal_plausibility=8.0,
+        )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "resonance" in weak
         assert len(weak) == 1

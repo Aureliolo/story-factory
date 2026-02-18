@@ -1393,6 +1393,7 @@ class TestWorldBuildCancellation:
             significance=7.5,
             story_relevance=8.0,
             distinctiveness=7.0,
+            temporal_plausibility=7.5,
             feedback="Good",
         )
         mock_services.world_quality.generate_locations_with_quality.return_value = [
@@ -1549,6 +1550,7 @@ class TestLocationQualityRefinement:
             significance=7.5,
             story_relevance=8.0,
             distinctiveness=7.0,
+            temporal_plausibility=7.5,
             feedback="Good location",
         )
         mock_services.world_quality.generate_locations_with_quality.return_value = [

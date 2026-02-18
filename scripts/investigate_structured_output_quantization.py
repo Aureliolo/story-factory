@@ -57,15 +57,22 @@ Rate each dimension 0-10:
 - influence: World impact, power level
 - conflict_potential: Story conflict opportunities
 - distinctiveness: Memorable, unique qualities
+- temporal_plausibility: Timeline consistency, era-appropriate placement
 
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"coherence": <float 0-10>, "influence": <float 0-10>, "conflict_potential": <float 0-10>, "distinctiveness": <float 0-10>, "feedback": "Your assessment..."}}
+{{"coherence": <float 0-10>, "influence": <float 0-10>, "conflict_potential": <float 0-10>, "distinctiveness": <float 0-10>, "temporal_plausibility": <float 0-10>, "feedback": "Your assessment..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
-SCORE_DIMS = ["coherence", "influence", "conflict_potential", "distinctiveness"]
+SCORE_DIMS = [
+    "coherence",
+    "influence",
+    "conflict_potential",
+    "distinctiveness",
+    "temporal_plausibility",
+]
 
 
 def run_constrained(client: ollama.Client, model: str, rounds: int) -> list[dict]:
@@ -93,6 +100,7 @@ def run_constrained(client: ollama.Client, model: str, rounds: int) -> list[dict
                     "influence": scores.influence,
                     "conflict_potential": scores.conflict_potential,
                     "distinctiveness": scores.distinctiveness,
+                    "temporal_plausibility": scores.temporal_plausibility,
                     "time": round(elapsed, 2),
                 }
             )

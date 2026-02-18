@@ -4,8 +4,12 @@ import pytest
 
 from src.memory.world_quality import (
     ChapterQualityScores,
+    CharacterQualityScores,
+    ConceptQualityScores,
     FactionQualityScores,
+    ItemQualityScores,
     JudgeConsistencyConfig,
+    LocationQualityScores,
     PlotQualityScores,
     RefinementHistory,
     ScoreStatistics,
@@ -501,6 +505,7 @@ class TestFactionQualityScores:
             influence=8.0,
             conflict_potential=5.0,  # Below threshold
             distinctiveness=8.0,
+            temporal_plausibility=8.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "conflict_potential" in weak
@@ -515,6 +520,7 @@ class TestFactionQualityScores:
             influence=8.0,
             conflict_potential=8.0,
             distinctiveness=5.0,  # Below threshold
+            temporal_plausibility=8.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "distinctiveness" in weak
@@ -529,9 +535,10 @@ class TestFactionQualityScores:
             influence=5.0,
             conflict_potential=5.0,
             distinctiveness=5.0,
+            temporal_plausibility=5.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
-        assert len(weak) == 4
+        assert len(weak) == 5
         assert "coherence" in weak
         assert "influence" in weak
         assert "conflict_potential" in weak
@@ -544,6 +551,7 @@ class TestFactionQualityScores:
             influence=8.0,
             conflict_potential=8.0,
             distinctiveness=8.0,
+            temporal_plausibility=8.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert weak == []
@@ -945,3 +953,333 @@ class TestChapterQualityScores:
                 hook=5.0,
                 coherence=5.0,
             )
+
+
+class TestCharacterTemporalPlausibility:
+    """Tests for temporal_plausibility in CharacterQualityScores."""
+
+    def test_temporal_plausibility_in_average(self):
+        """Average includes temporal_plausibility (sum of 6 dimensions / 6.0)."""
+        scores = CharacterQualityScores(
+            depth=6.0,
+            goals=6.0,
+            flaws=6.0,
+            uniqueness=6.0,
+            arc_potential=6.0,
+            temporal_plausibility=6.0,
+        )
+        assert scores.average == 6.0
+
+    def test_temporal_plausibility_affects_average(self):
+        """Changing temporal_plausibility changes the average."""
+        scores = CharacterQualityScores(
+            depth=8.0,
+            goals=8.0,
+            flaws=8.0,
+            uniqueness=8.0,
+            arc_potential=8.0,
+            temporal_plausibility=2.0,
+        )
+        # (8*5 + 2) / 6 = 42/6 = 7.0
+        assert scores.average == 7.0
+
+    def test_temporal_plausibility_in_to_dict(self):
+        """to_dict includes 'temporal_plausibility' key."""
+        scores = CharacterQualityScores(
+            depth=7.0,
+            goals=7.0,
+            flaws=7.0,
+            uniqueness=7.0,
+            arc_potential=7.0,
+            temporal_plausibility=5.0,
+        )
+        result = scores.to_dict()
+        assert "temporal_plausibility" in result
+        assert result["temporal_plausibility"] == 5.0
+
+    def test_temporal_plausibility_weak_dimension(self):
+        """weak_dimensions includes temporal_plausibility when below threshold."""
+        scores = CharacterQualityScores(
+            depth=8.0,
+            goals=8.0,
+            flaws=8.0,
+            uniqueness=8.0,
+            arc_potential=8.0,
+            temporal_plausibility=5.0,
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "temporal_plausibility" in weak
+        assert "depth" not in weak
+
+    def test_temporal_plausibility_not_weak_when_above(self):
+        """weak_dimensions excludes temporal_plausibility when above threshold."""
+        scores = CharacterQualityScores(
+            depth=8.0,
+            goals=8.0,
+            flaws=8.0,
+            uniqueness=8.0,
+            arc_potential=8.0,
+            temporal_plausibility=9.0,
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "temporal_plausibility" not in weak
+
+
+class TestLocationTemporalPlausibility:
+    """Tests for temporal_plausibility in LocationQualityScores."""
+
+    def test_temporal_plausibility_in_average(self):
+        """Average includes temporal_plausibility (sum of 5 dimensions / 5.0)."""
+        scores = LocationQualityScores(
+            atmosphere=6.0,
+            significance=6.0,
+            story_relevance=6.0,
+            distinctiveness=6.0,
+            temporal_plausibility=6.0,
+        )
+        assert scores.average == 6.0
+
+    def test_temporal_plausibility_affects_average(self):
+        """Changing temporal_plausibility changes the average."""
+        scores = LocationQualityScores(
+            atmosphere=8.0,
+            significance=8.0,
+            story_relevance=8.0,
+            distinctiveness=8.0,
+            temporal_plausibility=3.0,
+        )
+        # (8*4 + 3) / 5 = 35/5 = 7.0
+        assert scores.average == 7.0
+
+    def test_temporal_plausibility_in_to_dict(self):
+        """to_dict includes 'temporal_plausibility' key."""
+        scores = LocationQualityScores(
+            atmosphere=7.0,
+            significance=7.0,
+            story_relevance=7.0,
+            distinctiveness=7.0,
+            temporal_plausibility=4.0,
+        )
+        result = scores.to_dict()
+        assert "temporal_plausibility" in result
+        assert result["temporal_plausibility"] == 4.0
+
+    def test_temporal_plausibility_weak_dimension(self):
+        """weak_dimensions includes temporal_plausibility when below threshold."""
+        scores = LocationQualityScores(
+            atmosphere=8.0,
+            significance=8.0,
+            story_relevance=8.0,
+            distinctiveness=8.0,
+            temporal_plausibility=5.0,
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "temporal_plausibility" in weak
+        assert "atmosphere" not in weak
+
+    def test_temporal_plausibility_not_weak_when_above(self):
+        """weak_dimensions excludes temporal_plausibility when above threshold."""
+        scores = LocationQualityScores(
+            atmosphere=8.0,
+            significance=8.0,
+            story_relevance=8.0,
+            distinctiveness=8.0,
+            temporal_plausibility=9.0,
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "temporal_plausibility" not in weak
+
+
+class TestFactionTemporalPlausibility:
+    """Tests for temporal_plausibility in FactionQualityScores."""
+
+    def test_temporal_plausibility_in_average(self):
+        """Average includes temporal_plausibility (sum of 5 dimensions / 5.0)."""
+        scores = FactionQualityScores(
+            coherence=6.0,
+            influence=6.0,
+            conflict_potential=6.0,
+            distinctiveness=6.0,
+            temporal_plausibility=6.0,
+        )
+        assert scores.average == 6.0
+
+    def test_temporal_plausibility_affects_average(self):
+        """Changing temporal_plausibility changes the average."""
+        scores = FactionQualityScores(
+            coherence=10.0,
+            influence=10.0,
+            conflict_potential=10.0,
+            distinctiveness=10.0,
+            temporal_plausibility=0.0,
+        )
+        # (10*4 + 0) / 5 = 40/5 = 8.0
+        assert scores.average == 8.0
+
+    def test_temporal_plausibility_in_to_dict(self):
+        """to_dict includes 'temporal_plausibility' key."""
+        scores = FactionQualityScores(
+            coherence=7.0,
+            influence=7.0,
+            conflict_potential=7.0,
+            distinctiveness=7.0,
+            temporal_plausibility=3.0,
+        )
+        result = scores.to_dict()
+        assert "temporal_plausibility" in result
+        assert result["temporal_plausibility"] == 3.0
+
+    def test_temporal_plausibility_weak_dimension(self):
+        """weak_dimensions includes temporal_plausibility when below threshold."""
+        scores = FactionQualityScores(
+            coherence=8.0,
+            influence=8.0,
+            conflict_potential=8.0,
+            distinctiveness=8.0,
+            temporal_plausibility=5.0,
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "temporal_plausibility" in weak
+        assert "coherence" not in weak
+
+    def test_temporal_plausibility_not_weak_when_above(self):
+        """weak_dimensions excludes temporal_plausibility when above threshold."""
+        scores = FactionQualityScores(
+            coherence=8.0,
+            influence=8.0,
+            conflict_potential=8.0,
+            distinctiveness=8.0,
+            temporal_plausibility=9.0,
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "temporal_plausibility" not in weak
+
+
+class TestItemTemporalPlausibility:
+    """Tests for temporal_plausibility in ItemQualityScores."""
+
+    def test_temporal_plausibility_in_average(self):
+        """Average includes temporal_plausibility (sum of 5 dimensions / 5.0)."""
+        scores = ItemQualityScores(
+            significance=6.0,
+            uniqueness=6.0,
+            narrative_potential=6.0,
+            integration=6.0,
+            temporal_plausibility=6.0,
+        )
+        assert scores.average == 6.0
+
+    def test_temporal_plausibility_affects_average(self):
+        """Changing temporal_plausibility changes the average."""
+        scores = ItemQualityScores(
+            significance=10.0,
+            uniqueness=10.0,
+            narrative_potential=10.0,
+            integration=10.0,
+            temporal_plausibility=5.0,
+        )
+        # (10*4 + 5) / 5 = 45/5 = 9.0
+        assert scores.average == 9.0
+
+    def test_temporal_plausibility_in_to_dict(self):
+        """to_dict includes 'temporal_plausibility' key."""
+        scores = ItemQualityScores(
+            significance=7.0,
+            uniqueness=7.0,
+            narrative_potential=7.0,
+            integration=7.0,
+            temporal_plausibility=2.0,
+        )
+        result = scores.to_dict()
+        assert "temporal_plausibility" in result
+        assert result["temporal_plausibility"] == 2.0
+
+    def test_temporal_plausibility_weak_dimension(self):
+        """weak_dimensions includes temporal_plausibility when below threshold."""
+        scores = ItemQualityScores(
+            significance=8.0,
+            uniqueness=8.0,
+            narrative_potential=8.0,
+            integration=8.0,
+            temporal_plausibility=5.0,
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "temporal_plausibility" in weak
+        assert "uniqueness" not in weak
+
+    def test_temporal_plausibility_not_weak_when_above(self):
+        """weak_dimensions excludes temporal_plausibility when above threshold."""
+        scores = ItemQualityScores(
+            significance=8.0,
+            uniqueness=8.0,
+            narrative_potential=8.0,
+            integration=8.0,
+            temporal_plausibility=9.0,
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "temporal_plausibility" not in weak
+
+
+class TestConceptTemporalPlausibility:
+    """Tests for temporal_plausibility in ConceptQualityScores."""
+
+    def test_temporal_plausibility_in_average(self):
+        """Average includes temporal_plausibility (sum of 5 dimensions / 5.0)."""
+        scores = ConceptQualityScores(
+            relevance=6.0,
+            depth=6.0,
+            manifestation=6.0,
+            resonance=6.0,
+            temporal_plausibility=6.0,
+        )
+        assert scores.average == 6.0
+
+    def test_temporal_plausibility_affects_average(self):
+        """Changing temporal_plausibility changes the average."""
+        scores = ConceptQualityScores(
+            relevance=10.0,
+            depth=10.0,
+            manifestation=10.0,
+            resonance=10.0,
+            temporal_plausibility=0.0,
+        )
+        # (10*4 + 0) / 5 = 40/5 = 8.0
+        assert scores.average == 8.0
+
+    def test_temporal_plausibility_in_to_dict(self):
+        """to_dict includes 'temporal_plausibility' key."""
+        scores = ConceptQualityScores(
+            relevance=7.0,
+            depth=7.0,
+            manifestation=7.0,
+            resonance=7.0,
+            temporal_plausibility=1.0,
+        )
+        result = scores.to_dict()
+        assert "temporal_plausibility" in result
+        assert result["temporal_plausibility"] == 1.0
+
+    def test_temporal_plausibility_weak_dimension(self):
+        """weak_dimensions includes temporal_plausibility when below threshold."""
+        scores = ConceptQualityScores(
+            relevance=8.0,
+            depth=8.0,
+            manifestation=8.0,
+            resonance=8.0,
+            temporal_plausibility=5.0,
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "temporal_plausibility" in weak
+        assert "relevance" not in weak
+
+    def test_temporal_plausibility_not_weak_when_above(self):
+        """weak_dimensions excludes temporal_plausibility when above threshold."""
+        scores = ConceptQualityScores(
+            relevance=8.0,
+            depth=8.0,
+            manifestation=8.0,
+            resonance=8.0,
+            temporal_plausibility=9.0,
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "temporal_plausibility" not in weak

@@ -147,6 +147,7 @@ class TestReviewCharacterQuality:
             flaws=8.8,
             uniqueness=8.0,
             arc_potential=8.3,
+            temporal_plausibility=8.2,
             feedback="Excellent character",
         )
 
@@ -170,6 +171,7 @@ class TestReviewCharacterQuality:
             flaws=5.0,
             uniqueness=5.0,
             arc_potential=5.0,
+            temporal_plausibility=5.0,
             feedback="Needs more depth",
         )
         high_scores = CharacterQualityScores(
@@ -178,6 +180,7 @@ class TestReviewCharacterQuality:
             flaws=8.5,
             uniqueness=8.5,
             arc_potential=8.5,
+            temporal_plausibility=8.5,
             feedback="Much improved",
         )
         refined_char = Character(
@@ -485,6 +488,7 @@ class TestReviewCharactersBatch:
             flaws=8.5,
             uniqueness=8.5,
             arc_potential=8.5,
+            temporal_plausibility=8.5,
             feedback="Good",
         )
 
@@ -518,6 +522,7 @@ class TestReviewCharactersBatch:
             flaws=8.5,
             uniqueness=8.5,
             arc_potential=8.5,
+            temporal_plausibility=8.5,
             feedback="Good",
         )
 
@@ -567,6 +572,7 @@ class TestReviewCharactersBatch:
             flaws=8.5,
             uniqueness=8.5,
             arc_potential=8.5,
+            temporal_plausibility=8.5,
             feedback="Good",
         )
 

@@ -180,6 +180,7 @@ Create a character with:
 4. Uniqueness - not a genre archetype
 5. Arc potential - room for transformation
 6. Arc notes (arc_notes) - describe the character's potential transformation arc: how they might change over the story, what events could trigger growth or regression
+7. Timeline placement - birth year and era from the calendar system (if available)
 
 Write all text in {brief.language}."""
 
@@ -278,6 +279,8 @@ Description: {character.description}
 Traits: {", ".join(character.trait_names)}
 Goals: {", ".join(character.goals)}
 Arc Notes: {character.arc_notes}
+Birth Year: {character.birth_year}
+Birth Era: {character.birth_era}
 
 {JUDGE_CALIBRATION_BLOCK}
 
@@ -287,11 +290,12 @@ Rate each dimension 0-10:
 - flaws: Meaningful vulnerabilities that drive conflict
 - uniqueness: Distinctiveness from genre archetypes
 - arc_potential: Room for transformation and growth
+- temporal_plausibility: Timeline consistency, era-appropriate placement
 
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"depth": <float 0-10>, "goal_clarity": <float 0-10>, "flaws": <float 0-10>, "uniqueness": <float 0-10>, "arc_potential": <float 0-10>, "feedback": "Your assessment..."}}
+{{"depth": <float 0-10>, "goal_clarity": <float 0-10>, "flaws": <float 0-10>, "uniqueness": <float 0-10>, "arc_potential": <float 0-10>, "temporal_plausibility": <float 0-10>, "feedback": "Your assessment..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
@@ -333,6 +337,8 @@ def _refine_character(
         improvement_focus.append("Avoid genre archetypes, add surprising traits")
     if scores.arc_potential < threshold:
         improvement_focus.append("Expand transformation potential with specific turning points")
+    if scores.temporal_plausibility < threshold:
+        improvement_focus.append("Improve timeline placement and era consistency")
 
     prompt = f"""TASK: Improve this character to score HIGHER on the weak dimensions.
 
@@ -343,6 +349,8 @@ Description: {character.description}
 Traits: {", ".join(character.trait_names)}
 Goals: {", ".join(character.goals)}
 Arc Notes: {character.arc_notes}
+Birth Year: {character.birth_year}
+Birth Era: {character.birth_era}
 
 CURRENT SCORES (need {threshold}+ in all areas):
 - Depth: {scores.depth}/10
@@ -350,6 +358,7 @@ CURRENT SCORES (need {threshold}+ in all areas):
 - Flaws: {scores.flaws}/10
 - Uniqueness: {scores.uniqueness}/10
 - Arc Potential: {scores.arc_potential}/10
+- Temporal Plausibility: {scores.temporal_plausibility}/10
 
 JUDGE'S FEEDBACK: {scores.feedback}
 

@@ -672,7 +672,13 @@ def review_characters_batch(
         review_fn=lambda char: svc.review_character_quality(char, story_state),
         get_name=lambda char: char.name,
         zero_scores_fn=lambda msg: CharacterQualityScores(
-            depth=0, goals=0, flaws=0, uniqueness=0, arc_potential=0, feedback=msg
+            depth=0,
+            goals=0,
+            flaws=0,
+            uniqueness=0,
+            arc_potential=0,
+            temporal_plausibility=0,
+            feedback=msg,
         ),
         cancel_check=cancel_check,
         progress_callback=progress_callback,

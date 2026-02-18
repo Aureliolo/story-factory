@@ -324,7 +324,13 @@ class TestQualityLoopErrorPropagation:
             if judge_count == 1:
                 raise WorldGenerationError("Already logged upstream error")
             return CharacterQualityScores(
-                depth=9.0, goals=9.0, flaws=9.0, uniqueness=9.0, arc_potential=9.0, feedback="OK"
+                depth=9.0,
+                goals=9.0,
+                flaws=9.0,
+                uniqueness=9.0,
+                arc_potential=9.0,
+                temporal_plausibility=9.0,
+                feedback="OK",
             )
 
         with caplog.at_level(logging.DEBUG):
@@ -406,6 +412,7 @@ class TestIterationCountReporting:
                 flaws=score,
                 uniqueness=score,
                 arc_potential=score,
+                temporal_plausibility=score,
                 feedback="Test",
             )
 
