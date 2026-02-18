@@ -147,7 +147,7 @@ def get_world_health_metrics(
             # Include entity names for human-readable display
             edges_with_names: list[CycleEdge] = []
             for edge in cycle:
-                source_id, relation_type, target_id = edge[0], edge[1], edge[2]
+                source_id, relation_type, target_id = edge
                 edges_with_names.append(
                     CycleEdge(
                         source=source_id,
