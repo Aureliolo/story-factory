@@ -960,6 +960,120 @@ class TestGenerateEvents:
             len(call_kwargs.args) > 3 and call_kwargs.args[3] is not None
         )
 
+    def test_includes_temporal_attributes_in_context(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test entity temporal attributes (birth_year, death_year etc) appear in context."""
+        eid = mock_world_db.add_entity(
+            "character",
+            "Hero",
+            "The hero",
+            attributes={"birth_year": 1200, "death_year": 1260},
+        )
+        assert eid  # entity added
+
+        mock_services.world_quality.generate_events_with_quality.return_value = []
+
+        world_service._generate_events(sample_story_state, mock_world_db, mock_services)
+
+        call_args = mock_services.world_quality.generate_events_with_quality.call_args
+        entity_context = (
+            call_args.args[2]
+            if len(call_args.args) > 2
+            else call_args.kwargs.get("entity_context", "")
+        )
+        assert "birth_year=1200" in entity_context
+        assert "death_year=1260" in entity_context
+
+    def test_cancel_check_mid_processing(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test cancel check stops event processing mid-iteration."""
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        mock_services.world_quality.generate_events_with_quality.return_value = [
+            (
+                {"description": "Event 1", "year": 100, "participants": [], "consequences": []},
+                mock_quality_scores,
+            ),
+            (
+                {"description": "Event 2", "year": 200, "participants": [], "consequences": []},
+                mock_quality_scores,
+            ),
+        ]
+
+        cancel_called = [False]
+
+        def cancel_after_first():
+            """Cancel after first event is processed."""
+            if cancel_called[0]:
+                return True
+            cancel_called[0] = True
+            return False
+
+        count = world_service._generate_events(
+            sample_story_state, mock_world_db, mock_services, cancel_check=cancel_after_first
+        )
+
+        assert count == 1
+        assert len(mock_world_db.list_events()) == 1
+
+    def test_handles_non_dict_participants(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test non-dict participant entries are handled as plain strings."""
+        mock_world_db.add_entity("character", "Hero", "The hero")
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        mock_services.world_quality.generate_events_with_quality.return_value = [
+            (
+                {
+                    "description": "A battle",
+                    "year": 1200,
+                    "participants": ["Hero"],  # plain string, not dict
+                    "consequences": [],
+                },
+                mock_quality_scores,
+            ),
+        ]
+
+        count = world_service._generate_events(sample_story_state, mock_world_db, mock_services)
+
+        assert count == 1
+        events = mock_world_db.list_events()
+        assert len(events) == 1
+
+    def test_logs_unresolved_participant_names(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test unresolved participant names are logged at debug level."""
+        import logging
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        mock_services.world_quality.generate_events_with_quality.return_value = [
+            (
+                {
+                    "description": "Mystery event",
+                    "year": 1200,
+                    "participants": [{"entity_name": "NonExistentEntity", "role": "actor"}],
+                    "consequences": [],
+                },
+                mock_quality_scores,
+            ),
+        ]
+
+        with caplog.at_level(logging.DEBUG):
+            count = world_service._generate_events(sample_story_state, mock_world_db, mock_services)
+
+        assert count == 1
+        assert "Could not resolve event participant" in caplog.text
+        assert "NonExistentEntity" in caplog.text
+
     def test_build_world_includes_events_count(
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):

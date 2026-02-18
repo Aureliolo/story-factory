@@ -247,6 +247,22 @@ class TestJudgeEventQuality:
             service._judge_event_quality(event, story_state, temperature=0.1)
 
     @patch("src.services.world_quality_service._event.generate_structured")
+    def test_judge_event_quality_multi_call_warning(
+        self, mock_generate_structured, settings, mock_mode_service, story_state
+    ):
+        """Test judge logs warning (not error) when multi_call is enabled and call fails."""
+        settings.judge_consistency_enabled = True
+        settings.judge_multi_call_enabled = True
+        svc = WorldQualityService(settings, mock_mode_service)
+        svc._analytics_db = MagicMock()
+
+        mock_generate_structured.side_effect = Exception("LLM timeout")
+        event = {"description": "Some Event", "year": 1900}
+
+        with pytest.raises(WorldGenerationError, match="judgment failed"):
+            svc._judge_event_quality(event, story_state, temperature=0.1)
+
+    @patch("src.services.world_quality_service._event.generate_structured")
     def test_judge_event_quality_handles_missing_participants(
         self, mock_generate_structured, service, story_state
     ):
@@ -518,3 +534,38 @@ class TestGenerateEventWithQuality:
                 existing_descriptions=[],
                 entity_context="Test context",
             )
+
+
+class TestGenerateEventsWithQualityBatch:
+    """Tests for generate_events_with_quality batch wrapper."""
+
+    @patch("src.services.world_quality_service._event._judge_event_quality")
+    @patch("src.services.world_quality_service._event._create_event")
+    def test_batch_generates_events(self, mock_create, mock_judge, service, story_state):
+        """Test batch wrapper calls single-event generator and collects results."""
+        mock_create.return_value = {
+            "description": "A great battle",
+            "year": 1200,
+            "participants": [],
+            "consequences": [],
+        }
+        mock_judge.return_value = EventQualityScores(
+            significance=8.0,
+            temporal_plausibility=8.0,
+            causal_coherence=8.0,
+            narrative_potential=8.0,
+            entity_integration=8.0,
+            feedback="Good",
+        )
+
+        results = service.generate_events_with_quality(
+            story_state,
+            existing_descriptions=["Existing event"],
+            entity_context="Test context",
+            count=2,
+        )
+
+        assert len(results) >= 1
+        for event_dict, scores in results:
+            assert event_dict["description"] == "A great battle"
+            assert scores.average == 8.0
