@@ -215,7 +215,7 @@ class WorldHealthDashboard:
                     ui.label(f"+{orphan_count - 5} more...").classes("text-xs text-gray-400")
 
     def _build_circular_section(self) -> None:
-        """Build circular relationship warning section."""
+        """Build circular relationship warning section with view and accept/dismiss buttons."""
         circular_count = self.metrics.circular_count
 
         if circular_count == 0:

@@ -73,7 +73,9 @@ def get_world_health_metrics(
     """Get comprehensive health metrics for a story world.
 
     Aggregates entity counts, orphan detection, circular relationships,
-    quality scores, and computes overall health score.
+    quality scores, and computes overall health score. Cycles previously
+    accepted by the user (via ``accept_cycle``) are excluded from the
+    circular relationship count and recommendations.
 
     Args:
         svc: WorldService instance.
@@ -122,8 +124,12 @@ def get_world_health_metrics(
             if svc.settings.circular_check_all_types
             else svc.settings.circular_relationship_types,
         )
-        # Filter out accepted cycles
-        accepted_hashes = world_db.get_accepted_cycles()
+        # Filter out accepted cycles (non-fatal — show all cycles if lookup fails)
+        try:
+            accepted_hashes = world_db.get_accepted_cycles()
+        except Exception as e:
+            logger.warning("Failed to load accepted cycles, showing all cycles: %s", e)
+            accepted_hashes = set()
         if accepted_hashes:
             original_count = len(circular)
             circular = [
@@ -139,8 +145,8 @@ def get_world_health_metrics(
         for cycle in circular:
             # Include entity names for human-readable display
             edges_with_names = []
-            for e in cycle:
-                source_id, relation_type, target_id = e[0], e[1], e[2]
+            for edge in cycle:
+                source_id, relation_type, target_id = edge[0], edge[1], edge[2]
                 edges_with_names.append(
                     {
                         "source": source_id,

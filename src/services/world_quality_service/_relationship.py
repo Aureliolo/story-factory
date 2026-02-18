@@ -3,9 +3,12 @@
 import logging
 import threading
 from collections import Counter
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import ollama
+
+if TYPE_CHECKING:
+    from src.services.world_quality_service import WorldQualityService
 
 from src.memory.conflict_types import (
     RELATION_CONFLICT_MAPPING,
@@ -31,11 +34,13 @@ _LEADING_ARTICLES = ("the ", "a ", "an ")
 
 # Module-level cache for LLM-based relationship type classification.
 # Maps free-form description -> classified valid type. Thread-safe via lock.
+# Bounded to _LLM_CACHE_MAX_SIZE entries; cleared entirely when full.
+_LLM_CACHE_MAX_SIZE = 256
 _llm_classification_cache: dict[str, str] = {}
 _llm_classification_cache_lock = threading.Lock()
 
 
-def _classify_relation_type_with_llm(svc, raw_type: str) -> str | None:
+def _classify_relation_type_with_llm(svc: WorldQualityService, raw_type: str) -> str | None:
     """Classify a free-form relationship description into a valid type using the LLM.
 
     Used as a last-resort fallback when normalize_relation_type() cannot match the
@@ -49,11 +54,14 @@ def _classify_relation_type_with_llm(svc, raw_type: str) -> str | None:
     Returns:
         A valid relationship type string, or None if classification failed.
     """
-    # Check cache first
+    # Check cache first (empty string sentinel means "previously failed to classify")
     cache_key = raw_type.lower().strip()
     with _llm_classification_cache_lock:
         if cache_key in _llm_classification_cache:
             cached = _llm_classification_cache[cache_key]
+            if cached == "":
+                logger.debug("LLM classification negative cache hit for '%s'", raw_type)
+                return None
             logger.debug("LLM classification cache hit: '%s' -> '%s'", raw_type, cached)
             return cached
 
@@ -72,7 +80,7 @@ def _classify_relation_type_with_llm(svc, raw_type: str) -> str | None:
             prompt=prompt,
             options={
                 "temperature": 0.1,
-                "num_predict": 20,
+                "num_predict": 50,
             },
         )
 
@@ -81,6 +89,8 @@ def _classify_relation_type_with_llm(svc, raw_type: str) -> str | None:
         if result in RELATION_CONFLICT_MAPPING:
             logger.info("LLM classified unknown relation type '%s' -> '%s'", raw_type, result)
             with _llm_classification_cache_lock:
+                if len(_llm_classification_cache) >= _LLM_CACHE_MAX_SIZE:
+                    _llm_classification_cache.clear()
                 _llm_classification_cache[cache_key] = result
             return result
 
@@ -89,13 +99,29 @@ def _classify_relation_type_with_llm(svc, raw_type: str) -> str | None:
             result,
             raw_type,
         )
+        # Cache negative result to avoid repeated LLM calls for same input
+        with _llm_classification_cache_lock:
+            if len(_llm_classification_cache) >= _LLM_CACHE_MAX_SIZE:
+                _llm_classification_cache.clear()
+            _llm_classification_cache[cache_key] = ""
         return None
-    except Exception as e:
+    except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
         logger.warning("LLM relation type classification failed for '%s': %s", raw_type, e)
+        with _llm_classification_cache_lock:
+            if len(_llm_classification_cache) >= _LLM_CACHE_MAX_SIZE:
+                _llm_classification_cache.clear()
+            _llm_classification_cache[cache_key] = ""
+        return None
+    except (KeyError, ValueError) as e:
+        logger.warning(
+            "LLM relation type classification returned unparsable result for '%s': %s",
+            raw_type,
+            e,
+        )
         return None
 
 
-def _normalize_with_llm_fallback(svc, raw_type: str) -> str:
+def _normalize_with_llm_fallback(svc: WorldQualityService, raw_type: str) -> str:
     """Normalize a relationship type, falling back to LLM classification if needed.
 
     First tries the standard normalize_relation_type(). If the result is not in the

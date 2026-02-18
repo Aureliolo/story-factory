@@ -74,8 +74,10 @@ async def handle_fix_orphan(page, entity_id: str) -> None:
         page: WorldPage instance.
         entity_id: ID of the orphan entity to fix.
     """
-    logger.debug(f"_handle_fix_orphan called for entity_id={entity_id}")
+    logger.debug(f"handle_fix_orphan called for entity_id={entity_id}")
     if not page.state.world_db:
+        logger.warning("Cannot fix orphan entity: no world database loaded")
+        ui.notify("No world loaded. Open a project first.", type="warning")
         return
 
     # Use service call instead of direct state access
@@ -103,7 +105,7 @@ async def handle_view_circular(page, cycle: dict) -> None:
         page: WorldPage instance.
         cycle: Dictionary containing circular chain edge data.
     """
-    logger.debug(f"_handle_view_circular called with cycle keys={list(cycle.keys())}")
+    logger.debug(f"handle_view_circular called with cycle keys={list(cycle.keys())}")
     edges = cycle.get("edges", [])
     if not edges:
         return
@@ -130,8 +132,10 @@ async def handle_dismiss_circular(page, cycle: dict) -> None:
         page: WorldPage instance.
         cycle: Dictionary containing circular chain edge data.
     """
-    logger.debug(f"_handle_dismiss_circular called with cycle keys={list(cycle.keys())}")
+    logger.debug(f"handle_dismiss_circular called with cycle keys={list(cycle.keys())}")
     if not page.state.world_db:
+        logger.warning("Cannot dismiss circular chain: no world database loaded")
+        ui.notify("No world loaded. Open a project first.", type="warning")
         return
 
     edges = cycle.get("edges", [])
@@ -139,12 +143,26 @@ async def handle_dismiss_circular(page, cycle: dict) -> None:
         logger.warning("Cannot dismiss cycle with no edges")
         return
 
+    # Validate edge data before hashing
+    incomplete = [
+        e for e in edges if not e.get("source") or not e.get("type") or not e.get("target")
+    ]
+    if incomplete:
+        logger.warning("Cannot dismiss cycle with incomplete edge data: %s", incomplete)
+        ui.notify("Cycle data is incomplete. Refresh and try again.", type="warning")
+        return
+
     # Build the (source_id, relation_type, target_id) tuples for hashing
     cycle_tuples = [
         (edge.get("source", ""), edge.get("type", ""), edge.get("target", "")) for edge in edges
     ]
-    cycle_hash = page.state.world_db.compute_cycle_hash(cycle_tuples)
-    page.state.world_db.accept_cycle(cycle_hash)
+    try:
+        cycle_hash = page.state.world_db.compute_cycle_hash(cycle_tuples)
+        page.state.world_db.accept_cycle(cycle_hash)
+    except Exception as e:
+        logger.error("Failed to accept circular chain: %s", e)
+        ui.notify(f"Failed to dismiss cycle: {e}", type="negative")
+        return
 
     # Build readable description for the notification
     cycle_names: list[str] = []
@@ -170,8 +188,10 @@ async def handle_improve_quality(page, entity_id: str) -> None:
         page: WorldPage instance.
         entity_id: ID of the entity to improve.
     """
-    logger.debug(f"_handle_improve_quality called for entity_id={entity_id}")
+    logger.debug(f"handle_improve_quality called for entity_id={entity_id}")
     if not page.state.world_db:
+        logger.warning("Cannot improve entity quality: no world database loaded")
+        ui.notify("No world loaded. Open a project first.", type="warning")
         return
 
     # Use service call instead of direct state access

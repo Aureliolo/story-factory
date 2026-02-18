@@ -32,6 +32,7 @@ def export_to_json(db) -> dict[str, Any]:
                 }
                 for e in db.list_events()
             ],
+            "accepted_cycles": list(db.get_accepted_cycles()),
         }
 
 
@@ -51,6 +52,7 @@ def import_from_json(db, data: dict[str, Any]) -> None:
         cursor.execute("DELETE FROM events")
         cursor.execute("DELETE FROM relationships")
         cursor.execute("DELETE FROM entities")
+        cursor.execute("DELETE FROM accepted_cycles")
 
         # Import entities
         for entity_data in data.get("entities", []):
@@ -115,13 +117,30 @@ def import_from_json(db, data: dict[str, Any]) -> None:
                     (event_data["id"], participant["entity_id"], participant["role"]),
                 )
 
+        # Import accepted cycles
+        for cycle_hash in data.get("accepted_cycles", []):
+            if not cycle_hash or len(cycle_hash) != 16:
+                logger.warning("Skipping invalid accepted cycle hash on import: %r", cycle_hash)
+                continue
+            try:
+                int(cycle_hash, 16)
+            except ValueError:
+                logger.warning("Skipping non-hex accepted cycle hash on import: %r", cycle_hash)
+                continue
+            cursor.execute(
+                "INSERT OR REPLACE INTO accepted_cycles (cycle_hash, accepted_at) VALUES (?, ?)",
+                (cycle_hash, datetime.now().isoformat()),
+            )
+
         db.conn.commit()
         from . import _graph
 
         _graph.invalidate_graph(db)
 
+    accepted_count = len(data.get("accepted_cycles", []))
     logger.info(
         f"Imported {len(data.get('entities', []))} entities, "
         f"{len(data.get('relationships', []))} relationships, "
-        f"{len(data.get('events', []))} events"
+        f"{len(data.get('events', []))} events, "
+        f"{accepted_count} accepted cycles"
     )
