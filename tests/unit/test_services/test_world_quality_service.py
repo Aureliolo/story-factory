@@ -210,12 +210,13 @@ class TestCharacterQualityScores:
             flaws=5.0,
             uniqueness=9.0,
             arc_potential=6.0,
-            temporal_plausibility=8.0,
+            temporal_plausibility=6.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "goal_clarity" in weak
         assert "flaws" in weak
         assert "arc_potential" in weak
+        assert "temporal_plausibility" in weak
         assert "depth" not in weak
         assert "uniqueness" not in weak
 
@@ -261,11 +262,12 @@ class TestLocationQualityScores:
             significance=5.0,
             story_relevance=6.0,
             distinctiveness=9.0,
-            temporal_plausibility=8.0,
+            temporal_plausibility=6.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "narrative_significance" in weak
         assert "story_relevance" in weak
+        assert "temporal_plausibility" in weak
         assert "atmosphere" not in weak
 
     def test_to_dict(self):
@@ -346,11 +348,12 @@ class TestFactionQualityScores:
             influence=5.0,
             conflict_potential=8.0,
             distinctiveness=9.0,
-            temporal_plausibility=8.0,
+            temporal_plausibility=6.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "coherence" in weak
         assert "influence" in weak
+        assert "temporal_plausibility" in weak
         assert "conflict_potential" not in weak
         assert "distinctiveness" not in weak
 
@@ -391,11 +394,12 @@ class TestItemQualityScores:
             uniqueness=5.0,
             narrative_potential=8.0,
             integration=9.0,
-            temporal_plausibility=8.0,
+            temporal_plausibility=6.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "story_significance" in weak
         assert "uniqueness" in weak
+        assert "temporal_plausibility" in weak
         assert "narrative_potential" not in weak
         assert "integration" not in weak
 
@@ -436,11 +440,12 @@ class TestConceptQualityScores:
             depth=5.0,
             manifestation=8.0,
             resonance=9.0,
-            temporal_plausibility=8.0,
+            temporal_plausibility=6.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "relevance" in weak
         assert "depth" in weak
+        assert "temporal_plausibility" in weak
         assert "manifestation" not in weak
         assert "resonance" not in weak
 

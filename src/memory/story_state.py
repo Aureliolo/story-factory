@@ -113,7 +113,7 @@ class Faction(BaseModel):
     values: list[str] = Field(default_factory=list, description="Core values of the faction")
     base_location: str = Field(default="", description="Headquarters or territory location")
 
-    # Temporal/lifecycle fields
+    # Temporal/lifecycle fields (populated during world build when calendar exists)
     founding_year: int | None = None
     dissolution_year: int | None = None
     founding_era: str | None = None
@@ -131,7 +131,7 @@ class Item(BaseModel):
         default_factory=list, description="Special properties or abilities"
     )
 
-    # Temporal/lifecycle fields
+    # Temporal/lifecycle fields (populated during world build when calendar exists)
     creation_year: int | None = None
     creation_era: str | None = None
     temporal_notes: str = ""
@@ -147,7 +147,7 @@ class Concept(BaseModel):
         default="", description="How this concept appears through events, characters, or symbols"
     )
 
-    # Temporal/lifecycle fields
+    # Temporal/lifecycle fields (populated during world build when calendar exists)
     emergence_year: int | None = None
     emergence_era: str | None = None
     temporal_notes: str = ""
@@ -161,7 +161,7 @@ class Location(BaseModel):
     description: str = Field(description="Detailed description with sensory details")
     significance: str = Field(default="", description="Why this place matters to the story")
 
-    # Temporal/lifecycle fields
+    # Temporal/lifecycle fields (populated during world build when calendar exists)
     founding_year: int | None = None
     destruction_year: int | None = None
     founding_era: str | None = None

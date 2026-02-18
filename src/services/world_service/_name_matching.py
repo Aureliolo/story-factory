@@ -22,11 +22,14 @@ def _normalize_name(name: str) -> str:
     ("The", "A", "An") that LLMs frequently prepend, causing mismatches
     (e.g., "The Echoes of the Network" vs "Echoes of the Network").
     """
+    original = name
     normalized = " ".join(name.split()).lower()
     for article in _LEADING_ARTICLES:
         if normalized.startswith(article):
             normalized = normalized[len(article) :]
             break
+    if normalized != original.strip().lower():
+        logger.debug("Normalized entity name from %r to %r", original, normalized)
     return normalized
 
 

@@ -216,7 +216,7 @@ class TestBuildEntityLifecycle:
         assert result == {"lifecycle": {"temporal_notes": "Forgotten wisdom"}}
 
     def test_location_founding_without_era(self):
-        """Location with founding_year but no era omits birth dict."""
+        """Location with founding_year but no era has birth with year only."""
         entity = {
             "name": "Old Town",
             "founding_year": 400,
@@ -225,7 +225,7 @@ class TestBuildEntityLifecycle:
         assert "lifecycle" in result
         lifecycle = result["lifecycle"]
         assert lifecycle["founding_year"] == 400
-        assert "birth" not in lifecycle
+        assert lifecycle["birth"] == {"year": 400}
 
     def test_item_creation_without_era(self):
         """Item with creation_year but no era has birth without era_name."""
@@ -237,6 +237,46 @@ class TestBuildEntityLifecycle:
         assert "lifecycle" in result
         lifecycle = result["lifecycle"]
         assert lifecycle["birth"] == {"year": 150}
+
+    def test_location_era_only(self):
+        """Location with founding_era but no year produces birth with era only."""
+        entity = {
+            "name": "Misty Valley",
+            "founding_era": "Dawn Era",
+        }
+        result = build_entity_lifecycle(entity, "location")
+        assert "lifecycle" in result
+        assert result["lifecycle"]["birth"] == {"era_name": "Dawn Era"}
+
+    def test_faction_founding_without_era(self):
+        """Faction with founding_year but no era has birth with year only."""
+        entity = {
+            "name": "Iron Guard",
+            "founding_year": 200,
+        }
+        result = build_entity_lifecycle(entity, "faction")
+        assert "lifecycle" in result
+        assert result["lifecycle"]["birth"] == {"year": 200}
+
+    def test_item_era_only(self):
+        """Item with creation_era but no year produces birth with era only."""
+        entity = {
+            "name": "Mysterious Gem",
+            "creation_era": "Ancient Era",
+        }
+        result = build_entity_lifecycle(entity, "item")
+        assert "lifecycle" in result
+        assert result["lifecycle"]["birth"] == {"era_name": "Ancient Era"}
+
+    def test_concept_era_only(self):
+        """Concept with emergence_era but no year produces birth with era only."""
+        entity = {
+            "name": "Lost Magic",
+            "emergence_era": "Forgotten Age",
+        }
+        result = build_entity_lifecycle(entity, "concept")
+        assert "lifecycle" in result
+        assert result["lifecycle"]["birth"] == {"era_name": "Forgotten Age"}
 
     def test_faction_dissolution_only(self):
         """Faction with only dissolution_year produces lifecycle."""

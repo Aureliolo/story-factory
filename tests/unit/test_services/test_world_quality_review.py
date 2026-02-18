@@ -620,6 +620,7 @@ class TestReviewCharactersBatch:
         assert scores.flaws == 0
         assert scores.uniqueness == 0
         assert scores.arc_potential == 0
+        assert scores.temporal_plausibility == 0
         assert "Review failed" in scores.feedback
         assert "LLM error" in scores.feedback
 

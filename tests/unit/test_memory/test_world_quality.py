@@ -543,6 +543,7 @@ class TestFactionQualityScores:
         assert "influence" in weak
         assert "conflict_potential" in weak
         assert "distinctiveness" in weak
+        assert "temporal_plausibility" in weak
 
     def test_weak_dimensions_returns_empty_when_all_above_threshold(self):
         """Test weak_dimensions returns empty list when all scores high."""

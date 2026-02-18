@@ -86,8 +86,9 @@ def build_entity_lifecycle(entity_dict: dict[str, Any], entity_type: str) -> dic
 
         if founding is not None:
             lifecycle["founding_year"] = founding
-            if era:
-                lifecycle["birth"] = {"year": founding, "era_name": era}
+        birth_data = {k: v for k, v in (("year", founding), ("era_name", era)) if v is not None}
+        if birth_data:
+            lifecycle["birth"] = birth_data
         if destruction is not None:
             lifecycle["destruction_year"] = destruction
         if notes:
@@ -101,8 +102,9 @@ def build_entity_lifecycle(entity_dict: dict[str, Any], entity_type: str) -> dic
 
         if founding is not None:
             lifecycle["founding_year"] = founding
-            if era:
-                lifecycle["birth"] = {"year": founding, "era_name": era}
+        birth_data = {k: v for k, v in (("year", founding), ("era_name", era)) if v is not None}
+        if birth_data:
+            lifecycle["birth"] = birth_data
         if dissolution is not None:
             lifecycle["destruction_year"] = dissolution
         if notes:
@@ -113,11 +115,9 @@ def build_entity_lifecycle(entity_dict: dict[str, Any], entity_type: str) -> dic
         era = entity_dict.get("creation_era")
         notes = entity_dict.get("temporal_notes", "")
 
-        if creation is not None:
-            birth: dict[str, Any] = {"year": creation}
-            if era:
-                birth["era_name"] = era
-            lifecycle["birth"] = birth
+        birth_data = {k: v for k, v in (("year", creation), ("era_name", era)) if v is not None}
+        if birth_data:
+            lifecycle["birth"] = birth_data
         if notes:
             lifecycle["temporal_notes"] = notes
 
@@ -126,10 +126,8 @@ def build_entity_lifecycle(entity_dict: dict[str, Any], entity_type: str) -> dic
         era = entity_dict.get("emergence_era")
         notes = entity_dict.get("temporal_notes", "")
 
-        if emergence is not None:
-            birth_data: dict[str, Any] = {"year": emergence}
-            if era:
-                birth_data["era_name"] = era
+        birth_data = {k: v for k, v in (("year", emergence), ("era_name", era)) if v is not None}
+        if birth_data:
             lifecycle["birth"] = birth_data
         if notes:
             lifecycle["temporal_notes"] = notes

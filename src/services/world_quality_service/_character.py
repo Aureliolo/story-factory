@@ -161,12 +161,15 @@ def _create_character(
     if custom_instructions:
         custom_section = f"\n\nSPECIFIC REQUIREMENTS:\n{custom_instructions}\n"
 
+    calendar_context = svc.get_calendar_context()
+
     prompt = f"""Create a compelling NEW character for a {brief.genre} story.
 
 STORY PREMISE: {brief.premise}
 TONE: {brief.tone}
 THEMES: {", ".join(brief.themes)}
 SETTING: {brief.setting_place}, {brief.setting_time}
+{calendar_context}
 
 EXISTING CHARACTERS IN THIS WORLD: {", ".join(existing_names) if existing_names else "None yet"}
 (Create a NEW character with a different name that complements these existing ones)
@@ -279,8 +282,8 @@ Description: {character.description}
 Traits: {", ".join(character.trait_names)}
 Goals: {", ".join(character.goals)}
 Arc Notes: {character.arc_notes}
-Birth Year: {character.birth_year}
-Birth Era: {character.birth_era}
+Birth Year: {character.birth_year or "N/A"}
+Birth Era: {character.birth_era or "N/A"}
 
 {JUDGE_CALIBRATION_BLOCK}
 
@@ -349,8 +352,8 @@ Description: {character.description}
 Traits: {", ".join(character.trait_names)}
 Goals: {", ".join(character.goals)}
 Arc Notes: {character.arc_notes}
-Birth Year: {character.birth_year}
-Birth Era: {character.birth_era}
+Birth Year: {character.birth_year or "N/A"}
+Birth Era: {character.birth_era or "N/A"}
 
 CURRENT SCORES (need {threshold}+ in all areas):
 - Depth: {scores.depth}/10
