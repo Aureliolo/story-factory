@@ -558,8 +558,9 @@ class Settings:
         changed = _merge_with_defaults(data, cls)
 
         # Construct settings from merged data and validate value ranges.
-        # TypeError can occur if the JSON has wrong types for fields (e.g.
-        # "context_size": "not_a_number") — wrap as ValueError for clarity.
+        # TypeError can occur during validation when comparison operators
+        # receive incompatible types (e.g. "context_size": "not_a_number"
+        # fails the `< 1024` range check) — wrap as ValueError for clarity.
         try:
             settings = cls(**data)
             # Validate value ranges (may auto-migrate some values).
