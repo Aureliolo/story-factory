@@ -6,6 +6,8 @@ These tests verify that components work together correctly during startup.
 import json
 from unittest.mock import patch
 
+import pytest
+
 from src.services.model_service import ModelService
 from src.services.project_service import ProjectService
 
@@ -125,11 +127,11 @@ class TestServiceInteractions:
 class TestSettingsValidation:
     """Test settings validation during startup."""
 
-    def test_invalid_ollama_url_returns_default_settings(self, tmp_path):
-        """Settings.load() returns default Settings when config has invalid URL.
+    def test_invalid_ollama_url_raises_on_load(self, tmp_path):
+        """Settings.load() raises ValueError when config has invalid URL.
 
-        When validation fails (e.g., invalid URL format), the entire settings
-        object is replaced with defaults, not just the invalid field.
+        Validation errors for genuinely invalid values are propagated so the
+        user gets a clear error message rather than a silent reset.
         """
         from src.settings import Settings
 
@@ -137,9 +139,8 @@ class TestSettingsValidation:
         config_file.write_text(json.dumps({"ollama_url": "not-a-valid-url"}))
 
         with patch("src.settings._settings.SETTINGS_FILE", config_file):
-            settings = Settings.load()
-            # Entire settings is replaced with defaults when validation fails
-            assert settings.ollama_url == "http://localhost:11434"
+            with pytest.raises(ValueError, match="Invalid URL scheme"):
+                Settings.load()
 
     def test_missing_required_fields_use_defaults(self, tmp_path):
         """Settings uses defaults for missing fields."""

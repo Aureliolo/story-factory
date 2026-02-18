@@ -817,6 +817,49 @@ class TestMergeWithDefaults:
         assert "item" in data["relationship_minimums"]
         assert "minor" in data["relationship_minimums"]["character"]
 
+    def test_removes_obsolete_nested_dict_outer_keys(self):
+        """Obsolete outer keys in nested dict fields are removed."""
+        from dataclasses import asdict
+
+        from src.settings._settings import _merge_with_defaults
+
+        data = asdict(Settings())
+        data["relationship_minimums"]["alien"] = {"warrior": 3}
+
+        changed = _merge_with_defaults(data, Settings)
+
+        assert changed is True
+        assert "alien" not in data["relationship_minimums"]
+
+    def test_removes_obsolete_nested_dict_inner_keys(self):
+        """Obsolete inner keys in nested dict fields are removed."""
+        from dataclasses import asdict
+
+        from src.settings._settings import _merge_with_defaults
+
+        data = asdict(Settings())
+        data["relationship_minimums"]["character"]["legendary"] = 99
+
+        changed = _merge_with_defaults(data, Settings)
+
+        assert changed is True
+        assert "legendary" not in data["relationship_minimums"]["character"]
+
+    def test_handles_wrong_type_for_nested_dict_field(self):
+        """Nested dict fields with wrong type are replaced with defaults."""
+        from dataclasses import asdict
+
+        from src.settings._settings import _merge_with_defaults
+
+        data = asdict(Settings())
+        data["relationship_minimums"] = "not_a_dict"
+
+        changed = _merge_with_defaults(data, Settings)
+
+        assert changed is True
+        assert isinstance(data["relationship_minimums"], dict)
+        assert "character" in data["relationship_minimums"]
+
     def test_load_with_old_agent_models_preserves_settings(self, tmp_path, monkeypatch):
         """Loading settings with missing agent roles doesn't nuke everything."""
         settings_file = tmp_path / "settings.json"
