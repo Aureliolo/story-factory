@@ -278,7 +278,8 @@ def _judge_calendar_quality(
         if isinstance(e, dict):
             name = e.get("name", "Unknown Era")
             start = e.get("start_year", "?")
-            end = e.get("end_year", "present")
+            end = e.get("end_year")
+            end = end if end is not None else "present"
             eras_text += f"  - {name}: {start} - {end}\n"
 
     prompt = f"""You are evaluating a calendar system for a {genre} story.

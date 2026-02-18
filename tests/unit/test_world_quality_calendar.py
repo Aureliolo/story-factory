@@ -362,8 +362,6 @@ class TestCalendarContext:
 
     def test_set_calendar_context_formats_era_and_year(self, sample_calendar_dict):
         """Test that set_calendar_context formats era name, abbreviation, and story year."""
-        from src.services.world_quality_service import WorldQualityService
-
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = None
         svc._calendar_context_lock = threading.RLock()
@@ -376,8 +374,6 @@ class TestCalendarContext:
 
     def test_set_calendar_context_includes_months(self, sample_calendar_dict):
         """Test that set_calendar_context includes month names."""
-        from src.services.world_quality_service import WorldQualityService
-
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = None
         svc._calendar_context_lock = threading.RLock()
@@ -388,8 +384,6 @@ class TestCalendarContext:
 
     def test_set_calendar_context_includes_historical_eras(self, sample_calendar_dict):
         """Test that set_calendar_context includes historical era ranges."""
-        from src.services.world_quality_service import WorldQualityService
-
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = None
         svc._calendar_context_lock = threading.RLock()
@@ -401,8 +395,6 @@ class TestCalendarContext:
 
     def test_set_calendar_context_none_clears(self):
         """Test that set_calendar_context(None) clears the context."""
-        from src.services.world_quality_service import WorldQualityService
-
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = "some existing context"
         svc._calendar_context_lock = threading.RLock()
@@ -411,8 +403,6 @@ class TestCalendarContext:
 
     def test_get_calendar_context_returns_empty_when_none(self):
         """Test that get_calendar_context returns empty string when no context set."""
-        from src.services.world_quality_service import WorldQualityService
-
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = None
         svc._calendar_context_lock = threading.RLock()
@@ -431,8 +421,6 @@ class TestCalendarContext:
 
     def test_set_calendar_context_warns_on_empty_dict(self):
         """Test that set_calendar_context warns when dict produces no extractable context."""
-        from src.services.world_quality_service import WorldQualityService
-
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = None
         svc._calendar_context_lock = threading.RLock()

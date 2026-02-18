@@ -292,7 +292,7 @@ class WorldQualityService:
                 parts.append(f"Months: {', '.join(month_names)}")
 
             self._calendar_context = "\n".join(parts) if parts else None
-            if calendar_dict is not None and self._calendar_context is None:
+            if self._calendar_context is None:
                 logger.warning(
                     "Calendar dict provided but no context extracted — calendar may be malformed: %s",
                     {k: type(v).__name__ for k, v in calendar_dict.items()},

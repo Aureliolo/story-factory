@@ -141,7 +141,7 @@ def _display_calendar_info(page: WorldPage, calendar: WorldCalendar) -> None:
             with ui.column().classes("gap-2 mt-2"):
                 for era in calendar.eras:
                     era_text = f"{era.name}: {era.start_year}"
-                    if era.end_year:
+                    if era.end_year is not None:
                         era_text += f" - {era.end_year}"
                     else:
                         era_text += " - present"

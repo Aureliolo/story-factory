@@ -1144,6 +1144,9 @@ class TestBuildWorld:
                 WorldBuildOptions.full(),
             )
 
+        # Calendar context must be cleaned up even on cancellation (try/finally)
+        mock_services.world_quality.set_calendar_context.assert_called_with(None)
+
     def test_build_world_calendar_saves_to_existing_world_settings(
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
