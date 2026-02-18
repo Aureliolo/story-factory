@@ -393,30 +393,6 @@ class Settings:
     prompt_templates_dir: str = "src/prompts/templates"
     prompt_metrics_enabled: bool = True
 
-    # LLM generation token limits (num_predict values)
-    llm_tokens_character_create: int = 500
-    llm_tokens_character_judge: int = 300
-    llm_tokens_character_refine: int = 500
-    llm_tokens_location_create: int = 400
-    llm_tokens_location_judge: int = 200
-    llm_tokens_location_refine: int = 600
-    llm_tokens_faction_create: int = 600
-    llm_tokens_faction_judge: int = 200
-    llm_tokens_faction_refine: int = 600
-    llm_tokens_item_create: int = 500
-    llm_tokens_item_judge: int = 200
-    llm_tokens_item_refine: int = 500
-    llm_tokens_concept_create: int = 500
-    llm_tokens_concept_judge: int = 200
-    llm_tokens_concept_refine: int = 500
-    llm_tokens_calendar_create: int = 600
-    llm_tokens_calendar_judge: int = 300
-    llm_tokens_calendar_refine: int = 600
-    llm_tokens_relationship_create: int = 1200
-    llm_tokens_relationship_judge: int = 200
-    llm_tokens_relationship_refine: int = 500
-    llm_tokens_mini_description: int = 50
-
     # Entity extraction limits
     entity_extract_locations_max: int = 10
     entity_extract_items_max: int = 5

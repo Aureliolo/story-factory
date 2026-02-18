@@ -2131,22 +2131,6 @@ class TestMissingValidationCoverage:
         with pytest.raises(ValueError, match="world_gen_locations_max must be between"):
             settings.validate()
 
-    # --- LLM token settings validation (line 598) ---
-
-    def test_validate_raises_on_invalid_llm_tokens_character_create(self):
-        """Should raise ValueError for llm_tokens_character_create out of range."""
-        settings = Settings()
-        settings.llm_tokens_character_create = 5  # Below 10
-        with pytest.raises(ValueError, match="llm_tokens_character_create must be between"):
-            settings.validate()
-
-    def test_validate_raises_on_invalid_llm_tokens_mini_description(self):
-        """Should raise ValueError for llm_tokens_mini_description out of range."""
-        settings = Settings()
-        settings.llm_tokens_mini_description = 5000  # Above 4096
-        with pytest.raises(ValueError, match="llm_tokens_mini_description must be between"):
-            settings.validate()
-
     # --- Entity extraction limits validation (line 607) ---
 
     def test_validate_raises_on_invalid_entity_extract_locations_max(self):
@@ -2681,11 +2665,6 @@ class TestSettingsMigration:
         assert settings.agent_temperatures["suggestion"] == 0.8
         # User values preserved
         assert settings.agent_temperatures["writer"] == 0.9
-
-    def test_relationship_token_limit_default_is_1200(self):
-        """Default llm_tokens_relationship_create should be 1200 (increased from 800)."""
-        settings = Settings()
-        assert settings.llm_tokens_relationship_create == 1200
 
     def test_semaphore_timeout_default_is_300(self):
         """Default llm_semaphore_timeout should be 300 seconds."""

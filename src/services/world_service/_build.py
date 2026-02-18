@@ -144,8 +144,42 @@ def build_world(
             raise
         except Exception as e:
             logger.error("Calendar generation failed (non-fatal): %s", e)
-            report_progress("Warning: Calendar generation failed. Continuing without calendar.")
+            # Log warning without calling report_progress to avoid double-incrementing
+            # current_step (the initial report_progress call already counted this step).
+            logger.warning("Continuing world build without calendar.")
 
+    try:
+        # Steps 2-9 wrapped in try/finally to ensure calendar context cleanup
+        _build_world_entities(
+            svc,
+            state,
+            world_db,
+            services,
+            options,
+            counts,
+            check_cancelled,
+            report_progress,
+        )
+    finally:
+        services.world_quality.set_calendar_context(None)
+
+    report_progress("World build complete!")
+    total_rels = counts["relationships"] + counts["implicit_relationships"]
+    logger.info(
+        "World build complete for project %s: %s (total relationships: %d = %d explicit + %d implicit)",
+        state.id,
+        counts,
+        total_rels,
+        counts["relationships"],
+        counts["implicit_relationships"],
+    )
+    return counts
+
+
+def _build_world_entities(
+    svc, state, world_db, services, options, counts, check_cancelled, report_progress
+):
+    """Execute entity generation steps 2-9 of the world build."""
     # Step 2: Generate story structure (characters, chapters) if requested
     if options.generate_structure:
         check_cancelled()
@@ -315,21 +349,6 @@ def build_world(
     except Exception as e:
         logger.error("World embedding failed (non-fatal): %s", e)
         report_progress("Warning: World embedding failed. RAG context will be unavailable.")
-
-    # Clear calendar context from quality service (avoid stale context in future runs)
-    services.world_quality.set_calendar_context(None)
-
-    report_progress("World build complete!")
-    total_rels = counts["relationships"] + counts["implicit_relationships"]
-    logger.info(
-        "World build complete for project %s: %s (total relationships: %d = %d explicit + %d implicit)",
-        state.id,
-        counts,
-        total_rels,
-        counts["relationships"],
-        counts["implicit_relationships"],
-    )
-    return counts
 
 
 def _calculate_total_steps(options: WorldBuildOptions, *, generate_calendar: bool = False) -> int:
@@ -771,27 +790,7 @@ def _recover_orphans(
     services: ServiceContainer,
     cancel_check: Callable[[], bool] | None = None,
 ) -> int:
-    """Attempt to connect orphan entities by generating additional relationships.
-
-    After the main relationship generation pass, some entities may have zero
-    connections. This function identifies them and tries to generate relationships
-    to connect them to the world using a per-orphan loop with retry budget.
-
-    Each orphan gets up to ``MAX_RETRIES_PER_ORPHAN + 1`` attempts. The
-    ``required_entity`` constraint tells the LLM to include the orphan; the
-    quality loop rejects relationships that omit it *before* the expensive
-    judge/refine cycle, eliminating wasted LLM calls.
-
-    Args:
-        svc: WorldService instance.
-        state: Current story state.
-        world_db: World database.
-        services: Service container.
-        cancel_check: Optional cancellation check.
-
-    Returns:
-        Number of relationships successfully added.
-    """
+    """Connect orphan entities by generating relationships (up to MAX_RETRIES_PER_ORPHAN+1 attempts each)."""
     orphans = world_db.find_orphans()
     if not orphans:
         logger.debug("No orphan entities found, skipping recovery")

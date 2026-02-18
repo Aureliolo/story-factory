@@ -47,7 +47,6 @@ def validate(settings: Settings) -> bool:
     _validate_temperature_decay_semantics(settings)
     _validate_judge_consistency(settings)
     _validate_world_gen_counts(settings)
-    _validate_llm_token_limits(settings)
     _validate_entity_extraction(settings)
     _validate_mini_description(settings)
     _validate_workflow_limits(settings)
@@ -479,37 +478,6 @@ def _validate_world_gen_counts(settings: Settings) -> None:
                 f"world_gen_{entity_type}_min ({min_val}) cannot exceed "
                 f"world_gen_{entity_type}_max ({max_val})"
             )
-
-
-def _validate_llm_token_limits(settings: Settings) -> None:
-    """Validate LLM token limit settings."""
-    token_settings = [
-        ("llm_tokens_character_create", settings.llm_tokens_character_create),
-        ("llm_tokens_character_judge", settings.llm_tokens_character_judge),
-        ("llm_tokens_character_refine", settings.llm_tokens_character_refine),
-        ("llm_tokens_location_create", settings.llm_tokens_location_create),
-        ("llm_tokens_location_judge", settings.llm_tokens_location_judge),
-        ("llm_tokens_location_refine", settings.llm_tokens_location_refine),
-        ("llm_tokens_faction_create", settings.llm_tokens_faction_create),
-        ("llm_tokens_faction_judge", settings.llm_tokens_faction_judge),
-        ("llm_tokens_faction_refine", settings.llm_tokens_faction_refine),
-        ("llm_tokens_item_create", settings.llm_tokens_item_create),
-        ("llm_tokens_item_judge", settings.llm_tokens_item_judge),
-        ("llm_tokens_item_refine", settings.llm_tokens_item_refine),
-        ("llm_tokens_concept_create", settings.llm_tokens_concept_create),
-        ("llm_tokens_concept_judge", settings.llm_tokens_concept_judge),
-        ("llm_tokens_concept_refine", settings.llm_tokens_concept_refine),
-        ("llm_tokens_relationship_create", settings.llm_tokens_relationship_create),
-        ("llm_tokens_relationship_judge", settings.llm_tokens_relationship_judge),
-        ("llm_tokens_relationship_refine", settings.llm_tokens_relationship_refine),
-        ("llm_tokens_calendar_create", settings.llm_tokens_calendar_create),
-        ("llm_tokens_calendar_judge", settings.llm_tokens_calendar_judge),
-        ("llm_tokens_calendar_refine", settings.llm_tokens_calendar_refine),
-        ("llm_tokens_mini_description", settings.llm_tokens_mini_description),
-    ]
-    for name, value in token_settings:
-        if not 10 <= value <= 4096:
-            raise ValueError(f"{name} must be between 10 and 4096, got {value}")
 
 
 def _validate_entity_extraction(settings: Settings) -> None:

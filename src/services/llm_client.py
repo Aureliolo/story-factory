@@ -29,48 +29,6 @@ _model_context_cache: dict[str, int | None] = {}
 _model_context_cache_lock = threading.Lock()
 
 
-def estimate_token_count(text: str) -> int:
-    """Estimate token count for a text string.
-
-    Uses the rough heuristic of ~4 characters per token, which is a reasonable
-    approximation for English text with most tokenizers.
-
-    Args:
-        text: Input text to estimate tokens for.
-
-    Returns:
-        Estimated number of tokens.
-    """
-    return len(text) // 4
-
-
-def warn_if_prompt_too_large(prompt: str, model: str, context_size: int, max_tokens: int) -> None:
-    """Log a warning if the prompt + max_tokens may exceed the context window.
-
-    Uses a 90% threshold to account for system prompt overhead and formatting
-    tokens that are not included in the prompt text.
-
-    Args:
-        prompt: The prompt text to check.
-        model: Model identifier (for log message).
-        context_size: Configured context window size in tokens.
-        max_tokens: Maximum tokens to generate (num_predict).
-    """
-    estimated_prompt_tokens = estimate_token_count(prompt)
-    total_estimated = estimated_prompt_tokens + max_tokens
-    threshold = int(context_size * 0.9)
-
-    if total_estimated > threshold:
-        logger.warning(
-            "Prompt (~%d tokens) + max_tokens (%d) may exceed context_size (%d) "
-            "for model %s. Output may be truncated.",
-            estimated_prompt_tokens,
-            max_tokens,
-            context_size,
-            model,
-        )
-
-
 def get_model_context_size(client: ollama.Client, model: str) -> int | None:
     """Query and cache the context size for a model.
 

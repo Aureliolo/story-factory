@@ -19,7 +19,7 @@ from src.memory.conflict_types import (
 )
 from src.memory.story_state import StoryState
 from src.memory.world_quality import RelationshipQualityScores
-from src.services.llm_client import generate_structured, warn_if_prompt_too_large
+from src.services.llm_client import generate_structured
 from src.services.world_quality_service._common import (
     JUDGE_CALIBRATION_BLOCK,
     judge_with_averaging,
@@ -555,17 +555,11 @@ Output ONLY valid JSON (all text in {brief.language}):
     try:
         model = svc._get_creator_model(entity_type="relationship")
 
-        # Warn proactively if prompt may exceed context window
-        warn_if_prompt_too_large(
-            prompt, model, svc.settings.context_size, svc.settings.llm_tokens_relationship_create
-        )
-
         response = svc.client.generate(
             model=model,
             prompt=prompt,
             options={
                 "temperature": temperature,
-                "num_predict": svc.settings.llm_tokens_relationship_create,
             },
         )
 
@@ -582,13 +576,11 @@ Output ONLY valid JSON (all text in {brief.language}):
             # Detect likely truncation: unbalanced braces suggest output was cut off
             open_braces = raw_response.count("{") - raw_response.count("}")
             if open_braces > 0:
-                logger.error(
+                logger.warning(
                     "Relationship creation JSON appears truncated "
                     "(unbalanced braces: %d unclosed). "
-                    "Token limit llm_tokens_relationship_create=%d may be too low. "
                     "Raw response tail: ...%s",
                     open_braces,
-                    svc.settings.llm_tokens_relationship_create,
                     raw_response[-100:],
                 )
             else:
@@ -764,18 +756,12 @@ Output ONLY valid JSON:
     try:
         model = svc._get_creator_model(entity_type="relationship")
 
-        # Warn proactively if prompt may exceed context window
-        warn_if_prompt_too_large(
-            prompt, model, svc.settings.context_size, svc.settings.llm_tokens_relationship_refine
-        )
-
         response = svc.client.generate(
             model=model,
             prompt=prompt,
             format="json",
             options={
                 "temperature": temperature,
-                "num_predict": svc.settings.llm_tokens_relationship_refine,
             },
         )
 

@@ -123,13 +123,13 @@ WorldDatabase (sqlite-vec) → EmbeddingService → ContextRetrievalService → 
 3. Generate story structure (characters, chapters via Architect)
 4. Quality review: characters, plot, chapters
 5. Extract characters to world DB
-6. Generate embeddings
-7. Generate locations (quality loop)
-8. Generate factions (quality loop)
-9. Generate items (quality loop)
-10. Generate concepts (quality loop)
-11. Generate relationships (quality loop)
-12. Orphan recovery
+6. Generate locations (quality loop)
+7. Generate factions (quality loop)
+8. Generate items (quality loop)
+9. Generate concepts (quality loop)
+10. Generate relationships (quality loop)
+11. Orphan recovery
+12. Generate embeddings
 13. Build complete
 ```
 

@@ -11,12 +11,10 @@ from pydantic import BaseModel
 from src.services import llm_client
 from src.services.llm_client import (
     _model_context_cache,
-    estimate_token_count,
     generate_structured,
     get_model_context_size,
     get_ollama_client,
     validate_context_size,
-    warn_if_prompt_too_large,
 )
 from src.settings import Settings
 from src.utils.exceptions import LLMError
@@ -492,65 +490,6 @@ class TestGenerateStructured:
         mock_validate.assert_called_once_with(
             mock_client, "test-model:7b", mock_settings.context_size
         )
-
-
-class TestEstimateTokenCount:
-    """Tests for estimate_token_count function."""
-
-    def test_estimate_token_count_basic(self):
-        """Test token estimation for a basic string (11 chars -> 2 tokens)."""
-        result = estimate_token_count("hello world")
-        assert result == 2
-
-    def test_estimate_token_count_empty(self):
-        """Test token estimation for an empty string returns 0."""
-        result = estimate_token_count("")
-        assert result == 0
-
-    def test_estimate_token_count_longer_string(self):
-        """Test token estimation for a longer, more realistic prompt."""
-        text = "a" * 400
-        result = estimate_token_count(text)
-        assert result == 100  # 400 // 4 = 100
-
-
-class TestWarnIfPromptTooLarge:
-    """Tests for warn_if_prompt_too_large function."""
-
-    def test_warn_if_prompt_too_large_logs_warning(self, caplog):
-        """Test that a warning is logged when prompt + max_tokens exceed the threshold."""
-        # 100,000 chars -> ~25,000 tokens estimated
-        # 25,000 + 4,096 = ~29,096 >> 8192 * 0.9 = 7,372 threshold
-        large_prompt = "x" * 100_000
-
-        with caplog.at_level(logging.WARNING, logger="src.services.llm_client"):
-            warn_if_prompt_too_large(
-                prompt=large_prompt,
-                model="test-model:8b",
-                context_size=8192,
-                max_tokens=4096,
-            )
-
-        warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
-        assert len(warning_records) >= 1
-        assert any("may exceed context_size" in r.message for r in warning_records)
-
-    def test_warn_if_prompt_too_large_no_warning_when_fits(self, caplog):
-        """Test that no warning is logged when prompt + max_tokens fit within the threshold."""
-        # 100 chars -> ~25 tokens estimated
-        # 25 + 4,096 = ~4,121 << 32,768 * 0.9 = 29,491 threshold
-        short_prompt = "x" * 100
-
-        with caplog.at_level(logging.WARNING, logger="src.services.llm_client"):
-            warn_if_prompt_too_large(
-                prompt=short_prompt,
-                model="test-model:8b",
-                context_size=32768,
-                max_tokens=4096,
-            )
-
-        warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
-        assert len(warning_records) == 0
 
 
 class TestGetModelContextSize:

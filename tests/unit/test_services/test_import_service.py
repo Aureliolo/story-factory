@@ -55,10 +55,6 @@ def mock_settings():
     settings.import_default_confidence = 0.5
     settings.import_confidence_threshold = 0.7
     settings.import_character_token_multiplier = 4
-    settings.llm_tokens_character_create = 500
-    settings.llm_tokens_location_create = 400
-    settings.llm_tokens_item_create = 400
-    settings.llm_tokens_relationship_create = 300
     return settings
 
 

@@ -4,7 +4,7 @@ Provides UI for viewing and managing the world's calendar system.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from nicegui import ui
 
@@ -82,7 +82,7 @@ def refresh_calendar_section(page: WorldPage) -> None:
             page.generate_calendar_btn.text = "Generate Calendar"  # type: ignore[attr-defined]
 
 
-def _get_world_calendar(page: WorldPage) -> Any:
+def _get_world_calendar(page: WorldPage) -> WorldCalendar | None:
     """Get the calendar from world settings if available.
 
     Args:
@@ -110,7 +110,7 @@ def _get_world_calendar(page: WorldPage) -> Any:
         return None
 
 
-def _display_calendar_info(page: WorldPage, calendar: Any) -> None:
+def _display_calendar_info(page: WorldPage, calendar: WorldCalendar) -> None:
     """Display calendar information.
 
     Args:

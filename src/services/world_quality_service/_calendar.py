@@ -252,6 +252,15 @@ def _judge_calendar_quality(
     brief = story_state.brief
     genre = brief.genre if brief else "fiction"
 
+    logger.debug(
+        "Judging calendar quality: svc=%s, genre=%s, era=%s, months=%d, temperature=%.2f",
+        type(svc).__name__,
+        genre,
+        calendar.get("current_era_name", "Unknown"),
+        len(calendar.get("months", [])),
+        temperature,
+    )
+
     # Format months for display
     months_text = ""
     months_list = calendar.get("months", [])

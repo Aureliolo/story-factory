@@ -180,8 +180,6 @@ class TestCreateCalendar:
 
     def test_raises_on_missing_brief(self, mock_svc):
         """Test WorldGenerationError when no brief available."""
-        from src.utils.exceptions import WorldGenerationError
-
         state = StoryState(id="no-brief")
         with pytest.raises(WorldGenerationError, match="no brief"):
             _create_calendar(mock_svc, state, 0.9)

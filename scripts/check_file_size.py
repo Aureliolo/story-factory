@@ -27,35 +27,35 @@ CHECKED_PREFIXES = (
 )
 
 SPLIT_GUIDANCE = """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                    HOW TO SPLIT A LARGE FILE                                 ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  DO NOT add this file to any "allowed" list or skip this check.              ║
-║  Large files harm maintainability, testability, and code review.             ║
-║                                                                              ║
-║  INSTEAD, split the file into a package:                                     ║
-║                                                                              ║
-║  1. Create a directory with the same name as the file:                       ║
-║       src/services/my_service.py → src/services/my_service/                  ║
-║                                                                              ║
-║  2. Create __init__.py that re-exports the public API:                       ║
-║       from src.services.my_service._core import MyService                    ║
-║       __all__ = ["MyService"]                                                ║
-║                                                                              ║
-║  3. Split into focused modules by concern:                                   ║
-║       _core.py      - Main class/entry point                                 ║
-║       _helpers.py   - Internal helper functions                              ║
-║       _types.py     - Type definitions and models                            ║
-║       _validation.py - Validation logic                                      ║
-║                                                                              ║
-║  4. Use underscore prefix (_) for internal modules to signal private API     ║
-║                                                                              ║
-║  5. Keep each submodule under 500 lines ideally, 1000 max                    ║
-║                                                                              ║
-║  Example: See how src/services/orchestrator/ was split from orchestrator.py  ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
++------------------------------------------------------------------------------+
+|                    HOW TO SPLIT A LARGE FILE                                 |
++------------------------------------------------------------------------------+
+|                                                                              |
+|  DO NOT add this file to any "allowed" list or skip this check.              |
+|  Large files harm maintainability, testability, and code review.             |
+|                                                                              |
+|  INSTEAD, split the file into a package:                                     |
+|                                                                              |
+|  1. Create a directory with the same name as the file:                       |
+|       src/services/my_service.py -> src/services/my_service/                 |
+|                                                                              |
+|  2. Create __init__.py that re-exports the public API:                       |
+|       from src.services.my_service._core import MyService                    |
+|       __all__ = ["MyService"]                                                |
+|                                                                              |
+|  3. Split into focused modules by concern:                                   |
+|       _core.py      - Main class/entry point                                 |
+|       _helpers.py   - Internal helper functions                              |
+|       _types.py     - Type definitions and models                            |
+|       _validation.py - Validation logic                                      |
+|                                                                              |
+|  4. Use underscore prefix (_) for internal modules to signal private API     |
+|                                                                              |
+|  5. Keep each submodule under 500 lines ideally, 1000 max                    |
+|                                                                              |
+|  Example: See how src/services/orchestrator/ was split from orchestrator.py  |
+|                                                                              |
++------------------------------------------------------------------------------+
 """
 
 
@@ -101,7 +101,7 @@ def main() -> int:
 
         for file_path, line_count in sorted(violations, key=lambda x: -x[1]):
             excess = line_count - MAX_FILE_LINES
-            print(f"  ✗ {file_path}: {line_count} lines (exceeds limit by {excess})")
+            print(f"  X {file_path}: {line_count} lines (exceeds limit by {excess})")
 
         print(SPLIT_GUIDANCE)
         return 1

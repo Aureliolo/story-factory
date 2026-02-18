@@ -281,7 +281,8 @@ class WorldQualityService:
                     name = era.get("name", "Unknown")
                     start = era.get("start_year", "?")
                     end = era.get("end_year")
-                    era_lines.append(f"  - {name}: {start} - {end or 'present'}")
+                    end_display = end if end is not None else "present"
+                    era_lines.append(f"  - {name}: {start} - {end_display}")
                 parts.append("Historical Eras:\n" + "\n".join(era_lines))
 
             # Month names

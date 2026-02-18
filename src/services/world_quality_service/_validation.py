@@ -71,7 +71,6 @@ NO quotes, NO formatting, NO preambles — just the summary text in the "summary
             format=MiniDescription.model_json_schema(),
             options={
                 "temperature": svc.settings.world_quality_judge_temp,
-                "num_predict": svc.settings.llm_tokens_mini_description,
             },
             stream=True,
         )
