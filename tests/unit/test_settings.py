@@ -2035,7 +2035,7 @@ class TestMissingValidationCoverage:
         assert settings.world_quality_thresholds["character"] == 7.5
         assert settings.world_quality_thresholds["item"] == 8.0  # Items have higher default
         assert settings.world_quality_thresholds["calendar"] == 7.5
-        assert len(settings.world_quality_thresholds) == 9
+        assert len(settings.world_quality_thresholds) == 10
 
     def test_validate_raises_on_per_entity_threshold_out_of_range(self):
         """Should raise ValueError for per-entity threshold out of 0-10 range."""
@@ -2046,6 +2046,7 @@ class TestMissingValidationCoverage:
             "faction": 7.5,
             "item": 7.5,
             "concept": 7.5,
+            "event": 7.5,
             "calendar": 7.5,
             "relationship": 7.5,
             "plot": 7.5,
@@ -2065,6 +2066,7 @@ class TestMissingValidationCoverage:
             "faction": 7.5,
             "item": -1.0,
             "concept": 7.5,
+            "event": 7.5,
             "calendar": 7.5,
             "relationship": 7.5,
             "plot": 7.5,
@@ -2083,6 +2085,7 @@ class TestMissingValidationCoverage:
             "faction": 7.5,
             "item": 8.0,
             "concept": 7.5,
+            "event": 7.5,
             "calendar": 7.5,
             "relationship": 7.5,
             "plot": 7.5,

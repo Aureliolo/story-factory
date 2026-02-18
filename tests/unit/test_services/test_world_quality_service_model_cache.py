@@ -28,6 +28,7 @@ def settings():
             "faction": 7.0,
             "item": 7.0,
             "concept": 7.0,
+            "event": 7.0,
             "relationship": 7.0,
             "plot": 7.0,
             "chapter": 7.0,

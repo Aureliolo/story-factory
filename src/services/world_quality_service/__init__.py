@@ -28,6 +28,7 @@ from src.memory.world_quality import (
     ChapterQualityScores,
     CharacterQualityScores,
     ConceptQualityScores,
+    EventQualityScores,
     FactionQualityScores,
     ItemQualityScores,
     JudgeConsistencyConfig,
@@ -43,6 +44,7 @@ from src.services.world_quality_service import (
     _chapter_quality,
     _character,
     _concept,
+    _event,
     _faction,
     _item,
     _location,
@@ -60,6 +62,9 @@ from src.services.world_quality_service._batch import (
 )
 from src.services.world_quality_service._batch import (
     generate_concepts_with_quality as _generate_concepts_with_quality,
+)
+from src.services.world_quality_service._batch import (
+    generate_events_with_quality as _generate_events_with_quality,
 )
 from src.services.world_quality_service._batch import (
     generate_factions_with_quality as _generate_factions_with_quality,
@@ -93,6 +98,9 @@ from src.services.world_quality_service._character import (
 )
 from src.services.world_quality_service._concept import (
     generate_concept_with_quality as _generate_concept_with_quality,
+)
+from src.services.world_quality_service._event import (
+    generate_event_with_quality as _generate_event_with_quality,
 )
 from src.services.world_quality_service._faction import (
     FACTION_IDEOLOGY_HINTS,
@@ -200,6 +208,7 @@ class WorldQualityService:
         "location": "writer",  # Atmospheric/descriptive writing
         "item": "writer",  # Creative descriptions
         "concept": "architect",  # Abstract thinking
+        "event": "architect",  # Historical/plot event reasoning
         "calendar": "architect",  # Worldbuilding/structural reasoning
         "relationship": "editor",  # Understanding dynamics
         "plot": "architect",  # Plot structure reasoning
@@ -212,6 +221,7 @@ class WorldQualityService:
         "location": "judge",  # Location quality evaluation
         "item": "judge",  # Item quality evaluation
         "concept": "judge",  # Concept quality evaluation
+        "event": "judge",  # Event quality evaluation
         "calendar": "judge",  # Calendar quality evaluation
         "relationship": "judge",  # Relationship quality evaluation
         "plot": "judge",  # Plot quality evaluation
@@ -581,6 +591,18 @@ class WorldQualityService:
         """Generate a concept using the creator-judge-refine quality loop."""
         return _generate_concept_with_quality(self, story_state, existing_names)
 
+    # -- Event --
+    def generate_event_with_quality(
+        self,
+        story_state: StoryState,
+        existing_descriptions: list[str],
+        entity_context: str,
+    ) -> tuple[dict[str, Any], EventQualityScores, int]:
+        """Generate an event using the creator-judge-refine quality loop."""
+        return _generate_event_with_quality(
+            self, story_state, existing_descriptions, entity_context
+        )
+
     # -- Calendar --
     def generate_calendar_with_quality(
         self,
@@ -658,6 +680,26 @@ class WorldQualityService:
         """Generate multiple concepts with quality refinement."""
         return _generate_concepts_with_quality(
             self, story_state, existing_names, count, cancel_check, progress_callback
+        )
+
+    def generate_events_with_quality(
+        self,
+        story_state: StoryState,
+        existing_descriptions: list[str],
+        entity_context: str,
+        count: int = 5,
+        cancel_check: Callable[[], bool] | None = None,
+        progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
+    ) -> list[tuple[dict[str, Any], EventQualityScores]]:
+        """Generate multiple events with quality refinement."""
+        return _generate_events_with_quality(
+            self,
+            story_state,
+            existing_descriptions,
+            entity_context,
+            count,
+            cancel_check,
+            progress_callback,
         )
 
     def generate_characters_with_quality(
@@ -810,6 +852,21 @@ class WorldQualityService:
     def _refine_concept(self, concept, scores, story_state, temperature):
         """Refine a concept based on quality scores."""
         return _concept._refine_concept(self, concept, scores, story_state, temperature)
+
+    # -- Private: Event helpers --
+    def _create_event(self, story_state, existing_descriptions, entity_context, temperature):
+        """Create an event via LLM at the given temperature."""
+        return _event._create_event(
+            self, story_state, existing_descriptions, entity_context, temperature
+        )
+
+    def _judge_event_quality(self, event, story_state, temperature):
+        """Judge event quality and return scores."""
+        return _event._judge_event_quality(self, event, story_state, temperature)
+
+    def _refine_event(self, event, scores, story_state, temperature):
+        """Refine an event based on quality scores."""
+        return _event._refine_event(self, event, scores, story_state, temperature)
 
     # -- Private: Calendar helpers --
     def _create_calendar(self, story_state, temperature):

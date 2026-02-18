@@ -106,6 +106,12 @@ def build_generation_toolbar(page) -> None:
             ).props("outline dense").classes("text-pink-600").tooltip("Add thematic concepts")
 
             ui.button(
+                "Events",
+                on_click=lambda: page._show_generate_dialog("events"),
+                icon="event",
+            ).props("outline dense").classes("text-orange-600").tooltip("Add world events")
+
+            ui.button(
                 "Relationships",
                 on_click=lambda: page._generate_more("relationships"),
                 icon="link",

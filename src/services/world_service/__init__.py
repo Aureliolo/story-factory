@@ -59,6 +59,7 @@ class WorldBuildOptions:
     generate_factions: bool = True
     generate_items: bool = True
     generate_concepts: bool = True
+    generate_events: bool = True
     generate_relationships: bool = True
     cancellation_event: threading.Event | None = field(default=None, repr=False)
     world_template: WorldTemplate | None = field(default=None, repr=False)
@@ -82,6 +83,7 @@ class WorldBuildOptions:
             generate_factions=True,
             generate_items=True,
             generate_concepts=True,
+            generate_events=True,
             generate_relationships=True,
             cancellation_event=cancellation_event,
             world_template=world_template,
@@ -102,6 +104,7 @@ class WorldBuildOptions:
             generate_factions=True,
             generate_items=True,
             generate_concepts=True,
+            generate_events=True,
             generate_relationships=True,
             cancellation_event=cancellation_event,
             world_template=world_template,
@@ -601,6 +604,22 @@ class WorldService:
     ) -> int:
         """Generate and add relationships between entities."""
         return _build._generate_relationships(
+            self,
+            state,
+            world_db,
+            services,
+            cancel_check=cancel_check,
+        )
+
+    def _generate_events(
+        self,
+        state: StoryState,
+        world_db: WorldDatabase,
+        services: ServiceContainer,
+        cancel_check: Callable[[], bool] | None = None,
+    ) -> int:
+        """Generate and add world events to database."""
+        return _build._generate_events(
             self,
             state,
             world_db,

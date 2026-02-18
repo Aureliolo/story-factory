@@ -6,6 +6,7 @@ from src.memory.world_quality import (
     ChapterQualityScores,
     CharacterQualityScores,
     ConceptQualityScores,
+    EventQualityScores,
     FactionQualityScores,
     ItemQualityScores,
     JudgeConsistencyConfig,
@@ -1284,3 +1285,138 @@ class TestConceptTemporalPlausibility:
         )
         weak = scores.weak_dimensions(threshold=7.0)
         assert "temporal_plausibility" not in weak
+
+
+class TestEventQualityScores:
+    """Tests for EventQualityScores model."""
+
+    def test_average_calculation(self):
+        """Test average score calculation for event quality (5 dimensions / 5.0)."""
+        scores = EventQualityScores(
+            significance=8.0,
+            temporal_plausibility=7.0,
+            causal_coherence=6.0,
+            narrative_potential=9.0,
+            entity_integration=5.0,
+        )
+        # (8 + 7 + 6 + 9 + 5) / 5 = 35 / 5 = 7.0
+        assert scores.average == 7.0
+
+    def test_average_uniform_scores(self):
+        """Test average with all identical scores."""
+        scores = EventQualityScores(
+            significance=6.0,
+            temporal_plausibility=6.0,
+            causal_coherence=6.0,
+            narrative_potential=6.0,
+            entity_integration=6.0,
+        )
+        assert scores.average == 6.0
+
+    def test_to_dict(self):
+        """Test conversion to dictionary includes all fields."""
+        scores = EventQualityScores(
+            significance=8.0,
+            temporal_plausibility=7.0,
+            causal_coherence=6.0,
+            narrative_potential=9.0,
+            entity_integration=5.0,
+            feedback="Good event",
+        )
+        result = scores.to_dict()
+        assert result["significance"] == 8.0
+        assert result["temporal_plausibility"] == 7.0
+        assert result["causal_coherence"] == 6.0
+        assert result["narrative_potential"] == 9.0
+        assert result["entity_integration"] == 5.0
+        assert result["average"] == 7.0
+        assert result["feedback"] == "Good event"
+
+    def test_to_dict_default_feedback(self):
+        """Test to_dict with default empty feedback."""
+        scores = EventQualityScores(
+            significance=7.0,
+            temporal_plausibility=7.0,
+            causal_coherence=7.0,
+            narrative_potential=7.0,
+            entity_integration=7.0,
+        )
+        result = scores.to_dict()
+        assert result["feedback"] == ""
+
+    def test_weak_dimensions_identifies_low_scores(self):
+        """Test weak_dimensions identifies dimensions below threshold."""
+        scores = EventQualityScores(
+            significance=8.0,
+            temporal_plausibility=5.0,
+            causal_coherence=4.0,
+            narrative_potential=8.0,
+            entity_integration=8.0,
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "temporal_plausibility" in weak
+        assert "causal_coherence" in weak
+        assert "significance" not in weak
+        assert "narrative_potential" not in weak
+        assert "entity_integration" not in weak
+
+    def test_weak_dimensions_all_below(self):
+        """Test weak_dimensions when all dimensions are below threshold."""
+        scores = EventQualityScores(
+            significance=5.0,
+            temporal_plausibility=5.0,
+            causal_coherence=5.0,
+            narrative_potential=5.0,
+            entity_integration=5.0,
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert len(weak) == 5
+        assert "significance" in weak
+        assert "temporal_plausibility" in weak
+        assert "causal_coherence" in weak
+        assert "narrative_potential" in weak
+        assert "entity_integration" in weak
+
+    def test_weak_dimensions_returns_empty_when_all_above(self):
+        """Test weak_dimensions returns empty list when all scores high."""
+        scores = EventQualityScores(
+            significance=8.0,
+            temporal_plausibility=8.0,
+            causal_coherence=8.0,
+            narrative_potential=8.0,
+            entity_integration=8.0,
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert weak == []
+
+    def test_score_validation_bounds(self):
+        """Test that scores are bounded 0-10."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            EventQualityScores(
+                significance=11.0,
+                temporal_plausibility=5.0,
+                causal_coherence=5.0,
+                narrative_potential=5.0,
+                entity_integration=5.0,
+            )
+
+        with pytest.raises(ValidationError):
+            EventQualityScores(
+                significance=5.0,
+                temporal_plausibility=-1.0,
+                causal_coherence=5.0,
+                narrative_potential=5.0,
+                entity_integration=5.0,
+            )
+
+    def test_fields_are_required(self):
+        """Test that all score fields are required (no defaults)."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            EventQualityScores(
+                significance=8.0,
+                # Missing other required fields
+            )  # type: ignore[call-arg]

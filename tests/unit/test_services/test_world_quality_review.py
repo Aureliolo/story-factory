@@ -50,6 +50,7 @@ def settings():
             "faction": 8.0,
             "item": 8.0,
             "concept": 8.0,
+            "event": 8.0,
             "relationship": 8.0,
             "plot": 8.0,
             "chapter": 8.0,

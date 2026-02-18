@@ -23,6 +23,7 @@ from src.ui.pages.world._gen_dialogs import (
 )
 from src.ui.pages.world._gen_entity_types import (
     _generate_concepts,
+    _generate_events,
     _generate_factions,
     _generate_items,
     _generate_relationships,
@@ -144,6 +145,17 @@ async def generate_more(
             )
         elif entity_type == "concepts":
             await _generate_concepts(
+                page,
+                count,
+                use_quality,
+                all_existing_names,
+                should_cancel,
+                update_progress,
+                progress_label,
+                notification,
+            )
+        elif entity_type == "events":
+            await _generate_events(
                 page,
                 count,
                 use_quality,

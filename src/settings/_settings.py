@@ -33,6 +33,7 @@ PER_ENTITY_QUALITY_DEFAULTS: dict[str, float] = {
     "item": 8.0,
     "concept": 7.5,
     "calendar": 7.5,
+    "event": 7.5,
     "relationship": 7.5,
     "plot": 7.5,
     "chapter": 7.5,
@@ -360,6 +361,8 @@ class Settings:
     world_gen_items_max: int = 10
     world_gen_concepts_min: int = 1
     world_gen_concepts_max: int = 6
+    world_gen_events_min: int = 3
+    world_gen_events_max: int = 8
     world_gen_relationships_min: int = 8
     world_gen_relationships_max: int = 25
 

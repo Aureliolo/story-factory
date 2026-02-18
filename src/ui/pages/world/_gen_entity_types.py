@@ -377,6 +377,164 @@ async def _generate_concepts(
         return
 
 
+async def _generate_events(
+    page,
+    count,
+    use_quality,
+    all_existing_names,
+    should_cancel,
+    update_progress,
+    progress_label,
+    notification,
+) -> None:
+    """Generate events (quality only).
+
+    Args:
+        page: WorldPage instance.
+        count: Number to generate.
+        use_quality: Whether quality refinement is enabled.
+        all_existing_names: Existing entity names to avoid duplicates.
+        should_cancel: Cancel check callable.
+        update_progress: Progress update callback.
+        progress_label: Progress label widget.
+        notification: Notification widget.
+    """
+    from nicegui import run
+
+    if not use_quality:
+        if notification:
+            notification.dismiss()
+        ui.notify("Enable Quality Refinement to generate events", type="warning")
+        return
+
+    # Build entity context (same logic as build pipeline)
+    all_entities = page.state.world_db.list_entities()
+    all_relationships = page.state.world_db.list_relationships()
+    entity_by_id = {e.id: e for e in all_entities}
+
+    context_parts: list[str] = []
+    if all_entities:
+        entity_lines: list[str] = []
+        for e in all_entities:
+            line = f"  - {e.name} ({e.type})"
+            attrs = e.attributes or {}
+            for temporal_key in ("birth_year", "founded_year", "creation_year", "origin_year"):
+                val = attrs.get(temporal_key)
+                if val is not None:
+                    line += f", {temporal_key}={val}"
+            for temporal_key in ("death_year", "dissolved_year", "destruction_year"):
+                val = attrs.get(temporal_key)
+                if val is not None:
+                    line += f", {temporal_key}={val}"
+            entity_lines.append(line)
+        context_parts.append("ENTITIES:\n" + "\n".join(entity_lines))
+
+    if all_relationships:
+        rel_lines: list[str] = []
+        for r in all_relationships:
+            source = entity_by_id.get(r.source_id)
+            target = entity_by_id.get(r.target_id)
+            if source and target:
+                rel_lines.append(f"  - {source.name} -[{r.relation_type}]-> {target.name}")
+        if rel_lines:
+            context_parts.append("RELATIONSHIPS:\n" + "\n".join(rel_lines))
+
+    entity_context = "\n\n".join(context_parts) if context_parts else "No entities yet."
+
+    # Get existing event descriptions for dedup
+    existing_events = page.state.world_db.list_events()
+    existing_descriptions = [e.description for e in existing_events]
+
+    logger.info("Calling world quality service to generate events...")
+    event_results = await run.io_bound(
+        page.services.world_quality.generate_events_with_quality,
+        page.state.project,
+        existing_descriptions,
+        entity_context,
+        count,
+        should_cancel,
+        update_progress,
+    )
+    logger.info("Generated %d events with quality refinement", len(event_results))
+
+    notify_partial_failure(len(event_results), count, "events", should_cancel)
+    if len(event_results) == 0:
+        if page._generation_dialog:
+            page._generation_dialog.close()
+        ui.notify("Failed to generate any events", type="negative")
+        return
+
+    if page._generation_dialog:
+        page._generation_dialog.close()
+
+    def add_selected_events(selected: list[tuple[Any, Any]]) -> None:
+        """Add selected events to the world database."""
+        if not selected:
+            ui.notify("No events selected", type="info")
+            return
+        if not page.state.world_db or not page.state.project:
+            ui.notify("No project loaded", type="negative")
+            return
+
+        from src.services.world_service._name_matching import _find_entity_by_name
+
+        added = 0
+        for event, _scores in selected:
+            description = event.get("description", "")
+            if not description:
+                continue
+
+            # Build timestamp_in_story from temporal fields
+            timestamp_parts: list[str] = []
+            era_name = event.get("era_name", "")
+            year = event.get("year")
+            month = event.get("month")
+            if year is not None:
+                timestamp_parts.append(f"Year {year}")
+            if month is not None:
+                timestamp_parts.append(f"Month {month}")
+            if era_name:
+                timestamp_parts.append(era_name)
+            timestamp_in_story = ", ".join(timestamp_parts)
+
+            # Resolve participant names to entity IDs
+            participants: list[tuple[str, str]] = []
+            for p in event.get("participants", []):
+                if isinstance(p, dict):
+                    entity_name = p.get("entity_name", "")
+                    role = p.get("role", "affected")
+                else:
+                    entity_name = str(p)
+                    role = "affected"
+                if entity_name:
+                    matched = _find_entity_by_name(all_entities, entity_name)
+                    if matched:
+                        participants.append((matched.id, role))
+
+            consequences = event.get("consequences", [])
+
+            page.state.world_db.add_event(
+                description=description,
+                participants=participants if participants else None,
+                timestamp_in_story=timestamp_in_story,
+                consequences=consequences if consequences else None,
+            )
+            added += 1
+
+        page.state.world_db.invalidate_graph_cache()
+        page._refresh_entity_list()
+        if page._graph:
+            page._graph.refresh()
+        page.services.project.save_project(page.state.project)
+        avg_quality = sum(s.average for _, s in selected) / len(selected) if selected else 0
+        ui.notify(
+            f"Added {added} events (avg quality: {avg_quality:.1f})",
+            type="positive",
+        )
+
+    show_entity_preview_dialog(page, "event", event_results, add_selected_events)
+
+
 async def _generate_relationships(
     page,
     count,

@@ -27,13 +27,14 @@ from src.utils.exceptions import WorldGenerationError
 
 
 def _all_thresholds(value: float) -> dict[str, float]:
-    """Return a complete per-entity quality_thresholds dict with all 8 types set to *value*."""
+    """Return a complete per-entity quality_thresholds dict with all types set to *value*."""
     return {
         "character": value,
         "location": value,
         "faction": value,
         "item": value,
         "concept": value,
+        "event": value,
         "relationship": value,
         "plot": value,
         "chapter": value,

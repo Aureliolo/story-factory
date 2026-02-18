@@ -14,7 +14,8 @@ from src.services.world_service._lifecycle_helpers import (
     build_entity_lifecycle,
 )
 from src.services.world_service._name_matching import _find_entity_by_name
-from src.utils.exceptions import GenerationCancelledError, WorldGenerationError
+from src.services.world_service._orphan_recovery import _recover_orphans
+from src.utils.exceptions import GenerationCancelledError
 from src.utils.validation import validate_not_none, validate_type
 
 if TYPE_CHECKING:
@@ -74,6 +75,7 @@ def build_world(
         "factions": 0,
         "items": 0,
         "concepts": 0,
+        "events": 0,
         "relationships": 0,
         "implicit_relationships": 0,
     }
@@ -348,6 +350,16 @@ def _build_world_entities(
             counts["relationships"] += orphan_count
             logger.info(f"Orphan recovery added {orphan_count} relationships")
 
+    # Step 8b: Generate world events if requested
+    if options.generate_events:
+        check_cancelled()
+        report_progress("Generating world events...", "event")
+        event_count = _generate_events(
+            svc, state, world_db, services, cancel_check=options.is_cancelled
+        )
+        counts["events"] = event_count
+        logger.info("Generated %d world events", event_count)
+
     # Step 9: Batch-embed all world content for RAG context retrieval
     check_cancelled()
     report_progress("Embedding world content for RAG...")
@@ -380,6 +392,8 @@ def _calculate_total_steps(options: WorldBuildOptions, *, generate_calendar: boo
     if options.generate_relationships:
         steps += 1
         # +1 for orphan recovery step after relationship generation
+        steps += 1
+    if options.generate_events:
         steps += 1
     return steps
 
@@ -792,162 +806,140 @@ def _generate_relationships(
     return added_count
 
 
-MAX_RETRIES_PER_ORPHAN = 2  # Up to 3 total attempts per orphan (1 + 2 retries)
-
-
-def _recover_orphans(
+def _generate_events(
     svc: WorldService,
     state: StoryState,
     world_db: WorldDatabase,
     services: ServiceContainer,
     cancel_check: Callable[[], bool] | None = None,
 ) -> int:
-    """Connect orphan entities by generating relationships (up to MAX_RETRIES_PER_ORPHAN+1 attempts each)."""
-    orphans = world_db.find_orphans()
-    if not orphans:
-        logger.debug("No orphan entities found, skipping recovery")
-        return 0
+    """Generate and add world events to the database using quality refinement.
 
-    logger.info(
-        "Orphan recovery: found %d orphan entities: %s",
-        len(orphans),
-        [o.name for o in orphans],
-    )
+    Collects all entities, relationships, and lifecycle data to build context,
+    then generates events that reference existing entities as participants.
 
+    Args:
+        svc: WorldService instance.
+        state: Current story state with brief.
+        world_db: World database to read entities from and persist events to.
+        services: Service container providing the world quality service.
+        cancel_check: Optional callable that returns True to stop generation.
+
+    Returns:
+        Number of events successfully added to the world database.
+    """
+    # Build entity context for event generation prompts
     all_entities = world_db.list_entities()
-    entity_by_id = {e.id: e.name for e in all_entities}
+    all_relationships = world_db.list_relationships()
+    entity_by_id = {e.id: e for e in all_entities}
 
-    # Build existing relationships list
-    existing_rels: list[tuple[str, str, str]] = []
-    for r in world_db.list_relationships():
-        source_name = entity_by_id.get(r.source_id)
-        target_name = entity_by_id.get(r.target_id)
-        if source_name and target_name:
-            existing_rels.append((source_name, target_name, r.relation_type))
+    context_parts: list[str] = []
 
-    # Track orphan names still needing connections (mutable set for fast lookup)
-    orphan_names = {o.name.lower() for o in orphans}
+    # Entities with types and lifecycle data
+    if all_entities:
+        entity_lines: list[str] = []
+        for e in all_entities:
+            line = f"  - {e.name} ({e.type})"
+            attrs = e.attributes or {}
+            # Include lifecycle temporal data if present
+            for temporal_key in ("birth_year", "founded_year", "creation_year", "origin_year"):
+                val = attrs.get(temporal_key)
+                if val is not None:
+                    line += f", {temporal_key}={val}"
+            for temporal_key in ("death_year", "dissolved_year", "destruction_year"):
+                val = attrs.get(temporal_key)
+                if val is not None:
+                    line += f", {temporal_key}={val}"
+            entity_lines.append(line)
+        context_parts.append("ENTITIES:\n" + "\n".join(entity_lines))
+
+    # Relationships
+    if all_relationships:
+        rel_lines: list[str] = []
+        for r in all_relationships:
+            source = entity_by_id.get(r.source_id)
+            target = entity_by_id.get(r.target_id)
+            if source and target:
+                rel_lines.append(f"  - {source.name} -[{r.relation_type}]-> {target.name}")
+        if rel_lines:
+            context_parts.append("RELATIONSHIPS:\n" + "\n".join(rel_lines))
+
+    entity_context = "\n\n".join(context_parts) if context_parts else "No entities yet."
+
+    # Get existing event descriptions for dedup
+    existing_events = world_db.list_events()
+    existing_descriptions = [e.description for e in existing_events]
+
+    # Determine event count
+    event_min = state.target_events_min or svc.settings.world_gen_events_min
+    event_max = state.target_events_max or svc.settings.world_gen_events_max
+    event_count = random.randint(event_min, event_max)
+
+    event_results = services.world_quality.generate_events_with_quality(
+        state,
+        existing_descriptions,
+        entity_context,
+        event_count,
+        cancel_check=cancel_check,
+    )
 
     added_count = 0
-
-    for orphan in orphans:
+    for event, event_scores in event_results:
         if cancel_check and cancel_check():
-            logger.info("Orphan recovery cancelled")
+            logger.info("Event processing cancelled after %d events", added_count)
             break
 
-        # Skip if this orphan was already connected by a previous orphan's relationship
-        if orphan.name.lower() not in orphan_names:
-            logger.debug(
-                "Orphan '%s' already connected by a previous relationship, skipping",
-                orphan.name,
-            )
+        description = event.get("description", "")
+        if not description:
+            logger.warning("Skipping event with empty description: %s", event)
             continue
 
-        # Build entity list with orphan first (primacy bias) + all potential partners
-        partner_names = [e.name for e in all_entities if e.id != orphan.id]
-        if not partner_names:
-            logger.warning("Orphan recovery: only one entity '%s' available; skipping", orphan.name)
-            continue
-        constrained_names = [orphan.name, *partner_names]
+        # Build timestamp_in_story from temporal fields
+        timestamp_parts: list[str] = []
+        era_name = event.get("era_name", "")
+        year = event.get("year")
+        month = event.get("month")
+        if year is not None:
+            timestamp_parts.append(f"Year {year}")
+        if month is not None:
+            timestamp_parts.append(f"Month {month}")
+        if era_name:
+            timestamp_parts.append(era_name)
+        timestamp_in_story = ", ".join(timestamp_parts)
 
-        for attempt in range(MAX_RETRIES_PER_ORPHAN + 1):
-            if cancel_check and cancel_check():
-                logger.info("Orphan recovery cancelled during retries for '%s'", orphan.name)
-                break
-
-            logger.debug(
-                "Orphan recovery: orphan '%s' attempt %d/%d",
-                orphan.name,
-                attempt + 1,
-                MAX_RETRIES_PER_ORPHAN + 1,
-            )
-
-            try:
-                rel, scores, _iterations = (
-                    services.world_quality.generate_relationship_with_quality(
-                        state,
-                        constrained_names,
-                        existing_rels,
-                        required_entity=orphan.name,
-                    )
-                )
-
-                if not rel or not rel.get("source") or not rel.get("target"):
-                    logger.warning(
-                        "Orphan recovery: empty relationship for '%s' (attempt %d)",
-                        orphan.name,
-                        attempt + 1,
-                    )
-                    continue
-
-                # Find entities and add to database
-                source_entity = _find_entity_by_name(all_entities, rel["source"])
-                target_entity = _find_entity_by_name(all_entities, rel["target"])
-
-                if source_entity and target_entity:
-                    # Safety check: verify at least one endpoint is an orphan
-                    # (should always pass due to required_entity constraint in quality loop)
-                    source_is_orphan = source_entity.name.lower() in orphan_names
-                    target_is_orphan = target_entity.name.lower() in orphan_names
-                    if not source_is_orphan and not target_is_orphan:
-                        logger.warning(
-                            "Orphan recovery: skipping relationship %s -> %s"
-                            " (neither is an orphan)",
-                            rel["source"],
-                            rel["target"],
-                        )
-                        continue
-
-                    relation_type = rel.get("relation_type")
-                    if not relation_type:
-                        logger.debug(
-                            "Orphan recovery: no relation_type in generated relationship,"
-                            " defaulting to 'related_to'"
-                        )
-                        relation_type = "related_to"
-                    world_db.add_relationship(
-                        source_id=source_entity.id,
-                        target_id=target_entity.id,
-                        relation_type=relation_type,
-                        description=rel.get("description", ""),
-                    )
-                    existing_rels.append((source_entity.name, target_entity.name, relation_type))
-                    added_count += 1
-                    logger.info(
-                        "Orphan recovery: added %s -> %s (%s), quality: %.1f",
-                        rel["source"],
-                        rel["target"],
-                        relation_type,
-                        scores.average,
-                    )
-
-                    # Remove connected orphan(s) from tracking set
-                    if source_is_orphan:
-                        orphan_names.discard(source_entity.name.lower())
-                    if target_is_orphan:
-                        orphan_names.discard(target_entity.name.lower())
-                    break  # Success — move to the next orphan
+        # Resolve participant entity names to IDs
+        participants: list[tuple[str, str]] = []
+        for p in event.get("participants", []):
+            if isinstance(p, dict):
+                entity_name = p.get("entity_name", "")
+                role = p.get("role", "affected")
+            else:
+                entity_name = str(p)
+                role = "affected"
+            if entity_name:
+                matched = _find_entity_by_name(all_entities, entity_name)
+                if matched:
+                    participants.append((matched.id, role))
                 else:
-                    logger.warning(
-                        "Orphan recovery: could not resolve entities for %s -> %s",
-                        rel.get("source"),
-                        rel.get("target"),
+                    logger.debug(
+                        "Could not resolve event participant '%s' to an entity",
+                        entity_name,
                     )
 
-            except GenerationCancelledError:
-                raise
-            except WorldGenerationError as e:
-                logger.warning(
-                    "Orphan recovery: attempt %d for '%s' failed: %s",
-                    attempt + 1,
-                    orphan.name,
-                    e,
-                )
-                continue
+        consequences = event.get("consequences", [])
 
-    logger.info(
-        "Orphan recovery complete: generated %d relationships for %d orphan entities",
-        added_count,
-        len(orphans),
-    )
+        world_db.add_event(
+            description=description,
+            participants=participants if participants else None,
+            timestamp_in_story=timestamp_in_story,
+            consequences=consequences if consequences else None,
+        )
+        added_count += 1
+        logger.debug(
+            "Added event '%s' (quality: %.1f, participants: %d)",
+            description[:60],
+            event_scores.average,
+            len(participants),
+        )
+
     return added_count

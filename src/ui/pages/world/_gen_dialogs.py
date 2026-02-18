@@ -92,6 +92,7 @@ def get_random_count(page, entity_type: str) -> int:
         "factions": (settings.world_gen_factions_min, settings.world_gen_factions_max),
         "items": (settings.world_gen_items_min, settings.world_gen_items_max),
         "concepts": (settings.world_gen_concepts_min, settings.world_gen_concepts_max),
+        "events": (settings.world_gen_events_min, settings.world_gen_events_max),
         "relationships": (
             settings.world_gen_relationships_min,
             settings.world_gen_relationships_max,
@@ -118,6 +119,7 @@ def show_generate_dialog(page, entity_type: str) -> None:
         "factions": (settings.world_gen_factions_min, settings.world_gen_factions_max),
         "items": (settings.world_gen_items_min, settings.world_gen_items_max),
         "concepts": (settings.world_gen_concepts_min, settings.world_gen_concepts_max),
+        "events": (settings.world_gen_events_min, settings.world_gen_events_max),
         "relationships": (
             settings.world_gen_relationships_min,
             settings.world_gen_relationships_max,
@@ -133,6 +135,7 @@ def show_generate_dialog(page, entity_type: str) -> None:
         "factions": "Factions",
         "items": "Items",
         "concepts": "Concepts",
+        "events": "Events",
         "relationships": "Relationships",
     }
     type_name = type_names.get(entity_type, entity_type.title())
@@ -361,6 +364,23 @@ def show_entity_preview_dialog(
                     )
                     role = getattr(entity_data, "role", "")
                     extra = f" ({role})" if role else ""
+                elif entity_type == "event":
+                    # Events use description instead of name
+                    desc_full = (
+                        entity_data.get("description", "Unknown")
+                        if isinstance(entity_data, dict)
+                        else str(entity_data)
+                    )
+                    name = desc_full[:80] + ("..." if len(desc_full) > 80 else "")
+                    desc = desc_full[:150] + ("..." if len(desc_full) > 150 else "")
+                    year = entity_data.get("year") if isinstance(entity_data, dict) else None
+                    era = entity_data.get("era_name", "") if isinstance(entity_data, dict) else ""
+                    extra_parts: list[str] = []
+                    if year is not None:
+                        extra_parts.append(f"Year {year}")
+                    if era:
+                        extra_parts.append(era)
+                    extra = f" ({', '.join(extra_parts)})" if extra_parts else ""
                 elif entity_type == "relationship":
                     # Relationships show source -> relation_type -> target
                     source = (
