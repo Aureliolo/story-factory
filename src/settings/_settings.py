@@ -5,6 +5,7 @@ Settings are stored in settings.json and can be modified via the web UI.
 
 import json
 import logging
+import shutil
 from dataclasses import asdict, dataclass, field, fields
 from typing import Any, ClassVar
 
@@ -74,7 +75,7 @@ def _merge_with_defaults(data: dict[str, Any], settings_cls: type) -> bool:
     # Merge structured dict fields (fixed sub-keys)
     for field_name in _STRUCTURED_DICT_FIELDS:
         default_sub = default_dict[field_name]
-        current_sub = data.get(field_name)
+        current_sub = data[field_name]
         if not isinstance(current_sub, dict):
             logger.warning(
                 "Resetting %s to default (expected dict, got %s)",
@@ -98,7 +99,7 @@ def _merge_with_defaults(data: dict[str, Any], settings_cls: type) -> bool:
     # Merge nested dict fields (dict of dicts, fixed keys at both levels)
     for field_name in _NESTED_DICT_FIELDS:
         default_outer = default_dict[field_name]
-        current_outer = data.get(field_name)
+        current_outer = data[field_name]
         if not isinstance(current_outer, dict):
             logger.warning(
                 "Resetting %s to default (expected dict, got %s)",
@@ -118,7 +119,16 @@ def _merge_with_defaults(data: dict[str, Any], settings_cls: type) -> bool:
                 logger.info("Adding new %s[%s]", field_name, outer_key)
                 current_outer[outer_key] = default_inner
                 changed = True
-            elif isinstance(default_inner, dict) and isinstance(current_outer[outer_key], dict):
+            elif isinstance(default_inner, dict) and not isinstance(current_outer[outer_key], dict):
+                logger.warning(
+                    "Resetting %s[%s] to default (expected dict, got %s)",
+                    field_name,
+                    outer_key,
+                    type(current_outer[outer_key]).__name__,
+                )
+                current_outer[outer_key] = default_inner
+                changed = True
+            elif isinstance(default_inner, dict):
                 inner = current_outer[outer_key]
                 for inner_key in list(inner):
                     if inner_key not in default_inner:
@@ -496,6 +506,12 @@ class Settings:
                     data = json.load(f)
             except json.JSONDecodeError as e:
                 logger.error("Corrupted settings file (invalid JSON): %s", e)
+                backup_path = SETTINGS_FILE.with_suffix(".json.corrupt")
+                try:
+                    shutil.copy(SETTINGS_FILE, backup_path)
+                    logger.info("Backed up corrupted settings to %s", backup_path)
+                except OSError as copy_err:
+                    logger.warning("Failed to backup corrupted settings: %s", copy_err)
                 data = {}
         else:
             data = {}
@@ -504,7 +520,10 @@ class Settings:
         changed = _merge_with_defaults(data, cls)
 
         # Construct settings from merged data
-        settings = cls(**data)
+        try:
+            settings = cls(**data)
+        except TypeError as e:
+            raise ValueError(f"A setting has an invalid type: {e}") from e
 
         # Validate value ranges (may auto-migrate some values)
         changed = settings.validate() or changed

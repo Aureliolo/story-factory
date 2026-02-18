@@ -571,6 +571,57 @@ class TestSettingsSaveLoad:
         # Should return defaults
         assert settings.ollama_url == "http://localhost:11434"
 
+    def test_load_backs_up_corrupted_json(self, tmp_path, monkeypatch):
+        """Test load creates a .corrupt backup when JSON is invalid."""
+        settings_file = tmp_path / "settings.json"
+        backup_file = tmp_path / "settings.json.corrupt"
+        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+        Settings.clear_cache()
+
+        corrupted_content = "not valid json {{{"
+        settings_file.write_text(corrupted_content)
+
+        Settings.load()
+
+        assert backup_file.exists()
+        assert backup_file.read_text() == corrupted_content
+
+    def test_load_handles_backup_failure_gracefully(self, tmp_path, monkeypatch):
+        """Test load proceeds even if backup copy fails."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+        Settings.clear_cache()
+
+        settings_file.write_text("not valid json {{{")
+
+        with patch("src.settings._settings.shutil.copy", side_effect=OSError("denied")):
+            settings = Settings.load()
+
+        # Should still return defaults despite backup failure
+        assert settings.ollama_url == "http://localhost:11434"
+
+    def test_load_wraps_type_error_as_value_error(self, tmp_path, monkeypatch):
+        """Test load wraps TypeError from constructor as ValueError."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+        Settings.clear_cache()
+
+        # Patch _merge_with_defaults to inject a bad type that bypasses merge
+        # but causes TypeError in the dataclass constructor
+        original_merge = __import__(
+            "src.settings._settings", fromlist=["_merge_with_defaults"]
+        )._merge_with_defaults
+
+        def bad_merge(data, cls):
+            result = original_merge(data, cls)
+            # Inject a value that causes TypeError when passed to dataclass
+            data["unexpected_kwarg_xyz"] = "boom"
+            return result
+
+        with patch("src.settings._settings._merge_with_defaults", side_effect=bad_merge):
+            with pytest.raises(ValueError, match="A setting has an invalid type"):
+                Settings.load()
+
     def test_load_handles_unknown_fields(self, tmp_path, monkeypatch):
         """Test load filters out unknown fields and preserves known ones."""
         settings_file = tmp_path / "settings.json"
@@ -859,6 +910,21 @@ class TestMergeWithDefaults:
         assert changed is True
         assert isinstance(data["relationship_minimums"], dict)
         assert "character" in data["relationship_minimums"]
+
+    def test_handles_wrong_type_for_nested_dict_inner_value(self):
+        """Inner values of wrong type in nested dicts are reset to defaults."""
+        from dataclasses import asdict
+
+        from src.settings._settings import _merge_with_defaults
+
+        data = asdict(Settings())
+        data["relationship_minimums"]["character"] = "not_a_dict"
+
+        changed = _merge_with_defaults(data, Settings)
+
+        assert changed is True
+        assert isinstance(data["relationship_minimums"]["character"], dict)
+        assert "protagonist" in data["relationship_minimums"]["character"]
 
     def test_load_with_old_agent_models_preserves_settings(self, tmp_path, monkeypatch):
         """Loading settings with missing agent roles doesn't nuke everything."""
