@@ -816,17 +816,9 @@ def _validate_world_health(settings: Settings) -> None:
             f"relationship_minimums must be a dict, got {type(settings.relationship_minimums)}"
         )
     for entity_type, roles in settings.relationship_minimums.items():
-        if not isinstance(entity_type, str):
-            raise ValueError(f"relationship_minimums keys must be strings, got {type(entity_type)}")
-        if not isinstance(roles, dict):
-            raise ValueError(
-                f"relationship_minimums[{entity_type}] must be a dict, got {type(roles)}"
-            )
+        # Key/value type checks removed: _validate_dict_structure guarantees
+        # all outer keys, inner keys, and inner-value types are correct.
         for role, min_count in roles.items():
-            if not isinstance(role, str):
-                raise ValueError(
-                    f"relationship_minimums[{entity_type}] keys must be strings, got {type(role)}"
-                )
             if not isinstance(min_count, int) or min_count < 0:
                 raise ValueError(
                     f"relationship_minimums[{entity_type}][{role}] must be a non-negative "

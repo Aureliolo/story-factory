@@ -228,6 +228,13 @@ class TestEmbeddingTemperature:
 class TestSettingsValidation:
     """Additional tests for Settings validation."""
 
+    def test_validate_raises_on_invalid_vram_strategy(self):
+        """Should raise ValueError for unrecognized vram_strategy."""
+        settings = Settings()
+        settings.vram_strategy = "invalid_strategy"
+        with pytest.raises(ValueError, match="vram_strategy must be one of"):
+            settings.validate()
+
     def test_validate_raises_on_url_missing_host(self):
         """Should raise ValueError for URL without host."""
         settings = Settings()
@@ -1063,6 +1070,29 @@ class TestDictStructureValidation:
         settings = Settings()
         settings.validate()  # Should not raise
 
+    def test_skips_non_dict_structured_field(self):
+        """Non-dict structured field is skipped, caught by downstream validator."""
+        from src.settings._validation import _validate_dict_structure
+
+        settings = Settings()
+        settings.world_quality_thresholds = "not a dict"  # type: ignore[assignment]
+        # Structural validator skips non-dict fields (line 170 continue branch)
+        _validate_dict_structure(settings)  # Should not raise
+
+    def test_rejects_missing_outer_key_in_nested_dict(self):
+        """Missing outer key in relationship_minimums should raise ValueError."""
+        settings = Settings()
+        del settings.relationship_minimums["character"]
+        with pytest.raises(ValueError, match="Missing keys in relationship_minimums"):
+            settings.validate()
+
+    def test_rejects_missing_inner_key_in_nested_dict(self):
+        """Missing inner key in relationship_minimums should raise ValueError."""
+        settings = Settings()
+        del settings.relationship_minimums["character"]["protagonist"]
+        with pytest.raises(ValueError, match=r"Missing keys in relationship_minimums\[character\]"):
+            settings.validate()
+
 
 class TestAtomicWrite:
     """Tests for _atomic_write_json function."""
@@ -1104,6 +1134,19 @@ class TestAtomicWrite:
         assert not target.exists()
         tmp_files = list(tmp_path.glob("*.tmp"))
         assert tmp_files == []
+
+    def test_cleanup_failure_during_write_error(self, tmp_path):
+        """Original error propagates even if temp file cleanup fails."""
+        from src.settings._settings import _atomic_write_json
+
+        target = tmp_path / "test.json"
+
+        class Unserializable:
+            pass
+
+        with patch("src.settings._settings.os.unlink", side_effect=OSError("permission denied")):
+            with pytest.raises(TypeError):
+                _atomic_write_json(target, {"bad": Unserializable()})
 
 
 class TestSettingsGetModelForAgent:
