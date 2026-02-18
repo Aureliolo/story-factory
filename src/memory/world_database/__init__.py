@@ -69,9 +69,11 @@ def flatten_deep_attributes(
         logger.debug(f"Flattening nested {type(obj).__name__} at depth {current_depth}")
         try:
             return json.dumps(obj, ensure_ascii=False, sort_keys=True)
-        except TypeError, ValueError:
+        except (TypeError, ValueError) as exc:
             logger.warning(
-                "Failed to JSON-serialize attributes at max depth; falling back to str()"
+                "Failed to JSON-serialize %s at max depth; falling back to str(): %s",
+                type(obj).__name__,
+                exc,
             )
             return str(obj)
 
@@ -699,16 +701,13 @@ class WorldDatabase:
 
     @staticmethod
     def compute_cycle_hash(cycle_edges: list[tuple[str, str, str]]) -> str:
-        """Compute a deterministic hash for a cycle independent of traversal start.
+        """Compute a deterministic 16-char hex hash for a cycle.
 
-        Edges are sorted lexicographically to produce a canonical order,
-        so any permutation of the same edge set produces the same hash.
+        Edges are sorted lexicographically so any permutation of the same
+        edge set (including rotations) produces the same hash.
 
         Args:
             cycle_edges: List of (source_id, relation_type, target_id) tuples.
-
-        Returns:
-            16-character hex hash string.
         """
         return _cycles.compute_cycle_hash(cycle_edges)
 

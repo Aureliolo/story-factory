@@ -2,11 +2,13 @@
 
 import logging
 import math
+import sqlite3
 from typing import TYPE_CHECKING
 
 from src.memory.entities import Entity
 from src.memory.world_database import WorldDatabase
 from src.memory.world_health import CycleEdge, CycleInfo
+from src.utils.exceptions import DatabaseClosedError
 
 if TYPE_CHECKING:
     from src.memory.world_health import WorldHealthMetrics
@@ -128,7 +130,7 @@ def get_world_health_metrics(
         # Filter out accepted cycles (non-fatal — show all cycles if lookup fails)
         try:
             accepted_hashes = world_db.get_accepted_cycles()
-        except Exception as e:
+        except (sqlite3.Error, DatabaseClosedError) as e:
             logger.warning("Failed to load accepted cycles, showing all cycles: %s", e)
             accepted_hashes = set()
         if accepted_hashes:

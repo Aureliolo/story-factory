@@ -1,6 +1,7 @@
 """Analysis, health dashboard, and conflict map functions for the World page."""
 
 import logging
+import sqlite3
 
 from nicegui import ui
 
@@ -11,6 +12,7 @@ from src.ui.graph_renderer import (
     render_communities_result,
     render_path_result,
 )
+from src.utils.exceptions import DatabaseClosedError
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +158,7 @@ async def handle_accept_circular(page, cycle: CycleInfo) -> None:
     try:
         cycle_hash = page.state.world_db.compute_cycle_hash(cycle_tuples)
         page.state.world_db.accept_cycle(cycle_hash)
-    except Exception as e:
+    except (ValueError, sqlite3.Error, DatabaseClosedError) as e:
         logger.error("Failed to accept circular chain: %s", e)
         ui.notify(f"Failed to accept cycle: {e}", type="negative")
         return

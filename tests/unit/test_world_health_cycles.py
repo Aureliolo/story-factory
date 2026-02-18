@@ -337,7 +337,8 @@ class TestHealthMetricsFallbackOnAcceptedCyclesError:
     """Tests for graceful fallback when accepted cycles lookup fails."""
 
     def test_health_metrics_shows_all_cycles_when_accepted_cycles_fails(self, tmp_path):
-        """If get_accepted_cycles() raises, health metrics should still show all cycles."""
+        """If get_accepted_cycles() raises a DB error, health metrics should still show all cycles."""
+        import sqlite3
         from unittest.mock import patch
 
         from src.services.world_service import WorldService
@@ -358,8 +359,10 @@ class TestHealthMetricsFallbackOnAcceptedCyclesError:
             settings.circular_relationship_types = []
             svc = WorldService(settings)
 
-            # Patch get_accepted_cycles to raise
-            with patch.object(db, "get_accepted_cycles", side_effect=RuntimeError("DB corrupted")):
+            # Patch get_accepted_cycles to raise a database error
+            with patch.object(
+                db, "get_accepted_cycles", side_effect=sqlite3.OperationalError("DB corrupted")
+            ):
                 metrics = get_world_health_metrics(svc, db)
                 # Cycles should still be reported (fallback to empty accepted set)
                 assert metrics.circular_count > 0
