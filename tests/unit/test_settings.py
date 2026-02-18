@@ -606,6 +606,47 @@ class TestSettingsSaveLoad:
         # Should still return defaults despite backup failure
         assert settings.ollama_url == "http://localhost:11434"
 
+    def test_load_handles_non_dict_json_root(self, tmp_path, monkeypatch):
+        """Test load handles JSON file with non-object root (e.g. list)."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+        Settings.clear_cache()
+
+        settings_file.write_text("[1, 2, 3]")
+
+        settings = Settings.load()
+
+        # Should return defaults after treating non-dict as corrupted
+        assert settings.ollama_url == "http://localhost:11434"
+
+    def test_load_backs_up_non_dict_json_root(self, tmp_path, monkeypatch):
+        """Test load creates .corrupt backup when JSON root is not an object."""
+        settings_file = tmp_path / "settings.json"
+        backup_file = tmp_path / "settings.json.corrupt"
+        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+        Settings.clear_cache()
+
+        settings_file.write_text("[1, 2, 3]")
+
+        Settings.load()
+
+        assert backup_file.exists()
+        assert backup_file.read_text() == "[1, 2, 3]"
+
+    def test_load_handles_non_dict_json_root_backup_failure(self, tmp_path, monkeypatch):
+        """Test load proceeds even if backup copy fails for non-dict JSON root."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+        Settings.clear_cache()
+
+        settings_file.write_text('"just a string"')
+
+        with patch("src.settings._settings.shutil.copy", side_effect=OSError("denied")):
+            settings = Settings.load()
+
+        # Should still return defaults despite backup failure
+        assert settings.ollama_url == "http://localhost:11434"
+
     def test_load_wraps_type_error_as_value_error(self, tmp_path, monkeypatch):
         """Test load wraps TypeError from constructor as ValueError."""
         settings_file = tmp_path / "settings.json"
@@ -1037,6 +1078,13 @@ class TestDictStructureValidation:
         with pytest.raises(ValueError, match="Missing keys in agent_models"):
             settings.validate()
 
+    def test_raises_on_non_dict_agent_temperatures(self):
+        """Non-dict agent_temperatures raises ValueError, not AttributeError."""
+        settings = Settings()
+        settings.agent_temperatures = "not a dict"  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="agent_temperatures must be a dict"):
+            settings.validate()
+
     def test_rejects_unknown_key_in_agent_temperatures(self):
         """Unknown agent in agent_temperatures should raise ValueError."""
         settings = Settings()
@@ -1070,14 +1118,23 @@ class TestDictStructureValidation:
         settings = Settings()
         settings.validate()  # Should not raise
 
-    def test_skips_non_dict_structured_field(self):
-        """Non-dict structured field is skipped, caught by downstream validator."""
+    def test_raises_on_non_dict_structured_field(self):
+        """Non-dict structured field raises ValueError immediately."""
         from src.settings._validation import _validate_dict_structure
 
         settings = Settings()
         settings.world_quality_thresholds = "not a dict"  # type: ignore[assignment]
-        # Structural validator skips non-dict fields (line 170 continue branch)
-        _validate_dict_structure(settings)  # Should not raise
+        with pytest.raises(ValueError, match="world_quality_thresholds must be a dict"):
+            _validate_dict_structure(settings)
+
+    def test_raises_on_non_dict_nested_field(self):
+        """Non-dict nested field raises ValueError immediately."""
+        from src.settings._validation import _validate_dict_structure
+
+        settings = Settings()
+        settings.relationship_minimums = "not a dict"  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="relationship_minimums must be a dict"):
+            _validate_dict_structure(settings)
 
     def test_rejects_missing_outer_key_in_nested_dict(self):
         """Missing outer key in relationship_minimums should raise ValueError."""

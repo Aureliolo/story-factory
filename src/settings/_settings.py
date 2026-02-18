@@ -162,8 +162,10 @@ def _atomic_write_json(path: Any, data: dict[str, Any]) -> None:
     Prevents partial writes from corrupting the settings file on disk
     failure, power loss, or process kill.
     """
-    parent = getattr(path, "parent", None)
-    dir_path = str(parent) if parent is not None else "."
+    from pathlib import Path as _Path
+
+    path = _Path(path)
+    dir_path = str(path.parent)
     fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix=".tmp")
     try:
         with os.fdopen(fd, "w") as f:
@@ -172,8 +174,8 @@ def _atomic_write_json(path: Any, data: dict[str, Any]) -> None:
     except BaseException:
         try:
             os.unlink(tmp_path)
-        except OSError:
-            pass
+        except OSError as cleanup_err:
+            logger.warning("Failed to remove temp settings file %s: %s", tmp_path, cleanup_err)
         raise
 
 
@@ -528,6 +530,18 @@ class Settings:
             try:
                 with open(SETTINGS_FILE) as f:
                     data = json.load(f)
+                if not isinstance(data, dict):
+                    logger.error(
+                        "Corrupted settings file (expected JSON object, got %s)",
+                        type(data).__name__,
+                    )
+                    backup_path = SETTINGS_FILE.with_suffix(".json.corrupt")
+                    try:
+                        shutil.copy(SETTINGS_FILE, backup_path)
+                        logger.info("Backed up corrupted settings to %s", backup_path)
+                    except OSError as copy_err:
+                        logger.warning("Failed to backup corrupted settings: %s", copy_err)
+                    data = {}
             except json.JSONDecodeError as e:
                 logger.error("Corrupted settings file (invalid JSON): %s", e)
                 backup_path = SETTINGS_FILE.with_suffix(".json.corrupt")

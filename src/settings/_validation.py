@@ -138,6 +138,10 @@ def _validate_temperatures(settings: Settings) -> None:
     Structural checks (missing/extra keys) are handled by the merge step in
     Settings.load(), so this only validates value ranges.
     """
+    if not isinstance(settings.agent_temperatures, dict):
+        raise ValueError(
+            f"agent_temperatures must be a dict, got {type(settings.agent_temperatures).__name__}"
+        )
     for agent, temp in settings.agent_temperatures.items():
         if not 0.0 <= temp <= 2.0:
             raise ValueError(f"Temperature for {agent} must be between 0.0 and 2.0, got {temp}")
@@ -167,7 +171,7 @@ def _validate_dict_structure(settings: Settings) -> None:
     for field_name in _STRUCTURED_DICT_FIELDS:
         current = getattr(settings, field_name)
         if not isinstance(current, dict):
-            continue  # Type error caught by downstream validators
+            raise ValueError(f"{field_name} must be a dict, got {type(current).__name__}")
         expected = set(getattr(default_instance, field_name))
         actual = set(current)
         unknown = actual - expected
@@ -186,7 +190,7 @@ def _validate_dict_structure(settings: Settings) -> None:
         default_outer = getattr(default_instance, field_name)
         current_outer = getattr(settings, field_name)
         if not isinstance(current_outer, dict):
-            continue  # Type error caught by downstream validators
+            raise ValueError(f"{field_name} must be a dict, got {type(current_outer).__name__}")
         unknown_outer = set(current_outer) - set(default_outer)
         if unknown_outer:
             raise ValueError(
@@ -810,14 +814,11 @@ def _validate_world_health(settings: Settings) -> None:
     if not all(isinstance(t, str) for t in settings.circular_relationship_types):
         raise ValueError("circular_relationship_types must contain only strings")
 
-    # Validate relationship_minimums structure
-    if not isinstance(settings.relationship_minimums, dict):
-        raise ValueError(
-            f"relationship_minimums must be a dict, got {type(settings.relationship_minimums)}"
-        )
+    # _validate_dict_structure already rejects non-dict relationship_minimums,
+    # so we only validate inner values here.
     for entity_type, roles in settings.relationship_minimums.items():
-        # Key/value type checks removed: _validate_dict_structure guarantees
-        # all outer keys, inner keys, and inner-value types are correct.
+        # _validate_dict_structure ensures outer and inner key sets are correct,
+        # but does NOT validate inner value types — those checks remain below.
         for role, min_count in roles.items():
             if not isinstance(min_count, int) or min_count < 0:
                 raise ValueError(
