@@ -144,6 +144,8 @@ def _validate_temperatures(settings: Settings) -> None:
             f"agent_temperatures must be a dict, got {type(settings.agent_temperatures).__name__}"
         )
     for agent, temp in settings.agent_temperatures.items():
+        if not isinstance(temp, (int, float)):
+            raise ValueError(f"Temperature for {agent} must be a number, got {type(temp).__name__}")
         if not 0.0 <= temp <= 2.0:
             raise ValueError(f"Temperature for {agent} must be between 0.0 and 2.0, got {temp}")
 
@@ -159,6 +161,7 @@ def _validate_dict_structure(settings: Settings) -> None:
     Raises:
         ValueError: If any dict field has unknown or missing keys.
     """
+    logger.debug("Validating structured and nested dict settings")
     from src.settings._settings import (
         _NESTED_DICT_FIELDS,
         _STRUCTURED_DICT_FIELDS,

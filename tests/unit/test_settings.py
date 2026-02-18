@@ -1085,6 +1085,13 @@ class TestDictStructureValidation:
         with pytest.raises(ValueError, match="agent_temperatures must be a dict"):
             settings.validate()
 
+    def test_raises_on_non_numeric_agent_temperature(self):
+        """Non-numeric temperature value raises ValueError, not TypeError."""
+        settings = Settings()
+        settings.agent_temperatures["writer"] = "hot"  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="Temperature for writer must be a number"):
+            settings.validate()
+
     def test_rejects_unknown_key_in_agent_temperatures(self):
         """Unknown agent in agent_temperatures should raise ValueError."""
         settings = Settings()
