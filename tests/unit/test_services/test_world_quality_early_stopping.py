@@ -77,9 +77,6 @@ def settings():
         world_quality_judge_temp=0.1,
         world_quality_refinement_temp=0.7,
         world_quality_early_stopping_patience=2,
-        llm_tokens_faction_create=400,
-        llm_tokens_faction_judge=300,
-        llm_tokens_faction_refine=400,
     )
 
 

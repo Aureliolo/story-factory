@@ -5,6 +5,7 @@ iterative improvement of characters, locations, and relationships.
 """
 
 from src.memory.world_quality._entity_scores import (
+    CalendarQualityScores,
     CharacterQualityScores,
     ConceptQualityScores,
     FactionQualityScores,
@@ -27,6 +28,7 @@ from src.memory.world_quality._story_scores import (
 
 __all__ = [
     "BaseQualityScores",
+    "CalendarQualityScores",
     "ChapterQualityScores",
     "CharacterQualityScores",
     "ConceptQualityScores",

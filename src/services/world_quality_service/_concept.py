@@ -89,12 +89,14 @@ def _create_concept(
     # Format existing names with explicit warnings
     existing_names_formatted = svc._format_existing_names_warning(existing_names, "concept")
 
+    calendar_context = svc.get_calendar_context()
+
     prompt = f"""Create a thematic concept/idea for a {brief.genre} story.
 
 STORY PREMISE: {brief.premise}
 TONE: {brief.tone}
 THEMES: {", ".join(brief.themes)}
-
+{calendar_context}
 === CRITICAL: UNIQUENESS REQUIREMENTS ===
 {existing_names_formatted}
 

@@ -270,7 +270,6 @@ class TestRelationshipArrayDefense:
             {"source": "X", "target": "Y", "relation_type": "knows", "description": "E"},
         ]
         svc = MagicMock()
-        svc.settings.llm_tokens_relationship_create = 512
         svc._get_creator_model.return_value = "test-model:8b"
         svc.client.generate.return_value = {"response": "[]"}
 

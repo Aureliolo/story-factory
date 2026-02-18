@@ -46,7 +46,6 @@ class TestExistingPairsNotCapped:
         from src.services.world_quality_service._relationship import _create_relationship
 
         svc = MagicMock()
-        svc.settings.llm_tokens_relationship_create = 800
         svc._get_creator_model.return_value = "test-model:8b"
         svc.client.generate.return_value = {
             "response": '{"source": "Alpha", "target": "Beta", '
@@ -222,7 +221,6 @@ class TestCreationPromptIncludesValidTypes:
         from src.services.world_quality_service._relationship import _create_relationship
 
         svc = MagicMock()
-        svc.settings.llm_tokens_relationship_create = 800
         svc._get_creator_model.return_value = "test-model:8b"
         svc.client.generate.return_value = {
             "response": '{"source": "Alpha", "target": "Beta", '
@@ -249,7 +247,6 @@ class TestRelationTypeNormalizedBeforeStorage:
         from src.services.world_quality_service._relationship import _create_relationship
 
         svc = MagicMock()
-        svc.settings.llm_tokens_relationship_create = 800
         svc._get_creator_model.return_value = "test-model:8b"
         # LLM returns a prose-style type
         svc.client.generate.return_value = {
@@ -587,7 +584,6 @@ class TestExistingRelsIncludeTypes:
         from src.services.world_quality_service._relationship import _create_relationship
 
         svc = MagicMock()
-        svc.settings.llm_tokens_relationship_create = 800
         svc._get_creator_model.return_value = "test-model:8b"
         svc.client.generate.return_value = {
             "response": '{"source": "Alpha", "target": "Beta", '
@@ -613,7 +609,6 @@ class TestExistingRelsIncludeTypes:
         from src.services.world_quality_service._relationship import _create_relationship
 
         svc = MagicMock()
-        svc.settings.llm_tokens_relationship_create = 800
         svc._get_creator_model.return_value = "test-model:8b"
         svc.client.generate.return_value = {
             "response": '{"source": "Alpha", "target": "Delta", '
@@ -720,7 +715,6 @@ class TestRequiredEntityConstraint:
         from src.services.world_quality_service._relationship import _create_relationship
 
         svc = MagicMock()
-        svc.settings.llm_tokens_relationship_create = 800
         svc._get_creator_model.return_value = "test-model:8b"
         svc.client.generate.return_value = {
             "response": '{"source": "Charlie", "target": "Beta", '
@@ -739,7 +733,6 @@ class TestRequiredEntityConstraint:
         from src.services.world_quality_service._relationship import _create_relationship
 
         svc = MagicMock()
-        svc.settings.llm_tokens_relationship_create = 800
         svc._get_creator_model.return_value = "test-model:8b"
         svc.client.generate.return_value = {
             "response": '{"source": "Alpha", "target": "Beta", '
@@ -757,7 +750,6 @@ class TestRequiredEntityConstraint:
         from src.services.world_quality_service._relationship import _create_relationship
 
         svc = MagicMock()
-        svc.settings.llm_tokens_relationship_create = 800
         svc._get_creator_model.return_value = "test-model:8b"
         svc.client.generate.return_value = {
             "response": '{"source": "Charlie", "target": "Alpha", '
@@ -789,7 +781,6 @@ class TestRequiredEntityConstraint:
         from src.services.world_quality_service._relationship import _create_relationship
 
         svc = MagicMock()
-        svc.settings.llm_tokens_relationship_create = 800
         svc._get_creator_model.return_value = "test-model:8b"
         svc.client.generate.return_value = {
             "response": '{"source": "Alpha", "target": "Beta", '
@@ -1043,7 +1034,6 @@ class TestLLMRelationTypeClassification:
         from src.services.world_quality_service._relationship import _create_relationship
 
         svc = MagicMock()
-        svc.settings.llm_tokens_relationship_create = 800
         svc._get_creator_model.return_value = "test-model:8b"
 
         # First call: create returns a prose-style type
@@ -1068,7 +1058,6 @@ class TestLLMRelationTypeClassification:
         from src.services.world_quality_service._relationship import _refine_relationship
 
         svc = MagicMock()
-        svc.settings.llm_tokens_relationship_refine = 800
         svc.settings.context_size = 32768
         svc._get_creator_model.return_value = "test-model:8b"
         svc.get_config.return_value.get_threshold.return_value = 5.0

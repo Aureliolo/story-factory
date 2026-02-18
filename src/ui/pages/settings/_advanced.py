@@ -95,6 +95,7 @@ def build_world_gen_section(page: SettingsPage) -> None:
             ("faction", "Faction", "groups"),
             ("item", "Item", "inventory"),
             ("concept", "Concept", "lightbulb"),
+            ("calendar", "Calendar", "calendar_month"),
         ]
         secondary_threshold_configs = [
             ("relationship", "Relationship", "link"),

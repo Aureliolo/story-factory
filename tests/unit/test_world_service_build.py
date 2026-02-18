@@ -30,6 +30,7 @@ class TestWorldBuildOptions:
         """Test default values are set correctly."""
         options = WorldBuildOptions()
         assert options.clear_existing is False
+        assert options.generate_calendar is True
         assert options.generate_structure is True
         assert options.generate_locations is True
         assert options.generate_factions is True
@@ -41,6 +42,7 @@ class TestWorldBuildOptions:
         """Test full() factory method."""
         options = WorldBuildOptions.full()
         assert options.clear_existing is False
+        assert options.generate_calendar is True
         assert options.generate_structure is True
         assert options.generate_locations is True
         assert options.generate_factions is True
@@ -52,6 +54,7 @@ class TestWorldBuildOptions:
         """Test full_rebuild() factory method."""
         options = WorldBuildOptions.full_rebuild()
         assert options.clear_existing is True
+        assert options.generate_calendar is True
         assert options.generate_structure is True
         assert options.generate_locations is True
         assert options.generate_factions is True
@@ -63,6 +66,7 @@ class TestWorldBuildOptions:
         """Test custom option combinations."""
         options = WorldBuildOptions(
             clear_existing=True,
+            generate_calendar=False,
             generate_structure=False,
             generate_locations=True,
             generate_factions=False,
@@ -71,6 +75,7 @@ class TestWorldBuildOptions:
             generate_relationships=True,
         )
         assert options.clear_existing is True
+        assert options.generate_calendar is False
         assert options.generate_structure is False
         assert options.generate_locations is True
         assert options.generate_factions is False
@@ -191,6 +196,24 @@ def mock_services():
     services.world_quality.generate_items_with_quality = MagicMock(return_value=[])
     services.world_quality.generate_concepts_with_quality = MagicMock(return_value=[])
     services.world_quality.generate_relationships_with_quality = MagicMock(return_value=[])
+    # Calendar quality mock - returns a valid calendar dict and scores
+    services.world_quality.generate_calendar_with_quality = MagicMock(
+        return_value=(
+            {
+                "current_era_name": "Test Era",
+                "era_abbreviation": "TE",
+                "era_start_year": 1,
+                "months": [{"name": "Month1", "days": 30, "description": ""}],
+                "days_per_week": 7,
+                "day_names": ["Day1"],
+                "current_story_year": 100,
+                "eras": [],
+                "date_format": "{day} {month}, Year {year} {era}",
+            },
+            MagicMock(average=8.0),
+            1,
+        )
+    )
 
     # Quality review pass-through: return characters/chapters unchanged with mock scores
     def _review_characters(characters, state, cancel_check=None):
@@ -213,24 +236,25 @@ class TestCalculateTotalSteps:
         """Test step count for full options."""
         options = WorldBuildOptions.full()
         # Base (3: character extraction + embedding + completion)
-        # + structure (1) + quality review (3: characters, plot, chapters)
+        # + calendar (1) + structure (1) + quality review (3: characters, plot, chapters)
         # + locations (1) + factions (1)
-        # + items (1) + concepts (1) + relationships (1) + orphan recovery (1) = 13
-        assert world_service._calculate_total_steps(options) == 13
+        # + items (1) + concepts (1) + relationships (1) + orphan recovery (1) = 14
+        assert world_service._calculate_total_steps(options, generate_calendar=True) == 14
 
     def test_full_rebuild_options(self, world_service):
         """Test step count for full rebuild options."""
         options = WorldBuildOptions.full_rebuild()
         # Base (3: character extraction + embedding + completion)
-        # + clear (1) + structure (1) + quality review (3: characters, plot, chapters)
+        # + clear (1) + calendar (1) + structure (1) + quality review (3: characters, plot, chapters)
         # + locations (1) + factions (1)
-        # + items (1) + concepts (1) + relationships (1) + orphan recovery (1) = 14
-        assert world_service._calculate_total_steps(options) == 14
+        # + items (1) + concepts (1) + relationships (1) + orphan recovery (1) = 15
+        assert world_service._calculate_total_steps(options, generate_calendar=True) == 15
 
     def test_custom_options(self, world_service):
         """Test step count for custom options."""
         options = WorldBuildOptions(
             clear_existing=True,
+            generate_calendar=False,
             generate_structure=False,
             generate_locations=True,
             generate_factions=False,
@@ -240,6 +264,30 @@ class TestCalculateTotalSteps:
         )
         # Clear (1) + characters (1) + embedding (1) + locations (1) + concepts (1) + completion (1) = 6
         assert world_service._calculate_total_steps(options) == 6
+
+    def test_calculate_total_steps_includes_calendar(self, world_service):
+        """Test that generate_calendar adds one step to the total."""
+        options_with = WorldBuildOptions(
+            generate_calendar=True,
+            generate_structure=False,
+            generate_locations=False,
+            generate_factions=False,
+            generate_items=False,
+            generate_concepts=False,
+            generate_relationships=False,
+        )
+        options_without = WorldBuildOptions(
+            generate_calendar=False,
+            generate_structure=False,
+            generate_locations=False,
+            generate_factions=False,
+            generate_items=False,
+            generate_concepts=False,
+            generate_relationships=False,
+        )
+        steps_with = world_service._calculate_total_steps(options_with, generate_calendar=True)
+        steps_without = world_service._calculate_total_steps(options_without)
+        assert steps_with == steps_without + 1
 
 
 class TestClearWorldDb:
@@ -983,6 +1031,179 @@ class TestBuildWorld:
         assert len(sample_story_state.plot_points) == 1
         assert sample_story_state.plot_points[0].description == "The refined call"
         mock_services.world_quality.review_plot_quality.assert_called_once()
+
+    def test_build_world_generates_calendar_when_enabled(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test that calendar generation is called when enabled in options and settings."""
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
+        _mock_orphan_recovery_failure(mock_services)
+
+        counts = world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            WorldBuildOptions.full(),
+        )
+
+        mock_services.world_quality.generate_calendar_with_quality.assert_called_once_with(
+            sample_story_state
+        )
+        assert counts["calendar"] == 1
+
+    def test_build_world_skips_calendar_when_disabled(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test that calendar generation is skipped when generate_calendar=False."""
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
+        _mock_orphan_recovery_failure(mock_services)
+
+        options = WorldBuildOptions(generate_calendar=False)
+        counts = world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            options,
+        )
+
+        mock_services.world_quality.generate_calendar_with_quality.assert_not_called()
+        assert counts["calendar"] == 0
+
+    def test_build_world_skips_calendar_when_setting_disabled(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test that calendar generation is skipped when setting is disabled."""
+        world_service.settings.generate_calendar_on_world_build = False
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
+        _mock_orphan_recovery_failure(mock_services)
+
+        counts = world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            WorldBuildOptions.full(),
+        )
+
+        mock_services.world_quality.generate_calendar_with_quality.assert_not_called()
+        assert counts["calendar"] == 0
+
+    def test_build_world_calendar_failure_nonfatal(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test that calendar generation failure does not abort the build."""
+        mock_services.world_quality.generate_calendar_with_quality.side_effect = RuntimeError(
+            "Calendar LLM failed"
+        )
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
+        _mock_orphan_recovery_failure(mock_services)
+
+        # Build should succeed despite calendar failure
+        counts = world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            WorldBuildOptions.full(),
+        )
+
+        # Calendar count should remain 0 since it failed
+        assert counts["calendar"] == 0
+        # But other steps should have run
+        assert counts["characters"] >= 2
+
+    def test_build_world_calendar_cancellation_propagates(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test that GenerationCancelledError during calendar is not swallowed."""
+        from src.utils.exceptions import GenerationCancelledError
+
+        mock_services.world_quality.generate_calendar_with_quality.side_effect = (
+            GenerationCancelledError("User cancelled")
+        )
+
+        with pytest.raises(GenerationCancelledError):
+            world_service.build_world(
+                sample_story_state,
+                mock_world_db,
+                mock_services,
+                WorldBuildOptions.full(),
+            )
+
+        # Calendar context must be cleaned up even on cancellation (try/finally)
+        mock_services.world_quality.set_calendar_context.assert_called_with(None)
+
+    def test_build_world_calendar_saves_to_existing_world_settings(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test calendar is saved to existing WorldSettings when one already exists."""
+        from src.memory.world_settings import WorldSettings
+
+        # Pre-create world settings so get_world_settings() returns non-None
+        existing_settings = WorldSettings()
+        mock_world_db.save_world_settings(existing_settings)
+
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
+        _mock_orphan_recovery_failure(mock_services)
+
+        counts = world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            WorldBuildOptions.full(),
+        )
+
+        assert counts["calendar"] == 1
+        # Verify calendar was saved to the existing world settings
+        saved_settings = mock_world_db.get_world_settings()
+        assert saved_settings is not None
+        assert saved_settings.calendar is not None
+        assert saved_settings.calendar.current_era_name == "Test Era"
+
+    def test_build_world_sets_calendar_context_for_downstream(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test that calendar context is set on quality service after generation."""
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
+        _mock_orphan_recovery_failure(mock_services)
+
+        world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            WorldBuildOptions.full(),
+        )
+
+        # set_calendar_context should have been called with the calendar dict and then None
+        calls = mock_services.world_quality.set_calendar_context.call_args_list
+        assert len(calls) == 2
+        # First call: set context with the generated calendar dict
+        assert calls[0][0][0] is not None
+        assert calls[0][0][0]["current_era_name"] == "Test Era"
+        # Second call: clear context at end of build
+        assert calls[1][0][0] is None
 
 
 class TestBuildWorldEmbedding:

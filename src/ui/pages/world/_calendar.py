@@ -4,9 +4,12 @@ Provides UI for viewing and managing the world's calendar system.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from nicegui import ui
+
+from src.memory.world_calendar import WorldCalendar
+from src.memory.world_settings import WorldSettings
 
 if TYPE_CHECKING:
     from src.ui.pages.world import WorldPage
@@ -79,7 +82,7 @@ def refresh_calendar_section(page: WorldPage) -> None:
             page.generate_calendar_btn.text = "Generate Calendar"  # type: ignore[attr-defined]
 
 
-def _get_world_calendar(page: WorldPage) -> Any:
+def _get_world_calendar(page: WorldPage) -> WorldCalendar | None:
     """Get the calendar from world settings if available.
 
     Args:
@@ -103,11 +106,11 @@ def _get_world_calendar(page: WorldPage) -> Any:
         logger.debug("No calendar in world settings")
         return None
     except Exception as e:
-        logger.debug(f"Could not load world calendar: {e}")
+        logger.warning("Could not load world calendar: %s", e, exc_info=True)
         return None
 
 
-def _display_calendar_info(page: WorldPage, calendar: Any) -> None:
+def _display_calendar_info(page: WorldPage, calendar: WorldCalendar) -> None:
     """Display calendar information.
 
     Args:
@@ -138,7 +141,7 @@ def _display_calendar_info(page: WorldPage, calendar: Any) -> None:
             with ui.column().classes("gap-2 mt-2"):
                 for era in calendar.eras:
                     era_text = f"{era.name}: {era.start_year}"
-                    if era.end_year:
+                    if era.end_year is not None:
                         era_text += f" - {era.end_year}"
                     else:
                         era_text += " - present"
@@ -157,25 +160,19 @@ def _display_calendar_info(page: WorldPage, calendar: Any) -> None:
 
 
 async def _generate_calendar(page: WorldPage) -> None:
-    """Generate a calendar for the current world.
+    """Generate a calendar for the current world using the quality refinement loop.
 
     Args:
         page: WorldPage instance.
     """
     from nicegui import run
 
-    from src.memory.world_settings import WorldSettings
-
-    logger.info("Generating calendar for world")
+    logger.info("Generating calendar for world via quality loop")
 
     # Check if story state has a brief
     story_state = getattr(page.state, "story_state", None)
     if not story_state or not getattr(story_state, "brief", None):
         ui.notify("No story brief available. Complete the interview first.", type="warning")
-        return
-
-    if not hasattr(page.services, "calendar"):
-        ui.notify("Calendar service not available.", type="negative")
         return
 
     if not page.state.world_db:
@@ -188,10 +185,13 @@ async def _generate_calendar(page: WorldPage) -> None:
 
     page.state.begin_background_task("generate_calendar")
     try:
-        # Generate calendar using service - run off event loop to avoid blocking
-        calendar = await run.io_bound(page.services.calendar.generate_calendar, story_state.brief)
+        # Generate calendar using quality service - run off event loop to avoid blocking
+        calendar_dict, scores, iterations = await run.io_bound(
+            page.services.world_quality.generate_calendar_with_quality, story_state
+        )
 
-        # Save calendar to world settings
+        # Convert dict to WorldCalendar and save to world settings
+        calendar = WorldCalendar.from_dict(calendar_dict)
         world_settings = page.state.world_db.get_world_settings()
         if world_settings:
             world_settings.calendar = calendar
@@ -199,10 +199,19 @@ async def _generate_calendar(page: WorldPage) -> None:
             world_settings = WorldSettings(calendar=calendar)
         page.state.world_db.save_world_settings(world_settings)
 
-        logger.info(f"Generated and saved calendar: {calendar.current_era_name}")
+        # Keep service context in sync so downstream entity generation uses the new calendar
+        page.services.world_quality.set_calendar_context(calendar_dict)
+
+        logger.info(
+            "Generated and saved calendar: %s (quality: %.1f, iterations: %d)",
+            calendar.current_era_name,
+            scores.average,
+            iterations,
+        )
 
         ui.notify(
-            f"Generated calendar: {calendar.current_era_name} ({calendar.era_abbreviation})",
+            f"Generated calendar: {calendar.current_era_name} "
+            f"({calendar.era_abbreviation}) - quality: {scores.average:.1f}/10",
             type="positive",
         )
 
@@ -211,7 +220,8 @@ async def _generate_calendar(page: WorldPage) -> None:
 
     except Exception as e:
         logger.exception("Failed to generate calendar")
-        ui.notify(f"Failed to generate calendar: {e}", type="negative")
+        user_msg = str(e)[:150] if str(e) else "Unknown error"
+        ui.notify(f"Failed to generate calendar: {user_msg}", type="negative")
 
     finally:
         page.state.end_background_task("generate_calendar")

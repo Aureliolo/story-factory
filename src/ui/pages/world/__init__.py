@@ -46,6 +46,9 @@ from src.ui.pages.world._browser import (
     build_entity_browser,
     refresh_entity_list,
 )
+from src.ui.pages.world._calendar import (
+    build_calendar_section,
+)
 from src.ui.pages.world._editor import (
     build_entity_editor,
     refresh_entity_editor,
@@ -192,6 +195,7 @@ class WorldPage:
 
             # Bottom sections
             with ui.column().classes("w-full gap-4 p-4"):
+                self._build_calendar_section()
                 self._build_health_section()
                 self._build_relationships_section()
                 self._build_analysis_section()
@@ -318,6 +322,12 @@ class WorldPage:
     def _on_edge_context_menu(self, edge_id: str) -> None:
         """Handle edge right-click context menu."""
         on_edge_context_menu(self, edge_id)
+
+    # ========== Delegations to _calendar.py ==========
+
+    def _build_calendar_section(self) -> None:
+        """Build the calendar settings section."""
+        build_calendar_section(self)
 
     # ========== Delegations to _analysis.py ==========
 

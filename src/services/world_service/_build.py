@@ -6,7 +6,9 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from src.memory.story_state import PlotOutline, StoryState
+from src.memory.world_calendar import WorldCalendar
 from src.memory.world_database import WorldDatabase
+from src.memory.world_settings import WorldSettings
 from src.utils.exceptions import GenerationCancelledError, WorldGenerationError
 from src.utils.validation import validate_not_none, validate_type
 
@@ -62,6 +64,7 @@ def build_world(
 
     options = options or WorldBuildOptions.full()
     counts: dict[str, int] = {
+        "calendar": 0,
         "characters": 0,
         "locations": 0,
         "factions": 0,
@@ -71,8 +74,10 @@ def build_world(
         "implicit_relationships": 0,
     }
 
+    # Reconcile calendar option with settings gate before computing steps
+    effective_calendar = options.generate_calendar and svc.settings.generate_calendar_on_world_build
     # Calculate total steps for progress reporting
-    total_steps = _calculate_total_steps(options)
+    total_steps = _calculate_total_steps(options, generate_calendar=effective_calendar)
     current_step = 0
 
     def report_progress(message: str, entity_type: str | None = None, count: int = 0) -> None:
@@ -110,6 +115,75 @@ def build_world(
         _clear_world_db(world_db)
         logger.info("Cleared existing world data")
 
+    try:
+        # Step 1a: Generate calendar if requested and enabled in settings
+        if options.generate_calendar and svc.settings.generate_calendar_on_world_build:
+            check_cancelled()
+            report_progress("Generating calendar system...", "calendar")
+            try:
+                calendar_dict, calendar_scores, calendar_iterations = (
+                    services.world_quality.generate_calendar_with_quality(state)
+                )
+                # Convert dict back to WorldCalendar and save to world settings
+                calendar = WorldCalendar.from_dict(calendar_dict)
+                world_settings = world_db.get_world_settings()
+                if world_settings:
+                    world_settings.calendar = calendar
+                else:
+                    world_settings = WorldSettings(calendar=calendar)
+                world_db.save_world_settings(world_settings)
+                counts["calendar"] = 1
+                # Set calendar context for downstream entity generation prompts
+                services.world_quality.set_calendar_context(calendar_dict)
+                logger.info(
+                    "Generated calendar '%s' after %d iteration(s), quality: %.1f",
+                    calendar.current_era_name,
+                    calendar_iterations,
+                    calendar_scores.average,
+                )
+            except GenerationCancelledError:
+                raise
+            except Exception as e:
+                logger.warning("Calendar generation failed (non-fatal), continuing without: %s", e)
+
+        # Steps 2-9: entity generation (inside try/finally for calendar context cleanup)
+        _build_world_entities(
+            svc,
+            state,
+            world_db,
+            services,
+            options,
+            counts,
+            check_cancelled,
+            report_progress,
+        )
+    finally:
+        services.world_quality.set_calendar_context(None)
+
+    report_progress("World build complete!")
+    total_rels = counts["relationships"] + counts["implicit_relationships"]
+    logger.info(
+        "World build complete for project %s: %s (total relationships: %d = %d explicit + %d implicit)",
+        state.id,
+        counts,
+        total_rels,
+        counts["relationships"],
+        counts["implicit_relationships"],
+    )
+    return counts
+
+
+def _build_world_entities(
+    svc: WorldService,
+    state: StoryState,
+    world_db: WorldDatabase,
+    services: ServiceContainer,
+    options: WorldBuildOptions,
+    counts: dict[str, int],
+    check_cancelled: Callable[[], None],
+    report_progress: Callable[..., None],
+) -> None:
+    """Execute entity generation steps 2-9 of the world build."""
     # Step 2: Generate story structure (characters, chapters) if requested
     if options.generate_structure:
         check_cancelled()
@@ -277,26 +351,15 @@ def build_world(
         embed_counts = services.embedding.embed_all_world_data(world_db, state)
         logger.info("World embedding complete: %s", embed_counts)
     except Exception as e:
-        logger.error("World embedding failed (non-fatal): %s", e)
-        report_progress("Warning: World embedding failed. RAG context will be unavailable.")
-
-    report_progress("World build complete!")
-    total_rels = counts["relationships"] + counts["implicit_relationships"]
-    logger.info(
-        "World build complete for project %s: %s (total relationships: %d = %d explicit + %d implicit)",
-        state.id,
-        counts,
-        total_rels,
-        counts["relationships"],
-        counts["implicit_relationships"],
-    )
-    return counts
+        logger.warning("World embedding failed (non-fatal), RAG context unavailable: %s", e)
 
 
-def _calculate_total_steps(options: WorldBuildOptions) -> int:
+def _calculate_total_steps(options: WorldBuildOptions, *, generate_calendar: bool = False) -> int:
     """Calculate total number of steps for progress reporting."""
     steps = 3  # Character extraction + embedding + completion
     if options.clear_existing:
+        steps += 1
+    if generate_calendar:
         steps += 1
     if options.generate_structure:
         steps += 1
@@ -730,27 +793,7 @@ def _recover_orphans(
     services: ServiceContainer,
     cancel_check: Callable[[], bool] | None = None,
 ) -> int:
-    """Attempt to connect orphan entities by generating additional relationships.
-
-    After the main relationship generation pass, some entities may have zero
-    connections. This function identifies them and tries to generate relationships
-    to connect them to the world using a per-orphan loop with retry budget.
-
-    Each orphan gets up to ``MAX_RETRIES_PER_ORPHAN + 1`` attempts. The
-    ``required_entity`` constraint tells the LLM to include the orphan; the
-    quality loop rejects relationships that omit it *before* the expensive
-    judge/refine cycle, eliminating wasted LLM calls.
-
-    Args:
-        svc: WorldService instance.
-        state: Current story state.
-        world_db: World database.
-        services: Service container.
-        cancel_check: Optional cancellation check.
-
-    Returns:
-        Number of relationships successfully added.
-    """
+    """Connect orphan entities by generating relationships (up to MAX_RETRIES_PER_ORPHAN+1 attempts each)."""
     orphans = world_db.find_orphans()
     if not orphans:
         logger.debug("No orphan entities found, skipping recovery")

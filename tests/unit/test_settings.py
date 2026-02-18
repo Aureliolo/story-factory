@@ -2034,7 +2034,8 @@ class TestMissingValidationCoverage:
         # Default factory is PER_ENTITY_QUALITY_DEFAULTS.copy, already populated
         assert settings.world_quality_thresholds["character"] == 7.5
         assert settings.world_quality_thresholds["item"] == 8.0  # Items have higher default
-        assert len(settings.world_quality_thresholds) == 8
+        assert settings.world_quality_thresholds["calendar"] == 7.5
+        assert len(settings.world_quality_thresholds) == 9
 
     def test_validate_raises_on_per_entity_threshold_out_of_range(self):
         """Should raise ValueError for per-entity threshold out of 0-10 range."""
@@ -2045,6 +2046,7 @@ class TestMissingValidationCoverage:
             "faction": 7.5,
             "item": 7.5,
             "concept": 7.5,
+            "calendar": 7.5,
             "relationship": 7.5,
             "plot": 7.5,
             "chapter": 7.5,
@@ -2063,6 +2065,7 @@ class TestMissingValidationCoverage:
             "faction": 7.5,
             "item": -1.0,
             "concept": 7.5,
+            "calendar": 7.5,
             "relationship": 7.5,
             "plot": 7.5,
             "chapter": 7.5,
@@ -2080,6 +2083,7 @@ class TestMissingValidationCoverage:
             "faction": 7.5,
             "item": 8.0,
             "concept": 7.5,
+            "calendar": 7.5,
             "relationship": 7.5,
             "plot": 7.5,
             "chapter": 7.5,
@@ -2125,22 +2129,6 @@ class TestMissingValidationCoverage:
         settings = Settings()
         settings.world_gen_locations_max = 0  # Below 1
         with pytest.raises(ValueError, match="world_gen_locations_max must be between"):
-            settings.validate()
-
-    # --- LLM token settings validation (line 598) ---
-
-    def test_validate_raises_on_invalid_llm_tokens_character_create(self):
-        """Should raise ValueError for llm_tokens_character_create out of range."""
-        settings = Settings()
-        settings.llm_tokens_character_create = 5  # Below 10
-        with pytest.raises(ValueError, match="llm_tokens_character_create must be between"):
-            settings.validate()
-
-    def test_validate_raises_on_invalid_llm_tokens_mini_description(self):
-        """Should raise ValueError for llm_tokens_mini_description out of range."""
-        settings = Settings()
-        settings.llm_tokens_mini_description = 5000  # Above 4096
-        with pytest.raises(ValueError, match="llm_tokens_mini_description must be between"):
             settings.validate()
 
     # --- Entity extraction limits validation (line 607) ---
@@ -2677,11 +2665,6 @@ class TestSettingsMigration:
         assert settings.agent_temperatures["suggestion"] == 0.8
         # User values preserved
         assert settings.agent_temperatures["writer"] == 0.9
-
-    def test_relationship_token_limit_default_is_1200(self):
-        """Default llm_tokens_relationship_create should be 1200 (increased from 800)."""
-        settings = Settings()
-        assert settings.llm_tokens_relationship_create == 1200
 
     def test_semaphore_timeout_default_is_300(self):
         """Default llm_semaphore_timeout should be 300 seconds."""
