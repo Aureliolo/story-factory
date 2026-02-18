@@ -3,6 +3,10 @@
 import hashlib
 import logging
 from datetime import datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from . import WorldDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +49,7 @@ def validate_cycle_hash(cycle_hash: str) -> None:
         raise ValueError(f"Invalid cycle hash (expected 16 hex chars): {cycle_hash!r}") from exc
 
 
-def accept_cycle(db, cycle_hash: str) -> None:
+def accept_cycle(db: WorldDatabase, cycle_hash: str) -> None:
     """Mark a circular chain as accepted/intentional.
 
     Args:
@@ -67,7 +71,7 @@ def accept_cycle(db, cycle_hash: str) -> None:
         db.conn.commit()
 
 
-def remove_accepted_cycle(db, cycle_hash: str) -> bool:
+def remove_accepted_cycle(db: WorldDatabase, cycle_hash: str) -> bool:
     """Remove a previously accepted cycle.
 
     Args:
@@ -92,7 +96,7 @@ def remove_accepted_cycle(db, cycle_hash: str) -> bool:
     return removed
 
 
-def get_accepted_cycles(db) -> set[str]:
+def get_accepted_cycles(db: WorldDatabase) -> set[str]:
     """Get all accepted cycle hashes.
 
     Args:

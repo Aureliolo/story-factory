@@ -1,11 +1,15 @@
 """Database schema initialization and migration for WorldDatabase."""
 
 import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from . import WorldDatabase
 
 logger = logging.getLogger(__name__)
 
 
-def init_schema(db) -> None:
+def init_schema(db: WorldDatabase) -> None:
     """Initialize database schema with versioning.
 
     Creates all tables if they don't exist and handles version upgrades.
@@ -17,6 +21,7 @@ def init_schema(db) -> None:
     from . import SCHEMA_VERSION
 
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
 
         # Schema version table
@@ -76,19 +81,6 @@ def init_schema(db) -> None:
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_versions_entity_version "
             "ON entity_versions(entity_id, version_number)"
         )
-
-        # Set schema version
-        if current_version < SCHEMA_VERSION:
-            logger.info(
-                "Upgrading database schema from version %d to %d: %s",
-                current_version,
-                SCHEMA_VERSION,
-                db.db_path,
-            )
-            cursor.execute(
-                "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
-                (SCHEMA_VERSION,),
-            )
 
         # World settings table
         cursor.execute(
@@ -221,6 +213,19 @@ def init_schema(db) -> None:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_rel_type ON relationships(relation_type)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_entity_type ON entities(type)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_entity_name ON entities(name)")
+
+        # Set schema version (stamped last so crash-retries re-run migrations)
+        if current_version < SCHEMA_VERSION:
+            logger.info(
+                "Upgrading database schema from version %d to %d: %s",
+                current_version,
+                SCHEMA_VERSION,
+                db.db_path,
+            )
+            cursor.execute(
+                "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
+                (SCHEMA_VERSION,),
+            )
 
         db.conn.commit()
         logger.debug(f"Database schema initialized: {db.db_path}")
