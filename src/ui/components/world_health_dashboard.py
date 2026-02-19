@@ -290,10 +290,11 @@ class WorldHealthDashboard:
     def _build_temporal_section(self) -> None:
         """Build temporal consistency issues section."""
         logger.debug(
-            "Building temporal section: errors=%d, warnings=%d, issues=%d",
+            "Building temporal section: errors=%d, warnings=%d, issues=%d, failed=%s",
             self.metrics.temporal_error_count,
             self.metrics.temporal_warning_count,
             len(self.metrics.temporal_issues),
+            self.metrics.temporal_validation_failed,
         )
         error_count = self.metrics.temporal_error_count
         warning_count = self.metrics.temporal_warning_count
@@ -301,7 +302,27 @@ class WorldHealthDashboard:
 
         with ui.row().classes("w-full gap-4 mb-4"):
             with ui.element("div").classes("flex-1"):
-                if not has_issues:
+                # Show validation service failure as a distinct warning banner
+                if self.metrics.temporal_validation_failed:
+                    with ui.card().classes("p-3 bg-orange-900 mb-2"):
+                        with ui.row().classes("items-center gap-2"):
+                            ui.icon("report_problem", size="sm").classes("text-orange-400")
+                            ui.label("Temporal validation could not complete").classes(
+                                "text-sm font-medium text-orange-200"
+                            )
+                        error_msg = self.metrics.temporal_validation_error or "Unknown error"
+                        ui.label(f"Error: {error_msg}").classes("text-xs text-orange-300 ml-7")
+                        ui.label("Check logs for details and retry the health check.").classes(
+                            "text-xs text-orange-300 ml-7"
+                        )
+                        if self.on_validate_timeline:
+                            ui.button(
+                                "Retry Validation",
+                                on_click=self.on_validate_timeline,
+                                icon="refresh",
+                            ).props("flat size=sm").classes("mt-1")
+
+                if not has_issues and not self.metrics.temporal_validation_failed:
                     with ui.row().classes("items-center gap-2 p-2 bg-green-900 rounded"):
                         ui.icon("schedule", size="sm").classes("text-green-500")
                         ui.label("No temporal issues").classes("text-sm text-green-300")

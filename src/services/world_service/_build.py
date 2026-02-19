@@ -194,7 +194,7 @@ def _build_world_entities(
     check_cancelled: Callable[[], None],
     report_progress: Callable[..., None],
 ) -> None:
-    """Execute entity generation steps 2-10 of the world build.
+    """Execute all world-building steps after initial setup.
 
     Steps: structure generation, character extraction, quality review (characters,
     plot, chapters), locations, factions, items, concepts, relationships, orphan
@@ -402,7 +402,9 @@ def _build_world_entities(
         embed_counts = services.embedding.embed_all_world_data(world_db, state)
         logger.info("World embedding complete: %s", embed_counts)
     except Exception as e:
-        logger.warning("World embedding failed (non-fatal), RAG context unavailable: %s", e)
+        logger.warning(
+            "World embedding failed (non-fatal), RAG context unavailable: %s", e, exc_info=True
+        )
 
 
 def _calculate_total_steps(

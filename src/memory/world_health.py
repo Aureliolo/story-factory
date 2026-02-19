@@ -188,6 +188,14 @@ class WorldHealthMetrics(BaseModel):
         default_factory=list,
         description="List of temporal consistency issues with entity_id, message, severity",
     )
+    temporal_validation_failed: bool = Field(
+        default=False,
+        description="Whether the temporal validation service itself failed to run",
+    )
+    temporal_validation_error: str | None = Field(
+        default=None,
+        description="Error message if temporal validation service failed",
+    )
 
     # Computed metrics
     relationship_density: float = Field(

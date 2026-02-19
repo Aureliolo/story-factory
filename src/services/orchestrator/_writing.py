@@ -542,7 +542,9 @@ def write_all_chapters(
     temporal_context = _retrieve_temporal_context(orc)
     combined_context = _combine_contexts(world_context, temporal_context)
     rag_enabled = bool(orc.context_retrieval and orc.world_db)
-    temporal_enabled = bool(orc.world_db and orc.settings.validate_temporal_consistency)
+    temporal_enabled = bool(
+        orc.world_db and orc.settings.validate_temporal_consistency and orc.timeline
+    )
     if not combined_context and (rag_enabled or temporal_enabled):
         logger.warning(
             "Final story review proceeding without any world/temporal context "

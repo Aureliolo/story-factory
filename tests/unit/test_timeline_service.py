@@ -1,7 +1,7 @@
 """Tests for the timeline service."""
 
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -699,8 +699,6 @@ class TestTimelineService:
 
     def test_get_timeline_data_for_visjs_skips_no_temporal(self, timeline_service, mock_world_db):
         """Test vis.js data skips items with no temporal data."""
-        from unittest.mock import patch
-
         # Create items - one with temporal data, one without
         item_with_data = TimelineItem(
             id="item-1",
@@ -830,8 +828,6 @@ class TestTimelineService:
 
     def test_build_temporal_context_no_year_no_raw_text(self, timeline_service, mock_world_db):
         """Entities with neither raw_text nor year show 'unknown'."""
-        from unittest.mock import patch as mock_patch
-
         item = TimelineItem(
             id="char-1",
             entity_id="e1",
@@ -842,7 +838,7 @@ class TestTimelineService:
             group="character",
         )
 
-        with mock_patch.object(timeline_service, "get_timeline_items", return_value=[item]):
+        with patch.object(timeline_service, "get_timeline_items", return_value=[item]):
             result = timeline_service.build_temporal_context(mock_world_db)
 
         assert "MysteryEntity" in result
@@ -850,8 +846,6 @@ class TestTimelineService:
 
     def test_build_temporal_context_unknown_type(self, timeline_service, mock_world_db):
         """Unknown entity types are sorted to the end and formatted correctly."""
-        from unittest.mock import patch as mock_patch
-
         char_item = TimelineItem(
             id="char-1",
             entity_id="e1",
@@ -871,7 +865,7 @@ class TestTimelineService:
             group="mystical_artifact",
         )
 
-        with mock_patch.object(
+        with patch.object(
             timeline_service, "get_timeline_items", return_value=[custom_item, char_item]
         ):
             result = timeline_service.build_temporal_context(mock_world_db)

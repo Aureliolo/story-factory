@@ -72,10 +72,10 @@ def build_context_section(page: SettingsPage) -> None:
     """Create the "Memory & Context" settings card with inputs for context-related limits.
 
     Constructs a UI card containing number inputs for context window (tokens), max output tokens,
-    previous chapter memory (chars), analysis context (chars), and editor preview (chars).
-    Stores the input component references on page as:
+    previous chapter memory (chars), analysis context (chars), full story analysis (chars),
+    and editor preview (chars). Stores the input component references on page as:
     ``_context_size_input``, ``_max_tokens_input``, ``_prev_chapter_chars``,
-    ``_chapter_analysis_chars``, and ``_full_text_preview_chars``.
+    ``_chapter_analysis_chars``, ``_full_story_analysis_chars``, and ``_full_text_preview_chars``.
 
     Args:
         page: The SettingsPage instance.
@@ -140,6 +140,18 @@ def build_context_section(page: SettingsPage) -> None:
                 .tooltip("Characters to analyze when reviewing chapter quality")
             )
 
+            page._full_story_analysis_chars = (
+                ui.number(
+                    label="Full story analysis (chars)",
+                    value=page.settings.full_story_analysis_chars,
+                    min=2000,
+                    max=30000,
+                )
+                .classes("w-full")
+                .props("outlined dense")
+                .tooltip("Characters of full story content sent for continuity checks")
+            )
+
             page._full_text_preview_chars = (
                 ui.number(
                     label="Editor preview (chars)",
@@ -170,6 +182,7 @@ def save_to_settings(page: SettingsPage) -> None:
     page.settings.max_tokens = int(page._max_tokens_input.value)
     page.settings.previous_chapter_context_chars = int(page._prev_chapter_chars.value)
     page.settings.chapter_analysis_chars = int(page._chapter_analysis_chars.value)
+    page.settings.full_story_analysis_chars = int(page._full_story_analysis_chars.value)
     page.settings.full_text_preview_chars = int(page._full_text_preview_chars.value)
 
     logger.debug("Interaction and context settings saved")
@@ -200,6 +213,8 @@ def refresh_from_settings(page: SettingsPage) -> None:
         page._prev_chapter_chars.value = settings.previous_chapter_context_chars
     if hasattr(page, "_chapter_analysis_chars"):
         page._chapter_analysis_chars.value = settings.chapter_analysis_chars
+    if hasattr(page, "_full_story_analysis_chars"):
+        page._full_story_analysis_chars.value = settings.full_story_analysis_chars
     if hasattr(page, "_full_text_preview_chars"):
         page._full_text_preview_chars.value = settings.full_text_preview_chars
 

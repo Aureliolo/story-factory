@@ -7,6 +7,7 @@ This service handles:
 """
 
 import logging
+from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 from src.memory.entities import Entity, WorldEvent
@@ -25,6 +26,17 @@ if TYPE_CHECKING:
     from src.memory.world_database import WorldDatabase
 
 logger = logging.getLogger(__name__)
+
+# Canonical ordering and display names for temporal context sections
+_TEMPORAL_TYPE_ORDER = ["character", "faction", "location", "item", "concept", "event"]
+_TEMPORAL_PLURAL_MAP = {
+    "character": "CHARACTERS",
+    "faction": "FACTIONS",
+    "location": "LOCATIONS",
+    "item": "ITEMS",
+    "concept": "CONCEPTS",
+    "event": "EVENTS",
+}
 
 
 class TimelineService:
@@ -82,16 +94,14 @@ class TimelineService:
                 continue
 
             item = self._entity_to_timeline_item(entity)
-            if item:
-                items.append(item)
+            items.append(item)
 
         # Get events if requested
         if include_events:
             events = world_db.list_events()
             for event in events:
                 item = self._event_to_timeline_item(event)
-                if item:
-                    items.append(item)
+                items.append(item)
 
         # Sort by start timestamp
         items.sort(key=lambda x: x.start.sort_key)
@@ -228,30 +238,20 @@ class TimelineService:
             return ""
 
         # Group items by type
-        from collections import defaultdict
-
         groups: dict[str, list[TimelineItem]] = defaultdict(list)
         for item in items:
             groups[item.item_type].append(item)
 
         # Build formatted output
         sections: list[str] = []
-        type_order = ["character", "faction", "location", "item", "concept", "event"]
-        plural_map = {
-            "character": "CHARACTERS",
-            "faction": "FACTIONS",
-            "location": "LOCATIONS",
-            "item": "ITEMS",
-            "concept": "CONCEPTS",
-            "event": "EVENTS",
-        }
         sorted_keys = sorted(
-            groups.keys(), key=lambda k: type_order.index(k) if k in type_order else 999
+            groups.keys(),
+            key=lambda k: _TEMPORAL_TYPE_ORDER.index(k) if k in _TEMPORAL_TYPE_ORDER else 999,
         )
 
         for group_key in sorted_keys:
             group_items = groups[group_key]
-            header = plural_map.get(group_key, group_key.upper() + "S")
+            header = _TEMPORAL_PLURAL_MAP.get(group_key, group_key.upper() + "S")
             lines: list[str] = [header + ":"]
             for item in group_items[:20]:
                 start_year_display = item.start.year if item.start.year is not None else "unknown"

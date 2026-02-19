@@ -60,21 +60,27 @@ make check                  # Format + lint + test
 ```
 main.py
   └── ServiceContainer(settings)  # Creates all services once
-       ├── ProjectService         # Project CRUD
-       ├── StoryService           # Story generation workflow
-       ├── WorldService           # Entity/relationship management
-       ├── ModelService           # Ollama model operations
-       ├── ExportService          # Export formats
-       ├── ModelModeService       # Model performance tracking
-       ├── ScoringService         # Quality scoring
-       ├── WorldQualityService    # World quality enhancement
-       ├── SuggestionService      # AI-powered suggestions
-       ├── TemplateService        # Story template management
-       ├── BackupService          # Project backup/restore
-       ├── ImportService          # Import entities from text
-       ├── ComparisonService      # Model comparison testing
-       ├── EmbeddingService       # Vector embeddings via Ollama
-       └── ContextRetrievalService # RAG context retrieval for agent prompts
+       ├── ProjectService           # Project CRUD
+       ├── StoryService             # Story generation workflow
+       ├── WorldService             # Entity/relationship management
+       ├── ModelService             # Ollama model operations
+       ├── ExportService            # Export formats
+       ├── ModelModeService         # Model performance tracking
+       ├── ScoringService           # Quality scoring
+       ├── WorldQualityService      # World quality enhancement
+       ├── SuggestionService        # AI-powered suggestions
+       ├── TemplateService          # Story template management
+       ├── BackupService            # Project backup/restore
+       ├── ImportService            # Import entities from text
+       ├── ComparisonService        # Model comparison testing
+       ├── TimelineService          # Timeline aggregation and temporal context
+       ├── ConflictAnalysisService  # Story conflict detection
+       ├── WorldTemplateService     # World generation templates
+       ├── ContentGuidelinesService # Content guidelines enforcement
+       ├── CalendarService          # Calendar generation and management
+       ├── TemporalValidationService # Temporal consistency validation
+       ├── EmbeddingService         # Vector embeddings via Ollama
+       └── ContextRetrievalService  # RAG context retrieval for agent prompts
 ```
 
 **Layer responsibilities:**
@@ -130,8 +136,8 @@ WorldDatabase (sqlite-vec) → EmbeddingService → ContextRetrievalService → 
 10. Generate relationships (quality loop)
 11. Orphan recovery
 12. Generate events (quality loop, non-fatal — build continues if this fails)
-13. Generate embeddings
-14. Validate temporal consistency (non-fatal, gated by settings.validate_temporal_consistency)
+13. Validate temporal consistency (non-fatal, gated by settings.validate_temporal_consistency)
+14. Generate embeddings
 15. Build complete
 ```
 

@@ -241,6 +241,8 @@ def get_world_health_metrics(
     temporal_warning_count = 0
     temporal_issues: list[dict] = []
     average_temporal_consistency = 0.0
+    temporal_validation_failed = False
+    temporal_validation_error: str | None = None
 
     if svc.settings.validate_temporal_consistency:
         from src.services.temporal_validation_service import TemporalValidationService
@@ -273,18 +275,8 @@ def get_world_health_metrics(
             )
         except Exception as e:
             logger.warning("Temporal validation failed (non-fatal): %s", e, exc_info=True)
-            temporal_error_count = 1
-            temporal_issues = [
-                {
-                    "entity_id": "",
-                    "entity_name": "System",
-                    "entity_type": "validation",
-                    "message": f"Temporal validation could not complete: {e}",
-                    "severity": "error",
-                    "error_type": "validation_failure",
-                    "suggestion": "Check logs for details and retry the health check.",
-                }
-            ]
+            temporal_validation_failed = True
+            temporal_validation_error = str(e)
     else:
         logger.debug("Temporal validation disabled by settings")
 
@@ -307,6 +299,8 @@ def get_world_health_metrics(
         temporal_warning_count=temporal_warning_count,
         temporal_issues=temporal_issues,
         average_temporal_consistency=average_temporal_consistency,
+        temporal_validation_failed=temporal_validation_failed,
+        temporal_validation_error=temporal_validation_error,
     )
 
     # Calculate health score and generate recommendations

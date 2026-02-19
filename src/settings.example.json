@@ -30,6 +30,7 @@
   "revision_temperature": 0.7,
   "previous_chapter_context_chars": 2000,
   "chapter_analysis_chars": 4000,
+  "full_story_analysis_chars": 8000,
   "full_text_preview_chars": 3000,
   "interaction_mode": "checkpoint",
   "chapters_between_checkpoints": 3,

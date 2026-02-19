@@ -79,7 +79,7 @@ class ServiceContainer:
             settings (Settings | None): Application settings to share across services. If omitted, settings are loaded via Settings.load().
 
         Notes:
-            Some services are initialized with other service instances as dependencies (for example, `mode` is provided to `scoring`, `story`, `world_quality`, and `import_svc`).
+            Some services are initialized with other service instances as dependencies (for example, `mode` is provided to `scoring`, `story`, `world_quality`, and `import_svc`; `timeline` is provided to `story`).
         """
         t0 = time.perf_counter()
         logger.info("Initializing ServiceContainer...")

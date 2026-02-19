@@ -345,8 +345,8 @@ Return voice inconsistencies found. Set category to "voice". If no issues, retur
         Args:
             story_state: Current story state
             check_voice: Whether to perform voice consistency checks (default: True)
-            world_context: Optional world context (retrieval-augmented context and temporal
-                timeline data) for richer consistency checks.
+            world_context: Optional world context string for richer consistency checks.
+                May include RAG-retrieved entities and temporal timeline data.
 
         Returns:
             List of continuity issues found.
@@ -379,7 +379,7 @@ Return voice inconsistencies found. Set category to "voice". If no issues, retur
             premise=brief.premise,
             characters=story_state.characters,
             world_context=world_context or "",
-            full_content=full_content[:8000],
+            full_content=full_content[: self.settings.full_story_analysis_chars],
         )
 
         try:

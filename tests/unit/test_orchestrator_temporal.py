@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.services.orchestrator._writing import (
+    _combine_contexts,
     _retrieve_temporal_context,
 )
 
@@ -79,8 +80,6 @@ class TestCombineContexts:
 
     def test_both_contexts_present(self):
         """Combines both contexts with separator."""
-        from src.services.orchestrator._writing import _combine_contexts
-
         result = _combine_contexts("RAG data", "Timeline data")
         assert "RAG data" in result
         assert "Timeline data" in result
@@ -88,22 +87,16 @@ class TestCombineContexts:
 
     def test_only_world_context(self):
         """Returns world context when temporal is empty."""
-        from src.services.orchestrator._writing import _combine_contexts
-
         result = _combine_contexts("RAG data", "")
         assert result == "RAG data"
 
     def test_only_temporal_context(self):
         """Returns temporal context when world is empty."""
-        from src.services.orchestrator._writing import _combine_contexts
-
         result = _combine_contexts("", "Timeline data")
         assert result == "Timeline data"
 
     def test_both_empty(self):
         """Returns empty string when both are empty."""
-        from src.services.orchestrator._writing import _combine_contexts
-
         result = _combine_contexts("", "")
         assert result == ""
 
@@ -142,23 +135,25 @@ class TestWriteAllChaptersFinalReviewContextWarning:
         mock_orc.write_chapter = mock_write_chapter
         mock_orc.continuity.check_full_story.return_value = []
 
-        with patch(
-            "src.services.orchestrator._writing._retrieve_world_context",
-            return_value="",
-        ):
-            with patch(
+        with (
+            patch(
+                "src.services.orchestrator._writing._retrieve_world_context",
+                return_value="",
+            ),
+            patch(
                 "src.services.orchestrator._writing._retrieve_temporal_context",
                 return_value="",
-            ):
-                with patch("src.services.orchestrator._writing.logger") as mock_logger:
-                    from src.services.orchestrator._writing import write_all_chapters
+            ),
+            patch("src.services.orchestrator._writing.logger") as mock_logger,
+        ):
+            from src.services.orchestrator._writing import write_all_chapters
 
-                    list(write_all_chapters(mock_orc))
+            list(write_all_chapters(mock_orc))
 
-                    mock_logger.warning.assert_any_call(
-                        "Final story review proceeding without any world/temporal context "
-                        "despite context sources being configured"
-                    )
+            mock_logger.warning.assert_any_call(
+                "Final story review proceeding without any world/temporal context "
+                "despite context sources being configured"
+            )
 
 
 class TestReviewFullStoryContextWarning:
@@ -178,23 +173,25 @@ class TestReviewFullStoryContextWarning:
         mock_orc._emit = fake_emit
         mock_orc.continuity.check_full_story.return_value = []
 
-        with patch(
-            "src.services.orchestrator._writing._retrieve_world_context",
-            return_value="",
-        ):
-            with patch(
-                "src.services.orchestrator._writing._retrieve_temporal_context",
+        with (
+            patch(
+                "src.services.orchestrator._editing._retrieve_world_context",
                 return_value="",
-            ):
-                with patch("src.services.orchestrator._editing.logger") as mock_logger:
-                    from src.services.orchestrator._editing import review_full_story
+            ),
+            patch(
+                "src.services.orchestrator._editing._retrieve_temporal_context",
+                return_value="",
+            ),
+            patch("src.services.orchestrator._editing.logger") as mock_logger,
+        ):
+            from src.services.orchestrator._editing import review_full_story
 
-                    list(review_full_story(mock_orc))
+            list(review_full_story(mock_orc))
 
-                    mock_logger.warning.assert_any_call(
-                        "Full story review proceeding without any world/temporal context "
-                        "despite context sources being configured"
-                    )
+            mock_logger.warning.assert_any_call(
+                "Full story review proceeding without any world/temporal context "
+                "despite context sources being configured"
+            )
 
 
 class TestWriteAllChaptersFinalReview:
@@ -231,23 +228,26 @@ class TestWriteAllChaptersFinalReview:
         # Mock continuity check_full_story
         mock_orc.continuity.check_full_story.return_value = []
 
-        with patch(
-            "src.services.orchestrator._writing._retrieve_world_context",
-            return_value="RAG context",
-        ):
-            with patch(
+        with (
+            patch(
+                "src.services.orchestrator._writing._retrieve_world_context",
+                return_value="RAG context",
+            ),
+            patch(
                 "src.services.orchestrator._writing._retrieve_temporal_context",
                 return_value="TEMPORAL context",
-            ):
-                from src.services.orchestrator._writing import write_all_chapters
+            ),
+        ):
+            from src.services.orchestrator._writing import write_all_chapters
 
-                # Consume generator
-                list(write_all_chapters(mock_orc))
+            # Consume generator
+            list(write_all_chapters(mock_orc))
 
         # check_full_story should have been called with combined context
         mock_orc.continuity.check_full_story.assert_called_once()
         call_kwargs = mock_orc.continuity.check_full_story.call_args
-        world_context = call_kwargs.kwargs.get("world_context", "")
+        assert "world_context" in call_kwargs.kwargs, "world_context not passed as keyword arg"
+        world_context = call_kwargs.kwargs["world_context"]
         assert "RAG context" in world_context
         assert "TEMPORAL context" in world_context
 
@@ -278,20 +278,23 @@ class TestWriteAllChaptersFinalReview:
         mock_orc.write_chapter = mock_write_chapter
         mock_orc.continuity.check_full_story.return_value = []
 
-        with patch(
-            "src.services.orchestrator._writing._retrieve_world_context",
-            return_value="RAG context only",
-        ):
-            with patch(
+        with (
+            patch(
+                "src.services.orchestrator._writing._retrieve_world_context",
+                return_value="RAG context only",
+            ),
+            patch(
                 "src.services.orchestrator._writing._retrieve_temporal_context",
                 return_value="",
-            ):
-                from src.services.orchestrator._writing import write_all_chapters
+            ),
+        ):
+            from src.services.orchestrator._writing import write_all_chapters
 
-                list(write_all_chapters(mock_orc))
+            list(write_all_chapters(mock_orc))
 
         call_kwargs = mock_orc.continuity.check_full_story.call_args
-        world_context = call_kwargs.kwargs.get("world_context", "")
+        assert "world_context" in call_kwargs.kwargs, "world_context not passed as keyword arg"
+        world_context = call_kwargs.kwargs["world_context"]
         assert "RAG context only" in world_context
         # No temporal context appended
         assert "TEMPORAL" not in world_context
@@ -311,19 +314,22 @@ class TestReviewFullStoryTemporal:
         mock_orc._emit = fake_emit
         mock_orc.continuity.check_full_story.return_value = []
 
-        with patch(
-            "src.services.orchestrator._writing._retrieve_world_context",
-            return_value="RAG data",
-        ):
-            with patch(
-                "src.services.orchestrator._writing._retrieve_temporal_context",
+        with (
+            patch(
+                "src.services.orchestrator._editing._retrieve_world_context",
+                return_value="RAG data",
+            ),
+            patch(
+                "src.services.orchestrator._editing._retrieve_temporal_context",
                 return_value="Timeline data",
-            ):
-                from src.services.orchestrator._editing import review_full_story
+            ),
+        ):
+            from src.services.orchestrator._editing import review_full_story
 
-                list(review_full_story(mock_orc))
+            list(review_full_story(mock_orc))
 
         call_kwargs = mock_orc.continuity.check_full_story.call_args
-        world_context = call_kwargs.kwargs.get("world_context", "")
+        assert "world_context" in call_kwargs.kwargs, "world_context not passed as keyword arg"
+        world_context = call_kwargs.kwargs["world_context"]
         assert "RAG data" in world_context
         assert "Timeline data" in world_context
