@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.memory.world_database import WorldDatabase
+from src.memory.world_database import SCHEMA_VERSION, WorldDatabase
 
 
 class TestCycleHashComputation:
@@ -537,21 +537,23 @@ class TestSchemaV5ToV6Migration:
         conn.commit()
         conn.close()
 
-    def test_v5_database_upgraded_to_v6(self, tmp_path):
-        """Opening a v5 database should auto-upgrade to v6 with accepted_cycles table."""
+    def test_v5_database_upgraded_to_latest(self, tmp_path):
+        """Opening a v5 database should auto-upgrade to latest schema with all migrations."""
         db_path = tmp_path / "v5_test.db"
         self._create_v5_database(db_path)
 
         # Open with WorldDatabase — triggers _init_schema() migration
         db = WorldDatabase(db_path)
         try:
-            # Verify schema version upgraded to 6
+            # Verify schema version upgraded to latest (v7)
             cursor = db.conn.cursor()
             cursor.execute("SELECT version FROM schema_version ORDER BY version DESC LIMIT 1")
             version = cursor.fetchone()[0]
-            assert version == 6, f"Expected schema version 6, got {version}"
+            assert version == SCHEMA_VERSION, (
+                f"Expected schema version {SCHEMA_VERSION}, got {version}"
+            )
 
-            # Verify accepted_cycles table exists
+            # Verify v6 migration: accepted_cycles table exists
             cursor.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='accepted_cycles'"
             )
@@ -563,12 +565,19 @@ class TestSchemaV5ToV6Migration:
             db.accept_cycle(cycle_hash)
             accepted = db.get_accepted_cycles()
             assert cycle_hash in accepted
+
+            # Verify v7 migration: events table has 'attributes' column
+            cursor.execute("PRAGMA table_info(events)")
+            columns = {row[1] for row in cursor.fetchall()}
+            assert "attributes" in columns, (
+                "events table should have 'attributes' column after v7 migration"
+            )
         finally:
             db.close()
 
-    def test_v6_database_not_double_upgraded(self, tmp_path):
-        """Re-running _init_schema on a v6 database should not lose accepted cycles."""
-        db = WorldDatabase(tmp_path / "v6_test.db")
+    def test_latest_database_not_double_upgraded(self, tmp_path):
+        """Re-running _init_schema on a current-version database should not lose accepted cycles."""
+        db = WorldDatabase(tmp_path / "latest_test.db")
         try:
             # Accept a cycle
             cycle_hash = "1234567890abcdef"
@@ -582,10 +591,10 @@ class TestSchemaV5ToV6Migration:
             accepted = db.get_accepted_cycles()
             assert cycle_hash in accepted, "Accepted cycle should survive re-init"
 
-            # Verify schema version is still 6
+            # Verify schema version is still at latest
             cursor = db.conn.cursor()
             cursor.execute("SELECT version FROM schema_version ORDER BY version DESC LIMIT 1")
             version = cursor.fetchone()[0]
-            assert version == 6
+            assert version == SCHEMA_VERSION
         finally:
             db.close()
