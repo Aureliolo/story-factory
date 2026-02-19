@@ -4,6 +4,11 @@ import json
 import logging
 from unittest.mock import MagicMock
 
+import pytest
+from pydantic import ValidationError
+
+from src.memory.entities import WorldEvent
+from src.memory.story_state import EventParticipantEntry, WorldEventCreation
 from src.services.world_service._event_helpers import (
     _extract_lifecycle_temporal,
     _parse_lifecycle_sub,
@@ -334,3 +339,68 @@ class TestResolveEventParticipants:
         result = resolve_event_participants({}, [])
 
         assert result == []
+
+
+class TestEventModels:
+    """Tests for EventParticipantEntry and WorldEventCreation Pydantic models."""
+
+    def test_event_participant_entry_valid(self):
+        """Test creating a valid EventParticipantEntry."""
+        entry = EventParticipantEntry(entity_name="Hero", role="actor")
+        assert entry.entity_name == "Hero"
+        assert entry.role == "actor"
+
+    def test_event_participant_entry_default_role(self):
+        """Test that role defaults to 'affected'."""
+        entry = EventParticipantEntry(entity_name="Hero")
+        assert entry.role == "affected"
+
+    def test_event_participant_entry_rejects_empty_name(self):
+        """Test that empty entity_name raises ValidationError."""
+        with pytest.raises(ValidationError):
+            EventParticipantEntry(entity_name="")
+
+    def test_world_event_creation_valid(self):
+        """Test creating a valid WorldEventCreation."""
+        event = WorldEventCreation(description="A battle")
+        assert event.description == "A battle"
+
+    def test_world_event_creation_rejects_empty_description(self):
+        """Test that empty description raises ValidationError."""
+        with pytest.raises(ValidationError):
+            WorldEventCreation(description="")
+
+    def test_world_event_creation_month_range(self):
+        """Test month field validation — valid at 14, invalid at 0 and 15."""
+        # Valid: month=14 (max for custom calendars)
+        event = WorldEventCreation(description="A feast", month=14)
+        assert event.month == 14
+
+        # Invalid: month=0
+        with pytest.raises(ValidationError):
+            WorldEventCreation(description="A feast", month=0)
+
+        # Invalid: month=15
+        with pytest.raises(ValidationError):
+            WorldEventCreation(description="A feast", month=15)
+
+    def test_world_event_creation_defaults(self):
+        """Test that participants and consequences default to empty lists."""
+        event = WorldEventCreation(description="A quiet day")
+        assert event.participants == []
+        assert event.consequences == []
+
+
+class TestWorldEventModel:
+    """Tests for the WorldEvent entity model."""
+
+    def test_world_event_rejects_empty_description(self):
+        """Test that empty description raises ValidationError."""
+        with pytest.raises(ValidationError):
+            WorldEvent(id="e1", description="")
+
+    def test_world_event_valid(self):
+        """Test creating a valid WorldEvent."""
+        event = WorldEvent(id="e1", description="Battle")
+        assert event.id == "e1"
+        assert event.description == "Battle"

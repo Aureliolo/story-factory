@@ -329,7 +329,9 @@ Return ONLY the improved event."""
         )
 
         result = refined.model_dump()
-        # Preserve temporal fields from original if refined version drops them
+        # Preserve temporal fields from original if refined version drops them.
+        # LLMs frequently omit unchanged fields during refinement, so we
+        # backfill from the original to prevent data loss.
         for key in ("year", "month", "era_name"):
             if result.get(key) in (None, "") and event.get(key) not in (None, ""):
                 result[key] = event[key]

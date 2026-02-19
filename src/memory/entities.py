@@ -7,10 +7,13 @@ from pydantic import BaseModel, Field
 
 
 class Entity(BaseModel):
-    """A world entity (character, location, item, faction, concept)."""
+    """A world entity (character, location, item, faction, concept).
+
+    Events are stored separately via WorldEvent.
+    """
 
     id: str
-    type: str  # character, location, item, faction, concept
+    type: str  # character, location, item, faction, concept (events stored via WorldEvent)
     name: str
     description: str = ""
     attributes: dict[str, Any] = Field(default_factory=dict)
@@ -36,7 +39,7 @@ class WorldEvent(BaseModel):
     """A significant event in the story world."""
 
     id: str
-    description: str
+    description: str = Field(min_length=1)
     chapter_number: int | None = None
     timestamp_in_story: str = ""  # In-world timing (e.g., "Day 3", "Year 1042")
     consequences: list[str] = Field(default_factory=list)
@@ -49,8 +52,8 @@ EventRole = Literal["actor", "location", "affected", "witness"]
 class EventParticipant(BaseModel):
     """Links an entity to an event with a role."""
 
-    event_id: str
-    entity_id: str
+    event_id: str = Field(min_length=1)
+    entity_id: str = Field(min_length=1)
     role: EventRole
 
 

@@ -160,3 +160,128 @@ class TestRecoverOrphansCancellation:
         )
 
         assert count == 0
+
+
+class TestRecoverOrphansEmptyRelationship:
+    """Test orphan recovery with empty/invalid relationship from quality service."""
+
+    def test_empty_source_target_returns_zero(
+        self, mock_svc, story_state, mock_world_db, mock_services
+    ):
+        """Test that empty source/target in generated relationship adds nothing."""
+        mock_world_db.add_entity("character", "Hero", "A brave hero")
+        villain_id = mock_world_db.add_entity("character", "Villain", "Evil villain")
+        castle_id = mock_world_db.add_entity("location", "Castle", "Dark castle")
+        mock_world_db.add_relationship(villain_id, castle_id, "resides_in", "Lives in castle")
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 7.0
+
+        # Return empty source/target for all attempts
+        mock_services.world_quality.generate_relationship_with_quality.return_value = (
+            {"source": "", "target": ""},
+            mock_quality_scores,
+            1,
+        )
+
+        count = _recover_orphans(mock_svc, story_state, mock_world_db, mock_services)
+
+        assert count == 0
+
+
+class TestRecoverOrphansUnresolvableNames:
+    """Test orphan recovery when generated entity names don't match any real entities."""
+
+    def test_unresolvable_names_returns_zero(
+        self, mock_svc, story_state, mock_world_db, mock_services
+    ):
+        """Test that unresolvable entity names in relationship adds nothing."""
+        mock_world_db.add_entity("character", "Hero", "A brave hero")
+        villain_id = mock_world_db.add_entity("character", "Villain", "Evil villain")
+        castle_id = mock_world_db.add_entity("location", "Castle", "Dark castle")
+        mock_world_db.add_relationship(villain_id, castle_id, "resides_in", "Lives in castle")
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 7.0
+
+        mock_services.world_quality.generate_relationship_with_quality.return_value = (
+            {
+                "source": "NonExistent1",
+                "target": "NonExistent2",
+                "relation_type": "knows",
+            },
+            mock_quality_scores,
+            1,
+        )
+
+        count = _recover_orphans(mock_svc, story_state, mock_world_db, mock_services)
+
+        assert count == 0
+
+
+class TestRecoverOrphansNeitherOrphan:
+    """Test orphan recovery safety check: neither endpoint is an orphan."""
+
+    def test_neither_is_orphan_returns_zero(
+        self, mock_svc, story_state, mock_world_db, mock_services
+    ):
+        """Test that relationship between two non-orphans is skipped."""
+        mock_world_db.add_entity("character", "Hero", "A brave hero")
+        villain_id = mock_world_db.add_entity("character", "Villain", "Evil villain")
+        castle_id = mock_world_db.add_entity("location", "Castle", "Dark castle")
+        mock_world_db.add_relationship(villain_id, castle_id, "resides_in", "Lives in castle")
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 7.0
+
+        # Return a relationship between two already-connected entities (neither is an orphan)
+        mock_services.world_quality.generate_relationship_with_quality.return_value = (
+            {
+                "source": "Villain",
+                "target": "Castle",
+                "relation_type": "resides_in",
+                "description": "Lives there",
+            },
+            mock_quality_scores,
+            1,
+        )
+
+        count = _recover_orphans(mock_svc, story_state, mock_world_db, mock_services)
+
+        assert count == 0
+
+
+class TestRecoverOrphansAlreadyConnected:
+    """Test orphan recovery skips orphans already connected by previous relationships."""
+
+    def test_already_connected_skips_second_orphan(
+        self, mock_svc, story_state, mock_world_db, mock_services
+    ):
+        """Test that second orphan is skipped when already connected by first orphan's rel."""
+        # Hero and Sidekick are both orphans; Villain is connected to Castle
+        mock_world_db.add_entity("character", "Hero", "A brave hero")
+        mock_world_db.add_entity("character", "Sidekick", "A loyal sidekick")
+        villain_id = mock_world_db.add_entity("character", "Villain", "Evil villain")
+        castle_id = mock_world_db.add_entity("location", "Castle", "Dark castle")
+        mock_world_db.add_relationship(villain_id, castle_id, "resides_in", "Lives in castle")
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        # First call: connect Hero to Sidekick (connects both orphans at once)
+        # Second call should not happen because Sidekick is already connected
+        mock_services.world_quality.generate_relationship_with_quality.return_value = (
+            {
+                "source": "Hero",
+                "target": "Sidekick",
+                "relation_type": "allies",
+                "description": "Loyal allies",
+            },
+            mock_quality_scores,
+            1,
+        )
+
+        count = _recover_orphans(mock_svc, story_state, mock_world_db, mock_services)
+
+        # Only one relationship needed — connecting Hero to Sidekick resolves both orphans
+        assert count == 1

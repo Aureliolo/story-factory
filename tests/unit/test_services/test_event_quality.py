@@ -116,24 +116,36 @@ class TestCreateEvent:
         assert len(result["consequences"]) == 2
 
     @patch("src.services.world_quality_service._event.generate_structured")
-    def test_create_event_empty_description_returns_empty(
+    def test_create_event_empty_description_raises_error(
         self, mock_generate_structured, service, story_state
     ):
-        """Test event creation returns empty dict when description is empty."""
-        mock_event = WorldEventCreation(
-            description="",
-            year=None,
-            era_name="",
-            participants=[],
-            consequences=[],
-        )
-        mock_generate_structured.return_value = mock_event
+        """Test event creation raises WorldGenerationError when LLM returns empty description.
 
-        result = service._create_event(
-            story_state, existing_descriptions=[], entity_context="Test context", temperature=0.9
+        WorldEventCreation enforces min_length=1 on description, so Pydantic
+        raises ValidationError which _create_event wraps as WorldGenerationError.
+        """
+        from pydantic import ValidationError
+
+        mock_generate_structured.side_effect = ValidationError.from_exception_data(
+            title="WorldEventCreation",
+            line_errors=[
+                {  # type: ignore[typeddict-unknown-key]
+                    "type": "string_too_short",
+                    "loc": ("description",),
+                    "msg": "String should have at least 1 character",
+                    "input": "",
+                    "ctx": {"min_length": 1},
+                }
+            ],
         )
 
-        assert result == {}
+        with pytest.raises(WorldGenerationError, match="Event creation failed"):
+            service._create_event(
+                story_state,
+                existing_descriptions=[],
+                entity_context="Test context",
+                temperature=0.9,
+            )
 
     def test_create_event_no_brief_raises_value_error(self, service):
         """Test event creation raises ValueError without brief."""

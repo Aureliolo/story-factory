@@ -1,16 +1,24 @@
 """Event helper functions for world building.
 
 Contains utility functions for building event context, timestamps,
-and resolving event participants during world generation.
+and resolving event participants during world generation, plus the
+top-level ``_generate_events`` orchestrator extracted from ``_build.py``.
 """
 
 import json
 import logging
-from typing import Any
+import random
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from src.memory.entities import Entity
+from src.memory.story_state import StoryState
 from src.memory.world_database import WorldDatabase
 from src.services.world_service._name_matching import _find_entity_by_name
+
+if TYPE_CHECKING:
+    from src.services import ServiceContainer
+    from src.services.world_service import WorldService
 
 logger = logging.getLogger(__name__)
 
@@ -195,3 +203,96 @@ def resolve_event_participants(
                     len(all_entities),
                 )
     return participants
+
+
+def _generate_events(
+    svc: WorldService,
+    state: StoryState,
+    world_db: WorldDatabase,
+    services: ServiceContainer,
+    cancel_check: Callable[[], bool] | None = None,
+) -> int:
+    """Generate and add world events to the database using quality refinement.
+
+    Collects all entities, relationships, and lifecycle data to build context,
+    then generates events that reference existing entities as participants.
+    Existing event descriptions are collected for deduplication to avoid
+    generating duplicate events.
+
+    Args:
+        svc: WorldService instance.
+        state: Current story state with brief.
+        world_db: World database to read entities from and persist events to.
+        services: Service container providing the world quality service.
+        cancel_check: Optional callable that returns True to stop generation.
+
+    Returns:
+        Number of events successfully added to the world database.
+    """
+    entity_context = build_event_entity_context(world_db)
+
+    # Get existing event descriptions for dedup
+    existing_events = world_db.list_events()
+    existing_descriptions = [e.description for e in existing_events]
+
+    # Determine event count (per-project overrides take precedence over settings)
+    event_min = (
+        state.target_events_min
+        if state.target_events_min is not None
+        else svc.settings.world_gen_events_min
+    )
+    event_max = (
+        state.target_events_max
+        if state.target_events_max is not None
+        else svc.settings.world_gen_events_max
+    )
+    if event_min > event_max:
+        logger.error("Invalid event count range: min=%d > max=%d, swapping", event_min, event_max)
+        event_min, event_max = event_max, event_min
+    event_count = random.randint(event_min, event_max)
+
+    event_results = services.world_quality.generate_events_with_quality(
+        state,
+        existing_descriptions,
+        entity_context,
+        event_count,
+        cancel_check=cancel_check,
+    )
+
+    all_entities = world_db.list_entities()
+    added_count = 0
+    for event, event_scores in event_results:
+        if cancel_check and cancel_check():
+            logger.info("Event processing cancelled after %d events", added_count)
+            break
+
+        description = event.get("description", "")
+        if not description:
+            logger.warning("Skipping event with empty description: %s", event)
+            continue
+
+        timestamp_in_story = build_event_timestamp(event)
+        participants = resolve_event_participants(event, all_entities)
+
+        consequences = event.get("consequences", [])
+
+        world_db.add_event(
+            description=description,
+            participants=participants if participants else None,
+            timestamp_in_story=timestamp_in_story,
+            consequences=consequences if consequences else None,
+        )
+        added_count += 1
+        logger.debug(
+            "Added event '%s' (quality: %.1f, participants: %d)",
+            description[:60],
+            event_scores.average,
+            len(participants),
+        )
+
+    logger.info(
+        "Event generation complete: added %d/%d events to world database",
+        added_count,
+        event_count,
+    )
+    return added_count

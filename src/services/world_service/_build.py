@@ -9,18 +9,14 @@ from src.memory.story_state import PlotOutline, StoryState
 from src.memory.world_calendar import WorldCalendar
 from src.memory.world_database import WorldDatabase
 from src.memory.world_settings import WorldSettings
-from src.services.world_service._event_helpers import (
-    build_event_entity_context,
-    build_event_timestamp,
-    resolve_event_participants,
-)
+from src.services.world_service._event_helpers import _generate_events
 from src.services.world_service._lifecycle_helpers import (
     build_character_lifecycle,
     build_entity_lifecycle,
 )
 from src.services.world_service._name_matching import _find_entity_by_name
 from src.services.world_service._orphan_recovery import _recover_orphans
-from src.utils.exceptions import GenerationCancelledError
+from src.utils.exceptions import GenerationCancelledError, WorldGenerationError
 from src.utils.validation import validate_not_none, validate_type
 
 if TYPE_CHECKING:
@@ -194,7 +190,12 @@ def _build_world_entities(
     check_cancelled: Callable[[], None],
     report_progress: Callable[..., None],
 ) -> None:
-    """Execute entity generation steps 2-9 of the world build."""
+    """Execute entity generation steps 2-9 of the world build.
+
+    Steps: structure generation, character extraction, quality review (characters,
+    plot, chapters), locations, factions, items, concepts, relationships, orphan
+    recovery, events, and embeddings.
+    """
     # Step 2: Generate story structure (characters, chapters) if requested
     if options.generate_structure:
         check_cancelled()
@@ -367,7 +368,7 @@ def _build_world_entities(
             logger.info("Generated %d world events", event_count)
         except GenerationCancelledError:
             raise
-        except Exception as e:
+        except (WorldGenerationError, ValueError) as e:
             logger.warning("Event generation failed (non-fatal), continuing without events: %s", e)
 
     # Step 9: Batch-embed all world content for RAG context retrieval
@@ -411,15 +412,7 @@ def _calculate_total_steps(options: WorldBuildOptions, *, generate_calendar: boo
 def _clear_world_db(world_db: WorldDatabase) -> None:
     """Clear all entities, relationships, and events from world database."""
     # Delete events first (they reference entities via participants)
-    events = world_db.list_events()
-    if events:
-        logger.info("Deleting %d existing events...", len(events))
-        with world_db._lock:
-            world_db._ensure_open()
-            cursor = world_db.conn.cursor()
-            cursor.execute("DELETE FROM event_participants")
-            cursor.execute("DELETE FROM events")
-            world_db.conn.commit()
+    world_db.clear_events()
 
     # Delete relationships (they reference entities)
     relationships = world_db.list_relationships()
@@ -855,88 +848,5 @@ def _generate_relationships(
                 )
         else:
             logger.warning(f"Skipping invalid relationship: {rel}")
-
-    return added_count
-
-
-def _generate_events(
-    svc: WorldService,
-    state: StoryState,
-    world_db: WorldDatabase,
-    services: ServiceContainer,
-    cancel_check: Callable[[], bool] | None = None,
-) -> int:
-    """Generate and add world events to the database using quality refinement.
-
-    Collects all entities, relationships, and lifecycle data to build context,
-    then generates events that reference existing entities as participants.
-
-    Args:
-        svc: WorldService instance.
-        state: Current story state with brief.
-        world_db: World database to read entities from and persist events to.
-        services: Service container providing the world quality service.
-        cancel_check: Optional callable that returns True to stop generation.
-
-    Returns:
-        Number of events successfully added to the world database.
-    """
-    entity_context = build_event_entity_context(world_db)
-
-    # Get existing event descriptions for dedup
-    existing_events = world_db.list_events()
-    existing_descriptions = [e.description for e in existing_events]
-
-    # Determine event count
-    event_min = (
-        state.target_events_min
-        if state.target_events_min is not None
-        else svc.settings.world_gen_events_min
-    )
-    event_max = (
-        state.target_events_max
-        if state.target_events_max is not None
-        else svc.settings.world_gen_events_max
-    )
-    event_count = random.randint(event_min, event_max)
-
-    event_results = services.world_quality.generate_events_with_quality(
-        state,
-        existing_descriptions,
-        entity_context,
-        event_count,
-        cancel_check=cancel_check,
-    )
-
-    all_entities = world_db.list_entities()
-    added_count = 0
-    for event, event_scores in event_results:
-        if cancel_check and cancel_check():
-            logger.info("Event processing cancelled after %d events", added_count)
-            break
-
-        description = event.get("description", "")
-        if not description:
-            logger.warning("Skipping event with empty description: %s", event)
-            continue
-
-        timestamp_in_story = build_event_timestamp(event)
-        participants = resolve_event_participants(event, all_entities)
-
-        consequences = event.get("consequences", [])
-
-        world_db.add_event(
-            description=description,
-            participants=participants if participants else None,
-            timestamp_in_story=timestamp_in_story,
-            consequences=consequences if consequences else None,
-        )
-        added_count += 1
-        logger.debug(
-            "Added event '%s' (quality: %.1f, participants: %d)",
-            description[:60],
-            event_scores.average,
-            len(participants),
-        )
 
     return added_count

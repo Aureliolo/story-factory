@@ -1535,6 +1535,35 @@ class TestBuildWorld:
         assert counts["events"] == 0
 
 
+class TestBuildWorldEventNonFatal:
+    """Tests for event generation non-fatal behavior during world build."""
+
+    def test_build_world_event_failure_nonfatal(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test that event generation failure does NOT abort the build."""
+        mock_services.world_quality.generate_events_with_quality.side_effect = WorldGenerationError(
+            "Event LLM failed"
+        )
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
+        _mock_orphan_recovery_failure(mock_services)
+
+        # Build should succeed despite event generation failure
+        counts = world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            WorldBuildOptions.full(),
+        )
+
+        # Event count should remain 0 since it failed
+        assert counts["events"] == 0
+
+
 class TestBuildWorldEmbedding:
     """Tests for embedding step during world build."""
 

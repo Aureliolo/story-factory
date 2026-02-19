@@ -13,7 +13,7 @@ from src.memory.templates import WorldTemplate
 from src.memory.world_database import WorldDatabase
 from src.settings import Settings
 
-from . import _build, _entities, _extraction, _graph, _health
+from . import _build, _entities, _event_helpers, _extraction, _graph, _health
 from ._event_helpers import (
     build_event_entity_context as build_event_entity_context,
 )
@@ -629,7 +629,7 @@ class WorldService:
         cancel_check: Callable[[], bool] | None = None,
     ) -> int:
         """Generate and add world events to database."""
-        return _build._generate_events(
+        return _event_helpers._generate_events(
             self,
             state,
             world_db,

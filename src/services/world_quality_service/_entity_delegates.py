@@ -5,7 +5,7 @@ corresponding module-level functions. Extracted from __init__.py to keep
 the main service file under the 1000-line pre-commit limit.
 """
 
-from src.services.world_quality_service import (
+from . import (
     _calendar,
     _chapter_quality,
     _character,
