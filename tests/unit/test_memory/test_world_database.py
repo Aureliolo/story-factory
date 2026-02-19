@@ -569,6 +569,58 @@ class TestWorldDatabaseEvents:
         assert len(events) == 1
 
 
+class TestClearEvents:
+    """Tests for WorldDatabase.clear_events()."""
+
+    def test_clear_events_deletes_all(self, db):
+        """Test that clear_events removes all events and participants."""
+        char_id = db.add_entity("character", "Alice")
+        db.add_event("Event 1", [(char_id, "actor")])
+        db.add_event("Event 2", [(char_id, "witness")])
+        assert len(db.list_events()) == 2
+
+        count = db.clear_events()
+
+        assert count == 2
+        assert len(db.list_events()) == 0
+
+    def test_clear_events_empty_database(self, db):
+        """Test that clear_events returns 0 when no events exist."""
+        count = db.clear_events()
+        assert count == 0
+
+    def test_clear_events_triggers_delete_callbacks(self, db):
+        """Test that clear_events calls _on_content_deleted for each event."""
+        char_id = db.add_entity("character", "Alice")
+        eid1 = db.add_event("Event 1", [(char_id, "actor")])
+        eid2 = db.add_event("Event 2", [(char_id, "witness")])
+
+        callback = MagicMock()
+        db._on_content_deleted = callback
+
+        db.clear_events()
+
+        assert callback.call_count == 2
+        called_ids = {call.args[0] for call in callback.call_args_list}
+        assert called_ids == {eid1, eid2}
+
+    def test_clear_events_callback_exception_swallowed(self, db, caplog):
+        """Test that a failing delete callback does not prevent clearing."""
+        char_id = db.add_entity("character", "Alice")
+        db.add_event("Event 1", [(char_id, "actor")])
+        db.add_event("Event 2", [(char_id, "witness")])
+
+        callback = MagicMock(side_effect=RuntimeError("embedding delete failed"))
+        db._on_content_deleted = callback
+
+        with caplog.at_level(logging.WARNING):
+            count = db.clear_events()
+
+        assert count == 2
+        assert len(db.list_events()) == 0
+        assert "Embedding delete callback failed" in caplog.text
+
+
 class TestRowToEventErrorHandling:
     """Tests for row_to_event with corrupt data."""
 

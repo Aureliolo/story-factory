@@ -147,6 +147,30 @@ class TestCreateEvent:
                 temperature=0.9,
             )
 
+    @patch("src.services.world_quality_service._event.generate_structured")
+    def test_create_event_empty_description_bypass_returns_empty(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test defensive guard: returns empty dict if LLM bypasses validation.
+
+        Although min_length=1 on WorldEventCreation.description normally prevents
+        this path, generate_structured could return a model_construct() bypass.
+        """
+        # Use model_construct to bypass Pydantic validation
+        mock_event = WorldEventCreation.model_construct(
+            description="", year=None, month=None, era_name="", participants=[], consequences=[]
+        )
+        mock_generate_structured.return_value = mock_event
+
+        result = service._create_event(
+            story_state,
+            existing_descriptions=[],
+            entity_context="Test context",
+            temperature=0.9,
+        )
+
+        assert result == {}
+
     def test_create_event_no_brief_raises_value_error(self, service):
         """Test event creation raises ValueError without brief."""
         state = StoryState(id="test-id")

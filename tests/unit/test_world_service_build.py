@@ -1,5 +1,6 @@
 """Tests for WorldService.build_world and related methods."""
 
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -1094,6 +1095,26 @@ class TestGenerateEvents:
         assert count == 1
         assert "Could not resolve event participant" in caplog.text
         assert "NonExistentEntity" in caplog.text
+
+    def test_event_min_max_swap(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test that _generate_events swaps min/max when min > max."""
+        sample_story_state.target_events_min = 10
+        sample_story_state.target_events_max = 3
+
+        mock_services.world_quality.generate_events_with_quality.return_value = []
+
+        with caplog.at_level(logging.ERROR):
+            world_service._generate_events(sample_story_state, mock_world_db, mock_services)
+
+        assert "Invalid event count range: min=10 > max=3, swapping" in caplog.text
+        # After swap, min=3 max=10, so event_count is in [3, 10]
+        call_args = mock_services.world_quality.generate_events_with_quality.call_args
+        event_count = (
+            call_args.args[3] if len(call_args.args) > 3 else call_args.kwargs.get("event_count")
+        )
+        assert 3 <= event_count <= 10
 
 
 def _mock_orphan_recovery_failure(mock_services):
