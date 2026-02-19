@@ -565,7 +565,7 @@ class TestGenerateEventsWithQualityBatch:
             count=2,
         )
 
-        assert len(results) >= 1
+        assert len(results) == 2
         for event_dict, scores in results:
             assert event_dict["description"] == "A great battle"
             assert scores.average == 8.0

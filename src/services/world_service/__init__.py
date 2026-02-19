@@ -14,6 +14,15 @@ from src.memory.world_database import WorldDatabase
 from src.settings import Settings
 
 from . import _build, _entities, _extraction, _graph, _health
+from ._event_helpers import (
+    build_event_entity_context as build_event_entity_context,
+)
+from ._event_helpers import (
+    build_event_timestamp as build_event_timestamp,
+)
+from ._event_helpers import (
+    resolve_event_participants as resolve_event_participants,
+)
 
 if TYPE_CHECKING:
     from src.memory.world_health import WorldHealthMetrics

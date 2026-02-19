@@ -333,11 +333,11 @@ Return ONLY the improved event."""
         for key in ("year", "month", "era_name"):
             if result.get(key) in (None, "") and event.get(key) not in (None, ""):
                 result[key] = event[key]
-                logger.debug("Preserved temporal field '%s' from original event", key)
+                logger.warning("Preserved temporal field '%s' from original event", key)
         # Preserve participants from original if refined version drops them
         if not result.get("participants") and event.get("participants"):
             result["participants"] = event["participants"]
-            logger.debug("Preserved participants from original event")
+            logger.warning("Preserved participants from original event")
         return result
     except Exception as e:
         summary = summarize_llm_error(e)

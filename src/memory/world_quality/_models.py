@@ -1,7 +1,7 @@
 """Pydantic models for world quality scoring and refinement configuration.
 
-These models track quality scores from the judge/refinement loop, enabling
-iterative improvement of characters, locations, and relationships.
+These models provide the base classes and configuration structures for the
+quality refinement loop used across all entity types.
 """
 
 import logging

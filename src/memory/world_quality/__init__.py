@@ -1,7 +1,8 @@
 """Quality score models for world building entities.
 
 These models track quality scores from the judge/refinement loop, enabling
-iterative improvement of characters, locations, and relationships.
+iterative improvement of characters, locations, factions, items, concepts,
+events, calendars, and relationships.
 """
 
 from src.memory.world_quality._entity_scores import (

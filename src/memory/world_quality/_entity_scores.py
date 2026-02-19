@@ -1,12 +1,16 @@
 """Entity-specific quality score models.
 
 These models define the quality scoring dimensions for world-building entities:
-characters, locations, factions, items, and concepts.
+characters, locations, factions, items, concepts, events, and calendars.
 """
+
+import logging
 
 from pydantic import Field
 
 from src.memory.world_quality._models import BaseQualityScores
+
+logger = logging.getLogger(__name__)
 
 
 class CharacterQualityScores(BaseQualityScores):
@@ -423,13 +427,15 @@ class EventQualityScores(BaseQualityScores):
             average (float): Mean of significance, temporal_plausibility,
                 causal_coherence, narrative_potential, and entity_integration.
         """
-        return (
+        avg = (
             self.significance
             + self.temporal_plausibility
             + self.causal_coherence
             + self.narrative_potential
             + self.entity_integration
         ) / 5.0
+        logger.debug("EventQualityScores.average=%.3f", avg)
+        return avg
 
     def to_dict(self) -> dict[str, float | str]:
         """Serialize the event quality scores into a dictionary for storage.
@@ -439,7 +445,7 @@ class EventQualityScores(BaseQualityScores):
                 'temporal_plausibility', 'causal_coherence', 'narrative_potential',
                 'entity_integration', 'average', and 'feedback'.
         """
-        return {
+        payload: dict[str, float | str] = {
             "significance": self.significance,
             "temporal_plausibility": self.temporal_plausibility,
             "causal_coherence": self.causal_coherence,
@@ -448,6 +454,8 @@ class EventQualityScores(BaseQualityScores):
             "average": self.average,
             "feedback": self.feedback,
         }
+        logger.debug("EventQualityScores.to_dict keys=%s", list(payload))
+        return payload
 
     def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
         """Identify event quality dimensions whose scores are below the given threshold.
@@ -470,6 +478,7 @@ class EventQualityScores(BaseQualityScores):
             weak.append("narrative_potential")
         if self.entity_integration < threshold:
             weak.append("entity_integration")
+        logger.debug("EventQualityScores.weak_dimensions threshold=%.2f weak=%s", threshold, weak)
         return weak
 
 

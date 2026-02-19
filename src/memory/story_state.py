@@ -194,7 +194,7 @@ class WorldEventCreation(BaseModel):
 
     description: str
     year: int | None = None
-    month: int | None = Field(default=None, ge=1, le=12)
+    month: int | None = Field(default=None, ge=1, le=14)
     era_name: str = ""
     participants: list[EventParticipantEntry] = Field(default_factory=list)
     consequences: list[str] = Field(default_factory=list)

@@ -1,6 +1,6 @@
 """Entity-type-specific generation functions for the World page.
 
-Contains generators for factions, items, concepts, relationships,
+Contains generators for factions, items, concepts, events, relationships,
 and the generate_relationships_for_entities helper.
 """
 
@@ -408,7 +408,7 @@ async def _generate_events(
         return
 
     # Build entity context using shared helper
-    from src.services.world_service._build import build_event_entity_context
+    from src.services.world_service import build_event_entity_context
 
     entity_context = build_event_entity_context(page.state.world_db)
 
@@ -447,16 +447,18 @@ async def _generate_events(
             ui.notify("No project loaded", type="negative")
             return
 
-        from src.services.world_service._build import (
+        from src.services.world_service import (
             build_event_timestamp,
             resolve_event_participants,
         )
 
         all_entities = page.state.world_db.list_entities()
         added = 0
-        for event, _scores in selected:
+        added_scores: list[Any] = []
+        for event, scores in selected:
             description = event.get("description", "")
             if not description:
+                logger.warning("Skipping event with empty description in add flow")
                 continue
 
             timestamp_in_story = build_event_timestamp(event)
@@ -470,13 +472,16 @@ async def _generate_events(
                 consequences=consequences if consequences else None,
             )
             added += 1
+            added_scores.append(scores)
 
         page.state.world_db.invalidate_graph_cache()
         page._refresh_entity_list()
         if page._graph:
             page._graph.refresh()
         page.services.project.save_project(page.state.project)
-        avg_quality = sum(s.average for _, s in selected) / len(selected) if selected else 0
+        avg_quality = (
+            sum(s.average for s in added_scores) / len(added_scores) if added_scores else 0
+        )
         ui.notify(
             f"Added {added} events (avg quality: {avg_quality:.1f})",
             type="positive",

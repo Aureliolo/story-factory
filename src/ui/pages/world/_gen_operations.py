@@ -1,8 +1,9 @@
 """Entity generation operations for the World page.
 
 Contains the main generate_more dispatcher and generators for characters
-and locations.  Generators for factions, items, concepts, relationships,
-and generate_relationships_for_entities live in _gen_entity_types.py.
+and locations.  Generators for factions, items, concepts, events,
+relationships, and generate_relationships_for_entities live in
+_gen_entity_types.py.
 """
 
 import logging

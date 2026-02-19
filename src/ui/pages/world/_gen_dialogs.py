@@ -98,7 +98,10 @@ def get_random_count(page, entity_type: str) -> int:
             settings.world_gen_relationships_max,
         ),
     }
-    min_val, max_val = ranges.get(entity_type, (2, 4))
+    if entity_type not in ranges:
+        logger.error("Unknown entity_type '%s' in get_random_count", entity_type)
+        raise ValueError(f"Unknown entity_type: {entity_type}")
+    min_val, max_val = ranges[entity_type]
     return random.randint(min_val, max_val)
 
 
@@ -125,7 +128,10 @@ def show_generate_dialog(page, entity_type: str) -> None:
             settings.world_gen_relationships_max,
         ),
     }
-    min_val, max_val = ranges.get(entity_type, (2, 4))
+    if entity_type not in ranges:
+        logger.error("Unknown entity_type '%s' in show_generate_dialog", entity_type)
+        raise ValueError(f"Unknown entity_type: {entity_type}")
+    min_val, max_val = ranges[entity_type]
     default_count = (min_val + max_val) // 2
 
     # Pretty names for display

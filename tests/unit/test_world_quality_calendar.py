@@ -198,7 +198,7 @@ class TestCreateCalendar:
     def test_defaults_missing_month_days_and_era_start_year(self, mock_svc, story_state):
         """Test fallback defaults for month without days and era without start_year."""
         data = GeneratedCalendarData(
-            era_name="Test Era",
+            era_name="First Era",
             era_abbreviation="TE",
             current_year=100,
             months=[{"name": "Frostmoon", "description": "Cold"}],  # No "days" key
@@ -384,7 +384,7 @@ class TestGeneratedDataToWorldCalendar:
     def test_logs_warning_for_missing_start_year(self, caplog):
         """Test warning logged when era is missing 'start_year' field."""
         data = GeneratedCalendarData(
-            era_name="Test",
+            era_name="Lost Age",
             era_abbreviation="T",
             current_year=100,
             months=[{"name": "Frostmoon", "days": 28}],
