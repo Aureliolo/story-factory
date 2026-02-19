@@ -364,8 +364,11 @@ class TimelineService:
                 )
 
         # Sort groups by predefined order
-        group_order = ["character", "faction", "location", "item", "concept", "event"]
-        groups.sort(key=lambda g: group_order.index(g["id"]) if g["id"] in group_order else 999)
+        groups.sort(
+            key=lambda g: (
+                _TEMPORAL_TYPE_ORDER.index(g["id"]) if g["id"] in _TEMPORAL_TYPE_ORDER else 999
+            )
+        )
 
         logger.debug(f"Generated {len(groups)} timeline groups")
         return groups

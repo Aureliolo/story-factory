@@ -66,9 +66,11 @@ def _retrieve_temporal_context(orc: StoryOrchestrator) -> str:
         Formatted temporal context string, or empty string if unavailable.
     """
     if not orc.world_db:
+        logger.debug("No world_db configured, skipping temporal context")
         return ""
 
     if not orc.settings.validate_temporal_consistency:
+        logger.debug("Temporal validation disabled, skipping temporal context")
         return ""
 
     if not orc.timeline:
