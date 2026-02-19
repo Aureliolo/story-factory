@@ -1,0 +1,792 @@
+# Instincts generated from https://github.com/Aureliolo/story-factory
+# Generated: 2026-02-19T17:03:18.602Z
+# Version: 2.0
+
+---
+id: story-factory-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/Aureliolo/story-factory
+---
+
+# Story Factory Commit Length
+
+## Action
+
+Write moderate-length commit messages (~50 characters)
+
+## Evidence
+
+- Average commit message length: 63 chars
+- Based on 200 commits
+
+---
+id: story-factory-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/Aureliolo/story-factory
+---
+
+# Story Factory Naming Files
+
+## Action
+
+Use snake_case naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: snake_case
+
+---
+id: story-factory-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/Aureliolo/story-factory
+---
+
+# Story Factory Export Style
+
+## Action
+
+Prefer mixed exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: mixed
+
+---
+id: story-factory-arch-type-based
+trigger: "when adding new code"
+confidence: 0.8
+domain: architecture
+source: repo-analysis
+source_repo: https://github.com/Aureliolo/story-factory
+---
+
+# Story Factory Arch Type Based
+
+## Action
+
+Place code in the appropriate type folder (components/, services/, utils/, etc.)
+
+## Evidence
+
+- Type-based module organization detected
+- Folders: agents, memory, prompts, services, settings
+
+---
+id: story-factory-test-separate
+trigger: "when writing tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/Aureliolo/story-factory
+---
+
+# Story Factory Test Separate
+
+## Action
+
+Place tests in the tests/ or __tests__/ directory, mirroring src structure
+
+## Evidence
+
+- Separate test directory pattern detected
+- Tests live in dedicated test folders
+
+---
+id: story-factory-workflow-database-migration
+trigger: "when modifying the database schema or adding tables"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Aureliolo/story-factory
+---
+
+# Story Factory Workflow Database Migration
+
+## Action
+
+Follow the database-migration workflow:
+1. Create migration file
+2. Update schema definitions
+3. Generate/update types
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~10x per month
+- Files: **/schema.*
+
+---
+id: story-factory-workflow-feature-development
+trigger: "when implementing a new feature"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Aureliolo/story-factory
+---
+
+# Story Factory Workflow Feature Development
+
+## Action
+
+Follow the feature-development workflow:
+1. Add feature implementation
+2. Add tests for feature
+3. Update documentation
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~23x per month
+- Files: src/ui/components/*, tests/component/*, **/*.test.*
+
+---
+id: story-factory-workflow-test-driven-development
+trigger: "when adding new functionality"
+confidence: 0.65
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Aureliolo/story-factory
+---
+
+# Story Factory Workflow Test Driven Development
+
+## Action
+
+Follow the test-driven-development workflow:
+1. Write failing test
+2. Implement code to pass test
+3. Refactor if needed
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~3x per month
+- Files: **/*.test.*, **/*.spec.*, src/**/*
+
+---
+id: story-factory-workflow-refactoring
+trigger: "when refactoring code"
+confidence: 0.85
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Aureliolo/story-factory
+---
+
+# Story Factory Workflow Refactoring
+
+## Action
+
+Follow the refactoring workflow:
+1. Ensure tests pass before refactor
+2. Refactor code structure
+3. Verify tests still pass
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~7x per month
+- Files: src/**/*
+
+---
+id: story-factory-workflow-add-new-entity-type
+trigger: "when doing add new entity type"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Aureliolo/story-factory
+---
+
+# Story Factory Workflow Add New Entity Type
+
+## Action
+
+Follow the add-new-entity-type workflow:
+1. Create Pydantic model in src/memory/templates.py or story_state.py
+2. Add quality scores model in src/memory/world_quality/_entity_scores.py
+3. Create quality service module in src/services/world_quality_service/_entityname.py with create/judge/refine functions
+4. Add entity type to build pipeline in src/services/world_service/_build.py
+5. Add UI components and pages in src/ui/pages/
+6. Add comprehensive tests for all modules
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: src/memory/templates.py, src/memory/story_state.py, src/memory/world_quality/_entity_scores.py
+
+---
+id: story-factory-workflow-quality-loop-improvements
+trigger: "when doing quality loop improvements"
+confidence: 0.65
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Aureliolo/story-factory
+---
+
+# Story Factory Workflow Quality Loop Improvements
+
+## Action
+
+Follow the quality-loop-improvements workflow:
+1. Update quality loop logic in src/services/world_quality_service/_quality_loop.py
+2. Modify scoring models in src/memory/world_quality/_models.py
+3. Add analytics in src/services/world_quality_service/_analytics.py
+4. Update settings and validation in src/settings/
+5. Add UI controls in src/ui/pages/settings/
+6. Add comprehensive tests for new behaviors
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~3x per month
+- Files: src/services/world_quality_service/_quality_loop.py, src/services/world_quality_service/_analytics.py, src/memory/world_quality/_models.py
+
+---
+id: story-factory-workflow-llm-integration-changes
+trigger: "when doing llm integration changes"
+confidence: 0.7
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Aureliolo/story-factory
+---
+
+# Story Factory Workflow Llm Integration Changes
+
+## Action
+
+Follow the llm-integration-changes workflow:
+1. Update LLM client in src/services/llm_client.py
+2. Modify base agent structured output in src/agents/base.py
+3. Update model registry in src/settings/_model_registry.py
+4. Fix streaming utilities in src/utils/streaming.py if needed
+5. Add investigation scripts in scripts/ for debugging
+6. Update tests and mocks in tests/shared/mock_ollama.py
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~4x per month
+- Files: src/services/llm_client.py, src/agents/base.py, src/settings/_model_registry.py
+
+---
+id: story-factory-workflow-settings-migration-and-validation
+trigger: "when doing settings migration and validation"
+confidence: 0.65
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Aureliolo/story-factory
+---
+
+# Story Factory Workflow Settings Migration And Validation
+
+## Action
+
+Follow the settings-migration-and-validation workflow:
+1. Add setting fields to src/settings/_settings.py
+2. Add validation rules in src/settings/_validation.py
+3. Create UI controls in src/ui/pages/settings/
+4. Add migration logic for existing settings files
+5. Update tests for settings validation and UI
+6. Test integration behavior
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~3x per month
+- Files: src/settings/_settings.py, src/settings/_validation.py, src/ui/pages/settings/_advanced.py
+
+---
+id: story-factory-workflow-database-schema-migration
+trigger: "when doing database schema migration"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Aureliolo/story-factory
+---
+
+# Story Factory Workflow Database Schema Migration
+
+## Action
+
+Follow the database-schema-migration workflow:
+1. Update schema version and add migration in src/memory/world_database/_schema.py
+2. Add new database operations in src/memory/world_database/__init__.py
+3. Create helper modules if needed (like _cycles.py)
+4. Update related services that use the new data
+5. Add migration tests and integration tests
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: src/memory/world_database/_schema.py, src/memory/world_database/__init__.py, src/memory/world_database/_*.py
+
+---
+id: story-factory-workflow-ui-component-enhancement
+trigger: "when doing ui component enhancement"
+confidence: 0.65
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Aureliolo/story-factory
+---
+
+# Story Factory Workflow Ui Component Enhancement
+
+## Action
+
+Follow the ui-component-enhancement workflow:
+1. Update component in src/ui/components/ or src/ui/pages/
+2. Modify related services for data fetching optimization
+3. Add caching or performance improvements
+4. Update graph renderer if visualization changes needed
+5. Add component tests if testable
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~3x per month
+- Files: src/ui/components/, src/ui/pages/, src/ui/graph_renderer/
+
+---
+id: story-factory-workflow-investigation-script-creation
+trigger: "when doing investigation script creation"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Aureliolo/story-factory
+---
+
+# Story Factory Workflow Investigation Script Creation
+
+## Action
+
+Follow the investigation-script-creation workflow:
+1. Create investigation script in scripts/investigate_*.py
+2. Add helper utilities in scripts/_*.py if needed
+3. Include comprehensive unit tests in tests/unit/test_investigate_*.py
+4. Document findings and implement fixes in main codebase
+5. Update model registry or settings based on findings
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: scripts/investigate_*.py, scripts/_*.py, tests/unit/test_investigate_*.py
+
+---
+id: story-factory-workflow-world-building-pipeline-improvements
+trigger: "when doing world building pipeline improvements"
+confidence: 0.7
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Aureliolo/story-factory
+---
+
+# Story Factory Workflow World Building Pipeline Improvements
+
+## Action
+
+Follow the world-building-pipeline-improvements workflow:
+1. Update build pipeline in src/services/world_service/_build.py
+2. Modify entity generation in world quality service modules
+3. Update relationship generation in src/services/world_quality_service/_relationship.py
+4. Add health metrics improvements in src/services/world_service/_health.py
+5. Add comprehensive build tests
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~4x per month
+- Files: src/services/world_service/_build.py, src/services/world_service/_health.py, src/services/world_quality_service/_relationship.py
+
+---
+id: story-factory-snake-case-files
+trigger: "When creating a new Python file"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Snake Case Files
+
+## Action
+
+Use snake_case for file names
+
+## Evidence
+
+- Files like story_state.py, world_database.py, llm_client.py
+
+---
+id: story-factory-camel-case-functions
+trigger: "When defining a function in Python code"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Camel Case Functions
+
+## Action
+
+Use camelCase for function names
+
+## Evidence
+
+- Pattern observed in codeStyle.namingConventions.functions
+
+---
+id: story-factory-pascal-case-classes
+trigger: "When defining a class in Python code"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Pascal Case Classes
+
+## Action
+
+Use PascalCase for class names
+
+## Evidence
+
+- Pattern observed in codeStyle.namingConventions.classes
+
+---
+id: story-factory-screaming-snake-constants
+trigger: "When defining a constant variable"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Screaming Snake Constants
+
+## Action
+
+Use SCREAMING_SNAKE_CASE for constants
+
+## Evidence
+
+- Pattern observed in codeStyle.namingConventions.constants
+
+---
+id: story-factory-private-module-underscore
+trigger: "When creating internal/helper modules"
+confidence: 0.85
+domain: code-style
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Private Module Underscore
+
+## Action
+
+Prefix module name with underscore (e.g., _schema.py, _quality_loop.py)
+
+## Evidence
+
+- Files like _schema.py, _quality_loop.py, _analytics.py, _settings.py
+
+---
+id: story-factory-type-based-organization
+trigger: "When organizing modules in src/"
+confidence: 0.9
+domain: architecture
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Type Based Organization
+
+## Action
+
+Group by functionality type (agents/, memory/, services/, ui/)
+
+## Evidence
+
+- Folder structure shows agents, memory, services, ui, utils organization
+
+---
+id: story-factory-conventional-commits
+trigger: "When making a commit"
+confidence: 0.9
+domain: git
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Conventional Commits
+
+## Action
+
+Use conventional commit format: type: description (#issue)
+
+## Evidence
+
+- All commit examples follow feat:, fix:, refactor:, docs: pattern
+
+---
+id: story-factory-pr-reference-commits
+trigger: "When committing work related to a PR"
+confidence: 0.8
+domain: git
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Pr Reference Commits
+
+## Action
+
+Include PR reference in commit message with (#123) format
+
+## Evidence
+
+- Multiple commits show (#360) (#365) pattern
+
+---
+id: story-factory-comprehensive-test-coverage
+trigger: "When adding new functionality"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Comprehensive Test Coverage
+
+## Action
+
+Create corresponding test file in tests/unit/ directory
+
+## Evidence
+
+- Test structure shows tests/unit/test_* pattern in workflows
+
+---
+id: story-factory-mock-external-services
+trigger: "When testing LLM integration"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Mock External Services
+
+## Action
+
+Use mock_ollama.py in tests/shared/ for mocking external services
+
+## Evidence
+
+- tests/shared/mock_ollama.py referenced in LLM integration workflow
+
+---
+id: story-factory-pydantic-models-first
+trigger: "When adding new entity type"
+confidence: 0.95
+domain: workflow
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Pydantic Models First
+
+## Action
+
+Start by creating Pydantic model in src/memory/templates.py or story_state.py
+
+## Evidence
+
+- add-new-entity-type workflow step 1 with confidence 0.95
+
+---
+id: story-factory-quality-scores-after-model
+trigger: "When Pydantic model for entity is created"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Quality Scores After Model
+
+## Action
+
+Add corresponding quality scores model in src/memory/world_quality/_entity_scores.py
+
+## Evidence
+
+- add-new-entity-type workflow step 2
+
+---
+id: story-factory-create-judge-refine-pattern
+trigger: "When adding entity quality service"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Create Judge Refine Pattern
+
+## Action
+
+Implement create/judge/refine functions in service module
+
+## Evidence
+
+- add-new-entity-type workflow mentions create/judge/refine functions
+
+---
+id: story-factory-settings-validation-pair
+trigger: "When adding new setting"
+confidence: 0.85
+domain: workflow
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Settings Validation Pair
+
+## Action
+
+Add field to _settings.py AND validation rules to _validation.py
+
+## Evidence
+
+- settings-migration-and-validation workflow steps 1-2
+
+---
+id: story-factory-schema-version-increment
+trigger: "When modifying database schema"
+confidence: 0.82
+domain: workflow
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Schema Version Increment
+
+## Action
+
+Update schema version and add migration in _schema.py
+
+## Evidence
+
+- database-schema-migration workflow step 1
+
+---
+id: story-factory-investigation-scripts-for-issues
+trigger: "When encountering performance or model behavior issues"
+confidence: 0.78
+domain: workflow
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Investigation Scripts For Issues
+
+## Action
+
+Create investigate_*.py script in scripts/ directory
+
+## Evidence
+
+- investigation-script-creation workflow and existing investigate_*.py files
+
+---
+id: story-factory-ui-service-data-optimization
+trigger: "When enhancing UI components"
+confidence: 0.8
+domain: workflow
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Ui Service Data Optimization
+
+## Action
+
+Modify related services for data fetching optimization alongside UI changes
+
+## Evidence
+
+- ui-component-enhancement workflow step 2
+
+---
+id: story-factory-quality-loop-analytics
+trigger: "When improving quality refinement"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Quality Loop Analytics
+
+## Action
+
+Add analytics in _analytics.py alongside quality loop changes
+
+## Evidence
+
+- quality-loop-improvements workflow step 3
+
+---
+id: story-factory-helper-utilities-pattern
+trigger: "When creating investigation scripts"
+confidence: 0.7
+domain: workflow
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Helper Utilities Pattern
+
+## Action
+
+Add shared helper utilities in scripts/_*.py files
+
+## Evidence
+
+- investigation-script-creation workflow mentions scripts/_*.py helpers
+
+---
+id: story-factory-build-pipeline-integration
+trigger: "When adding new entity type"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: Aureliolo/story-factory
+---
+
+# Story Factory Build Pipeline Integration
+
+## Action
+
+Add entity type to build pipeline in src/services/world_service/_build.py
+
+## Evidence
+
+- add-new-entity-type workflow step 4
+
