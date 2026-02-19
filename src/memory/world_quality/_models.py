@@ -207,7 +207,7 @@ class RefinementHistory(BaseModel):
 
         first_score = self.iterations[0].average_score
         last_score = self.iterations[-1].average_score
-        self.improvement_detected = self.peak_score > first_score
+        improved = self.peak_score > first_score
 
         # mid_loop_regression: True if any iteration scored lower than a previous one
         mid_loop_regression = any(
@@ -216,7 +216,7 @@ class RefinementHistory(BaseModel):
         )
 
         return {
-            "improved": self.improvement_detected,
+            "improved": improved,
             "first_score": first_score,
             "peak_score": self.peak_score,
             "final_score": last_score,

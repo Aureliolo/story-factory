@@ -94,7 +94,7 @@ Fetch from three GitHub API sources **in parallel** using `gh api`:
 
 **Important:** Use `gh api` with `--jq` for filtering. Keep it simple and robust — no complex Python scripts to parse JSON.
 
-**Important:** When review bodies are large (e.g. CodeRabbit's review with embedded outside-diff comments), fetch the **full body** without truncation. Use `--jq '.[].body | .[:15000]'` (jq string slice) rather than `--jq '.body[0:500]'` truncation. This operates on Unicode code points and keeps the output valid. Outside-diff comments are typically at the top of the review body.
+**Important:** When review bodies are large (e.g. CodeRabbit's review with embedded outside-diff comments), fetch the **full body** without truncation. Use a projection that preserves all fields while limiting body length, e.g.: `--jq '[.[] | {author: (.user.login // .author.login), state: .state, body: (.body | .[:15000])}]'` rather than slicing only the body (`.[].body | .[:15000]`), which discards author and state entirely. Note that jq's string slicing operates on bytes, not Unicode code points. Outside-diff comments are typically at the top of the review body.
 
 ## Phase 4: Consolidate and triage
 
@@ -110,7 +110,7 @@ For each item, determine:
   - External feedback: infer from reviewer labels if present, otherwise from context
 - **File:Line**: Where the issue is
 - **Issue**: One-line summary of the problem
-- **Valid?**: Your assessment — is this correct advice for this codebase? Check against CLAUDE.md rules and actual code
+- **Valid?**: Your assessment — is this correct advice for this codebase? Check against CLAUDE.md rules and actual code.
 
 **Deduplication:** If multiple sources flag the same issue on the same line, merge into one item and note all sources.
 
@@ -143,7 +143,7 @@ For each approved item, grouped by file (to minimize context switches):
 After all fixes:
 1. Run `ruff format .` and `ruff check --fix .`
 2. If any fix changes test expectations (e.g. behavior change), update the affected tests
-3. Only run tests for genuinely new code paths (1-2 targeted test runs max) — rely on pre-push hooks and CI for full coverage
+3. Only run targeted tests (1-2 test runs max) — focus on files that were directly modified, not the entire suite; rely on pre-push hooks and CI for full coverage
 
 ## Phase 7: Commit and push
 

@@ -2,7 +2,7 @@
 
 import copy
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.memory.story_state import StoryState, WorldEventCreation
 from src.memory.world_quality import EventQualityScores
@@ -14,6 +14,9 @@ from src.services.world_quality_service._common import (
 )
 from src.services.world_quality_service._quality_loop import quality_refinement_loop
 from src.utils.exceptions import WorldGenerationError, summarize_llm_error
+
+if TYPE_CHECKING:
+    from src.services.world_quality_service import WorldQualityService
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +57,7 @@ def _format_event_details(event: dict[str, Any]) -> str:
 
 
 def generate_event_with_quality(
-    svc,
+    svc: WorldQualityService,
     story_state: StoryState,
     existing_descriptions: list[str],
     entity_context: str,
@@ -120,7 +123,7 @@ def generate_event_with_quality(
 
 
 def _create_event(
-    svc,
+    svc: WorldQualityService,
     story_state: StoryState,
     existing_descriptions: list[str],
     entity_context: str,
@@ -217,7 +220,7 @@ Write all text in {brief.language}."""
 
 
 def _judge_event_quality(
-    svc,
+    svc: WorldQualityService,
     event: dict[str, Any],
     story_state: StoryState,
     temperature: float,
@@ -301,7 +304,7 @@ DO NOT wrap in "properties" or "description" - return ONLY the flat scores objec
 
 
 def _refine_event(
-    svc,
+    svc: WorldQualityService,
     event: dict[str, Any],
     scores: EventQualityScores,
     story_state: StoryState,
@@ -372,10 +375,13 @@ Return ONLY the improved event."""
 
         result = refined.model_dump()
         # Preserve temporal fields from original if refined version drops them
-        for key in ("year", "month", "era_name"):
-            if result.get(key) in (None, "") and event.get(key) not in (None, ""):
+        for key in ("year", "month"):
+            if result.get(key) is None and event.get(key) is not None:
                 result[key] = event[key]
                 logger.warning("Preserved temporal field '%s' from original event", key)
+        if not result.get("era_name") and event.get("era_name"):
+            result["era_name"] = event["era_name"]
+            logger.warning("Preserved temporal field 'era_name' from original event")
         # Preserve participants from original if refined version drops them
         if not result.get("participants") and event.get("participants"):
             result["participants"] = event["participants"]

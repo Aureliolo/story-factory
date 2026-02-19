@@ -386,7 +386,7 @@ async def _generate_events(
     update_progress,
     progress_label,
     notification,
-    custom_instructions=None,
+    custom_instructions: str | None = None,
 ) -> None:
     """Generate events (quality only).
 

@@ -395,7 +395,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                     "%s hail-mary returned empty entity, keeping original",
                     entity_type.capitalize(),
                 )
-        except (WorldGenerationError, ValueError) as e:
+        except (WorldGenerationError, KeyError, ValueError) as e:
             logger.warning(
                 "%s hail-mary failed: %s. Keeping original best.",
                 entity_type.capitalize(),
@@ -429,7 +429,9 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                 history.best_iteration,
             )
 
-        # Reconstruct scores from best iteration
+        # Reconstruct scores from best iteration.
+        # record.scores uses alias keys (from to_dict()), so this relies on
+        # populate_by_name=True in BaseQualityScores.model_config.
         best_scores: S | None = None
         for record in history.iterations:
             if record.iteration == history.best_iteration:

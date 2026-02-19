@@ -106,12 +106,12 @@ def build_world(
                 )
             )
 
-    logger.info(f"Starting world build for project {state.id} with options: {options}")
+    logger.info("Starting world build for project %s with options: %s", state.id, options)
 
     # Persist world template ID to state if provided
     if options.world_template:
         state.world_template_id = options.world_template.id
-        logger.debug(f"Set world_template_id on state: {options.world_template.id}")
+        logger.debug("Set world_template_id on state: %s", options.world_template.id)
 
     def check_cancelled() -> None:
         """Raise if cancellation requested."""
@@ -271,7 +271,7 @@ def _build_world_entities(
     char_count, char_implicit_rels = _extract_characters_to_world(state, world_db)
     counts["characters"] = char_count
     counts["implicit_relationships"] += char_implicit_rels
-    logger.info(f"Extracted {char_count} characters to world database")
+    logger.info("Extracted %d characters to world database", char_count)
 
     # Step 4: Generate locations if requested
     if options.generate_locations:
@@ -285,7 +285,7 @@ def _build_world_entities(
             cancel_check=options.is_cancelled,
         )
         counts["locations"] = loc_count
-        logger.info(f"Generated {loc_count} locations")
+        logger.info("Generated %d locations", loc_count)
 
     # Step 5: Generate factions if requested
     if options.generate_factions:
@@ -300,7 +300,7 @@ def _build_world_entities(
         )
         counts["factions"] = faction_count
         counts["implicit_relationships"] += implicit_rel_count
-        logger.info(f"Generated {faction_count} factions")
+        logger.info("Generated %d factions", faction_count)
 
     # Step 6: Generate items if requested
     if options.generate_items:
@@ -314,7 +314,7 @@ def _build_world_entities(
             cancel_check=options.is_cancelled,
         )
         counts["items"] = item_count
-        logger.info(f"Generated {item_count} items")
+        logger.info("Generated %d items", item_count)
 
     # Step 7: Generate concepts if requested
     if options.generate_concepts:
@@ -328,7 +328,7 @@ def _build_world_entities(
             cancel_check=options.is_cancelled,
         )
         counts["concepts"] = concept_count
-        logger.info(f"Generated {concept_count} concepts")
+        logger.info("Generated %d concepts", concept_count)
 
     # Step 8: Generate relationships if requested
     if options.generate_relationships:
@@ -342,7 +342,7 @@ def _build_world_entities(
             cancel_check=options.is_cancelled,
         )
         counts["relationships"] = rel_count
-        logger.info(f"Generated {rel_count} relationships")
+        logger.info("Generated %d relationships", rel_count)
 
     # Step 8a: Recover orphan entities by generating additional relationships
     if options.generate_relationships:
@@ -353,7 +353,7 @@ def _build_world_entities(
         )
         if orphan_count > 0:
             counts["relationships"] += orphan_count
-            logger.info(f"Orphan recovery added {orphan_count} relationships")
+            logger.info("Orphan recovery added %d relationships", orphan_count)
 
     # Step 8b: Generate world events if requested
     if options.generate_events:
@@ -407,13 +407,13 @@ def _clear_world_db(world_db: WorldDatabase) -> None:
     """Clear all entities and relationships from world database."""
     # Delete relationships first (they reference entities)
     relationships = world_db.list_relationships()
-    logger.info(f"Deleting {len(relationships)} existing relationships...")
+    logger.info("Deleting %d existing relationships...", len(relationships))
     for rel in relationships:
         world_db.delete_relationship(rel.id)
 
     # Delete all entities
     entities = world_db.list_entities()
-    logger.info(f"Deleting {len(entities)} existing entities...")
+    logger.info("Deleting %d existing entities...", len(entities))
     for entity in entities:
         world_db.delete_entity(entity.id)
 
@@ -435,7 +435,7 @@ def _extract_characters_to_world(state: StoryState, world_db: WorldDatabase) -> 
     for char in state.characters:
         existing = world_db.get_entity_by_name(char.name, entity_type="character")
         if existing:
-            logger.debug(f"Character already exists: {char.name}")
+            logger.debug("Character already exists: %s", char.name)
             char_id_map[char.name] = existing.id
             continue
 
@@ -528,7 +528,7 @@ def _generate_locations(
     added_count = 0
     for loc, scores in location_results:
         if cancel_check and cancel_check():
-            logger.info(f"Location processing cancelled after {added_count} locations")
+            logger.info("Location processing cancelled after %d locations", added_count)
             break
         name = loc.get("name", "")
         if name:
@@ -544,7 +544,7 @@ def _generate_locations(
             )
             added_count += 1
         else:
-            logger.warning(f"Skipping invalid location: {loc}")
+            logger.warning("Skipping invalid location: %s", loc)
 
     return added_count
 
@@ -626,7 +626,7 @@ def _generate_factions(
                         base_loc,
                     )
         else:
-            logger.warning(f"Skipping invalid faction: {faction}")
+            logger.warning("Skipping invalid faction: %s", faction)
 
     if implicit_rel_count:
         logger.info(
@@ -683,7 +683,7 @@ def _generate_items(
             )
             added_count += 1
         else:
-            logger.warning(f"Skipping invalid item: {item}")
+            logger.warning("Skipping invalid item: %s", item)
 
     return added_count
 
@@ -734,7 +734,7 @@ def _generate_concepts(
             )
             added_count += 1
         else:
-            logger.warning(f"Skipping invalid concept: {concept}")
+            logger.warning("Skipping invalid concept: %s", concept)
 
     return added_count
 
@@ -801,7 +801,7 @@ def _generate_relationships(
 
     for rel, scores in relationship_results:
         if cancel_check and cancel_check():
-            logger.info(f"Relationship processing cancelled after {added_count} relationships")
+            logger.info("Relationship processing cancelled after %d relationships", added_count)
             break
         if isinstance(rel, dict) and "source" in rel and "target" in rel:
             # Find source and target entities (fuzzy match for LLM name variations)
@@ -834,11 +834,12 @@ def _generate_relationships(
                 )
             else:
                 logger.warning(
-                    f"Could not find entities for relationship: "
-                    f"{rel.get('source')} -> {rel.get('target')}"
+                    "Could not find entities for relationship: %s -> %s",
+                    rel.get("source"),
+                    rel.get("target"),
                 )
         else:
-            logger.warning(f"Skipping invalid relationship: {rel}")
+            logger.warning("Skipping invalid relationship: %s", rel)
 
     return added_count
 

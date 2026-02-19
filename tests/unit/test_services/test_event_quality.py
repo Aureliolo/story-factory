@@ -116,24 +116,40 @@ class TestCreateEvent:
         assert len(result["consequences"]) == 2
 
     @patch("src.services.world_quality_service._event.generate_structured")
-    def test_create_event_empty_description_returns_empty(
+    def test_create_event_empty_description_raises_generation_error(
         self, mock_generate_structured, service, story_state
     ):
-        """Test event creation returns empty dict when description is empty."""
-        mock_event = WorldEventCreation(
-            description="",
-            year=None,
-            era_name="",
-            participants=[],
-            consequences=[],
-        )
-        mock_generate_structured.return_value = mock_event
+        """Test event creation raises WorldGenerationError when LLM returns empty description.
 
-        result = service._create_event(
-            story_state, existing_descriptions=[], entity_context="Test context", temperature=0.9
-        )
+        With min_length=1 on WorldEventCreation.description, Pydantic rejects
+        empty descriptions at parse time, which generate_structured raises as
+        ValidationError, caught and wrapped by _create_event.
+        """
+        from pydantic import ValidationError
 
-        assert result == {}
+        from src.utils.exceptions import WorldGenerationError
+
+        # Create the actual ValidationError that Pydantic raises for empty description
+        try:
+            WorldEventCreation(
+                description="",
+                year=None,
+                era_name="",
+                participants=[],
+                consequences=[],
+            )
+        except ValidationError as e:
+            mock_generate_structured.side_effect = e
+        else:
+            pytest.fail("Expected ValidationError for empty description")
+
+        with pytest.raises(WorldGenerationError, match="Event creation failed"):
+            service._create_event(
+                story_state,
+                existing_descriptions=[],
+                entity_context="Test context",
+                temperature=0.9,
+            )
 
     def test_create_event_no_brief_raises_value_error(self, service):
         """Test event creation raises ValueError without brief."""

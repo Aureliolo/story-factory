@@ -150,6 +150,7 @@ class WorldQualityService:
         self._model_cache = ModelResolutionCache(settings, mode_service)
         self._calendar_context: str | None = None
         self._calendar_context_lock = threading.RLock()
+        self._init_lock = threading.RLock()
         logger.debug("WorldQualityService initialized successfully")
 
     # ========== Calendar context for downstream entity generation ==========
@@ -224,9 +225,14 @@ class WorldQualityService:
 
     @property
     def analytics_db(self) -> ModeDatabase:
-        """Get or create analytics database instance."""
+        """Get or create analytics database instance.
+
+        Thread-safe: guarded by ``_init_lock`` (double-checked locking).
+        """
         if self._analytics_db is None:
-            self._analytics_db = ModeDatabase()
+            with self._init_lock:
+                if self._analytics_db is None:
+                    self._analytics_db = ModeDatabase()
         return self._analytics_db
 
     def record_entity_quality(
@@ -298,16 +304,20 @@ class WorldQualityService:
         """
         Provide an Ollama client configured with a timeout scaled to the writer model's size; creates and caches the client on first access.
 
+        Thread-safe: guarded by ``_init_lock`` (double-checked locking).
+
         Returns:
             ollama.Client: The cached or newly created Ollama client configured with the service host and a timeout derived from the writer model.
         """
         if self._client is None:
-            # Use writer model for timeout scaling since it's typically the largest
-            writer_model = self.settings.get_model_for_agent("writer")
-            self._client = ollama.Client(
-                host=self.settings.ollama_url,
-                timeout=self.settings.get_scaled_timeout(writer_model),
-            )
+            with self._init_lock:
+                if self._client is None:
+                    # Use writer model for timeout scaling since it's typically the largest
+                    writer_model = self.settings.get_model_for_agent("writer")
+                    self._client = ollama.Client(
+                        host=self.settings.ollama_url,
+                        timeout=self.settings.get_scaled_timeout(writer_model),
+                    )
         return self._client
 
     def get_config(self) -> RefinementConfig:

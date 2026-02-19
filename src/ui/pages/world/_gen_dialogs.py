@@ -86,7 +86,7 @@ def _get_entity_ranges(settings) -> dict[str, tuple[int, int]]:
     Returns:
         Dictionary mapping each entity type to its (min_count, max_count) tuple.
     """
-    return {
+    ranges = {
         "characters": (settings.world_gen_characters_min, settings.world_gen_characters_max),
         "locations": (settings.world_gen_locations_min, settings.world_gen_locations_max),
         "factions": (settings.world_gen_factions_min, settings.world_gen_factions_max),
@@ -98,6 +98,8 @@ def _get_entity_ranges(settings) -> dict[str, tuple[int, int]]:
             settings.world_gen_relationships_max,
         ),
     }
+    logger.debug("Loaded generation ranges from settings: %s", ranges)
+    return ranges
 
 
 def get_random_count(page, entity_type: str) -> int:
@@ -373,15 +375,16 @@ def show_entity_preview_dialog(
                     extra = f" ({role})" if role else ""
                 elif entity_type == "event":
                     # Events use description instead of name
-                    desc_full = (
-                        entity_data.get("description", "Unknown")
-                        if isinstance(entity_data, dict)
-                        else str(entity_data)
-                    )
+                    if isinstance(entity_data, dict):
+                        desc_full = entity_data.get("description") or "Unknown"
+                        year = entity_data.get("year")
+                        era = entity_data.get("era_name", "")
+                    else:
+                        desc_full = getattr(entity_data, "description", None) or str(entity_data)
+                        year = getattr(entity_data, "year", None)
+                        era = getattr(entity_data, "era_name", "")
                     name = desc_full[:80] + ("..." if len(desc_full) > 80 else "")
                     desc = desc_full[:150] + ("..." if len(desc_full) > 150 else "")
-                    year = entity_data.get("year") if isinstance(entity_data, dict) else None
-                    era = entity_data.get("era_name", "") if isinstance(entity_data, dict) else ""
                     extra_parts: list[str] = []
                     if year is not None:
                         extra_parts.append(f"Year {year}")

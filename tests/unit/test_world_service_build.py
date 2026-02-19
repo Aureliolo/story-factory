@@ -1059,7 +1059,7 @@ class TestGenerateEvents:
     def test_logs_unresolved_participant_names(
         self, world_service, mock_world_db, sample_story_state, mock_services, caplog
     ):
-        """Test unresolved participant names are logged at debug level."""
+        """Test unresolved participant names are logged at warning level."""
         import logging
 
         mock_quality_scores = MagicMock()
