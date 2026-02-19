@@ -165,6 +165,7 @@ async def generate_more(
                 update_progress,
                 progress_label,
                 notification,
+                custom_instructions,
             )
         elif entity_type == "relationships":
             await _generate_relationships(

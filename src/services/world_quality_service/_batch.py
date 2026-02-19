@@ -524,6 +524,7 @@ def generate_events_with_quality(
     existing_descriptions: list[str],
     entity_context: str,
     count: int = 5,
+    custom_instructions: str | None = None,
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable | None = None,
 ) -> list[tuple[dict[str, Any], EventQualityScores]]:
@@ -535,6 +536,7 @@ def generate_events_with_quality(
         existing_descriptions: Descriptions of existing events to avoid duplicates.
         entity_context: Pre-formatted string of all entities/relationships/lifecycle data.
         count: Number of events to generate.
+        custom_instructions: Optional custom instructions to refine generation.
         cancel_check: Optional callable that returns True to cancel generation.
         progress_callback: Optional callback to receive progress updates.
 
@@ -544,13 +546,18 @@ def generate_events_with_quality(
     Raises:
         WorldGenerationError: If no events could be generated.
     """
+    logger.info(
+        "Batch event generation: count=%d, custom_instructions=%s",
+        count,
+        custom_instructions[:50] if custom_instructions else None,
+    )
     descriptions = existing_descriptions.copy()
     return _generate_batch(
         svc=svc,
         count=count,
         entity_type="event",
         generate_fn=lambda _i: svc.generate_event_with_quality(
-            story_state, descriptions, entity_context
+            story_state, descriptions, entity_context, custom_instructions
         ),
         get_name=lambda evt: evt.get("description", "Unknown")[:60],
         on_success=lambda evt: (

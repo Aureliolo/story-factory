@@ -29,6 +29,7 @@ gh pr list --head $(git branch --show-current) --json number,title --jq '.[0]'
 ```
 
 Get the OWNER/REPO from:
+
 ```bash
 gh repo view --json nameWithOwner -q .nameWithOwner
 ```
@@ -66,28 +67,34 @@ Collect all findings with their severity/confidence scores.
 Fetch from three GitHub API sources **in parallel** using `gh api`:
 
 1. **Review submissions** (top-level review bodies):
+
    ```bash
    gh api repos/OWNER/REPO/pulls/NUMBER/reviews --paginate
    ```
+
    Extract: author, state, body.
 
    **CRITICAL: Parse review bodies for outside-diff-range comments.** Some reviewers (e.g. CodeRabbit) embed actionable comments inside `<details>` blocks in the review body when the affected lines are outside the PR's diff range. Look for patterns like "Outside diff range comments (N)" and extract each embedded comment's file path, line range, severity, and description. These are just as important as inline comments — do NOT skip them.
 
 2. **Inline review comments** (comments on specific lines):
+
    ```bash
    gh api repos/OWNER/REPO/pulls/NUMBER/comments --paginate
    ```
+
    Extract: author, file path, line number, body, subject_type.
 
 3. **Issue-level comments** (general PR comments, e.g. CodeRabbit walkthrough):
+
    ```bash
    gh api repos/OWNER/REPO/issues/NUMBER/comments --paginate
    ```
+
    Extract: author, body (look for actionable items, not just summaries).
 
 **Important:** Use `gh api` with `--jq` for filtering. Keep it simple and robust — no complex Python scripts to parse JSON.
 
-**Important:** When review bodies are large (e.g. CodeRabbit's review with embedded outside-diff comments), fetch the **full body** without truncation. Use `head -c` with a generous limit (e.g. 15000 chars) rather than `--jq '.body[0:500]'` truncation. Outside-diff comments are typically at the top of the review body.
+**Important:** When review bodies are large (e.g. CodeRabbit's review with embedded outside-diff comments), fetch the **full body** without truncation. Use `--jq '.[].body | .[:15000]'` (jq string slice) rather than `--jq '.body[0:500]'` truncation. This operates on Unicode code points and keeps the output valid. Outside-diff comments are typically at the top of the review body.
 
 ## Phase 4: Consolidate and triage
 

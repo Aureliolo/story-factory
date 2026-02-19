@@ -128,6 +128,20 @@ class TestEntityTypeModelMapping:
         mock_mode_service.get_model_for_agent.assert_called_once_with("architect")
         assert model == "test-architect-model"
 
+    def test_event_uses_architect_model(self, settings):
+        """Test that event generation uses architect model."""
+        mock_mode_service = MagicMock()
+        mock_mode_service.get_model_for_agent.return_value = "test-architect-model"
+
+        service = WorldQualityService(settings, mock_mode_service)
+
+        # Get model for event entity type
+        model = service._get_creator_model(entity_type="event")
+
+        # Should call get_model_for_agent with "architect"
+        mock_mode_service.get_model_for_agent.assert_called_once_with("architect")
+        assert model == "test-architect-model"
+
     def test_relationship_uses_editor_model(self, settings):
         """Test that relationship generation uses editor model."""
         mock_mode_service = MagicMock()

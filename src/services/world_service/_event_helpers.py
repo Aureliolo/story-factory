@@ -5,22 +5,62 @@ and resolving event participants during world generation.
 """
 
 import logging
+from typing import Any
 
+from src.memory.entities import Entity
 from src.memory.world_database import WorldDatabase
 from src.services.world_service._name_matching import _find_entity_by_name
 
 logger = logging.getLogger(__name__)
 
-# Temporal attribute keys used for entity context building
-TEMPORAL_KEYS = (
-    "birth_year",
-    "founded_year",
-    "creation_year",
-    "origin_year",
-    "death_year",
-    "dissolved_year",
-    "destruction_year",
-)
+
+def _extract_lifecycle_temporal(attrs: dict[str, Any]) -> list[str]:
+    """Extract human-readable temporal annotations from lifecycle attributes.
+
+    Lifecycle data is stored under ``attrs["lifecycle"]`` as nested dicts
+    produced by ``build_character_lifecycle`` / ``build_entity_lifecycle``.
+    This function reads the canonical keys from that nested structure.
+
+    Args:
+        attrs: Entity attributes dict (may or may not contain a "lifecycle" key).
+
+    Returns:
+        List of "key=value" strings for each temporal field found.
+    """
+    lifecycle = attrs.get("lifecycle")
+    if not lifecycle or not isinstance(lifecycle, dict):
+        return []
+
+    parts: list[str] = []
+
+    # Birth / founding / creation / emergence year (stored in lifecycle["birth"]["year"])
+    birth = lifecycle.get("birth")
+    if isinstance(birth, dict) and birth.get("year") is not None:
+        parts.append(f"birth_year={birth['year']}")
+        if birth.get("era_name"):
+            parts.append(f"era={birth['era_name']}")
+
+    # Death / destruction year (stored in lifecycle["death"]["year"])
+    death = lifecycle.get("death")
+    if isinstance(death, dict) and death.get("year") is not None:
+        parts.append(f"death_year={death['year']}")
+
+    # Founding year (locations/factions store this separately)
+    founding = lifecycle.get("founding_year")
+    if founding is not None:
+        parts.append(f"founding_year={founding}")
+
+    # Destruction / dissolution year
+    destruction = lifecycle.get("destruction_year")
+    if destruction is not None:
+        parts.append(f"destruction_year={destruction}")
+
+    # Temporal notes
+    notes = lifecycle.get("temporal_notes")
+    if notes:
+        parts.append(f"notes={notes}")
+
+    return parts
 
 
 def build_event_entity_context(world_db: WorldDatabase) -> str:
@@ -46,10 +86,9 @@ def build_event_entity_context(world_db: WorldDatabase) -> str:
         for e in all_entities:
             line = f"  - {e.name} ({e.type})"
             attrs = e.attributes or {}
-            for temporal_key in TEMPORAL_KEYS:
-                val = attrs.get(temporal_key)
-                if val is not None:
-                    line += f", {temporal_key}={val}"
+            temporal_parts = _extract_lifecycle_temporal(attrs)
+            if temporal_parts:
+                line += ", " + ", ".join(temporal_parts)
             entity_lines.append(line)
         context_parts.append("ENTITIES:\n" + "\n".join(entity_lines))
 
@@ -75,7 +114,7 @@ def build_event_entity_context(world_db: WorldDatabase) -> str:
     return "\n\n".join(context_parts) if context_parts else "No entities yet."
 
 
-def build_event_timestamp(event: dict) -> str:
+def build_event_timestamp(event: dict[str, Any]) -> str:
     """Build a human-readable timestamp string from an event's temporal fields.
 
     Args:
@@ -98,7 +137,9 @@ def build_event_timestamp(event: dict) -> str:
     return ", ".join(timestamp_parts)
 
 
-def resolve_event_participants(event: dict, all_entities: list) -> list[tuple[str, str]]:
+def resolve_event_participants(
+    event: dict[str, Any], all_entities: list[Entity]
+) -> list[tuple[str, str]]:
     """Resolve event participant names to entity IDs.
 
     Each participant entry can be a dict with 'entity_name' and 'role',
@@ -117,11 +158,11 @@ def resolve_event_participants(event: dict, all_entities: list) -> list[tuple[st
             entity_name = p.get("entity_name", "")
             role = p.get("role", "affected")
         else:
+            # Plain string is a supported format (see docstring)
             entity_name = str(p)
             role = "affected"
-            logger.warning(
-                "Unexpected participant format (expected dict, got %s): %r",
-                type(p).__name__,
+            logger.debug(
+                "Participant provided as plain string (converting to entity_name): %r",
                 p,
             )
         if entity_name:
@@ -129,8 +170,8 @@ def resolve_event_participants(event: dict, all_entities: list) -> list[tuple[st
             if matched:
                 participants.append((matched.id, role))
             else:
-                logger.debug(
-                    "Could not resolve event participant '%s' to an entity",
+                logger.warning(
+                    "Could not resolve event participant '%s' to any entity",
                     entity_name,
                 )
     return participants

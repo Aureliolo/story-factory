@@ -386,6 +386,7 @@ async def _generate_events(
     update_progress,
     progress_label,
     notification,
+    custom_instructions=None,
 ) -> None:
     """Generate events (quality only).
 
@@ -398,6 +399,7 @@ async def _generate_events(
         update_progress: Progress update callback.
         progress_label: Progress label widget.
         notification: Notification widget.
+        custom_instructions: Optional custom instructions to refine generation.
     """
     from nicegui import run
 
@@ -416,13 +418,17 @@ async def _generate_events(
     existing_events = page.state.world_db.list_events()
     existing_descriptions = [e.description for e in existing_events]
 
-    logger.info("Calling world quality service to generate events...")
+    logger.info(
+        "Calling world quality service to generate events (custom_instructions=%s)...",
+        custom_instructions[:50] if custom_instructions else None,
+    )
     event_results = await run.io_bound(
         page.services.world_quality.generate_events_with_quality,
         page.state.project,
         existing_descriptions,
         entity_context,
         count,
+        custom_instructions,
         should_cancel,
         update_progress,
     )

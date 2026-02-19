@@ -20,7 +20,7 @@ from src.services.world_service._lifecycle_helpers import (
 )
 from src.services.world_service._name_matching import _find_entity_by_name
 from src.services.world_service._orphan_recovery import _recover_orphans
-from src.utils.exceptions import GenerationCancelledError
+from src.utils.exceptions import GenerationCancelledError, WorldGenerationError
 from src.utils.validation import validate_not_none, validate_type
 
 if TYPE_CHECKING:
@@ -154,10 +154,10 @@ def build_world(
                 )
             except GenerationCancelledError:
                 raise
-            except Exception as e:
+            except (WorldGenerationError, ValueError, RuntimeError) as e:
                 logger.warning("Calendar generation failed (non-fatal), continuing without: %s", e)
 
-        # Steps 2-9: entity generation (inside try/finally for calendar context cleanup)
+        # Steps 2-9 (with sub-steps 2a-2c, 8a-8b): entity generation (inside try/finally for calendar context cleanup)
         _build_world_entities(
             svc,
             state,
@@ -371,7 +371,7 @@ def _build_world_entities(
     try:
         embed_counts = services.embedding.embed_all_world_data(world_db, state)
         logger.info("World embedding complete: %s", embed_counts)
-    except Exception as e:
+    except (ValueError, RuntimeError, OSError) as e:
         logger.warning("World embedding failed (non-fatal), RAG context unavailable: %s", e)
 
 

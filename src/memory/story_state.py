@@ -194,6 +194,7 @@ class WorldEventCreation(BaseModel):
 
     description: str
     year: int | None = None
+    # le=14: fantasy calendars can have 8-14 months (see _calendar.py prompt)
     month: int | None = Field(default=None, ge=1, le=14)
     era_name: str = ""
     participants: list[EventParticipantEntry] = Field(default_factory=list)

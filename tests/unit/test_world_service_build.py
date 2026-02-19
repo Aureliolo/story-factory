@@ -966,20 +966,25 @@ class TestGenerateEvents:
         assert call_kwargs.kwargs["cancel_check"] is my_cancel
 
     def test_includes_temporal_attributes_in_context(
-        self, world_service, mock_world_db, sample_story_state, mock_services
+        self, world_service, sample_story_state, mock_services
     ):
         """Test entity temporal attributes (birth_year, death_year etc) appear in context."""
-        eid = mock_world_db.add_entity(
-            "character",
-            "Hero",
-            "The hero",
-            attributes={"birth_year": 1200, "death_year": 1260},
-        )
-        assert eid  # entity added
+        # Use a mock world_db so nested lifecycle attributes are not flattened
+        # by WorldDatabase's max nesting depth.
+        entity = MagicMock()
+        entity.id = "hero-id"
+        entity.name = "Hero"
+        entity.type = "character"
+        entity.attributes = {"lifecycle": {"birth": {"year": 1200}, "death": {"year": 1260}}}
+
+        mock_db = MagicMock()
+        mock_db.list_entities.return_value = [entity]
+        mock_db.list_relationships.return_value = []
+        mock_db.count_entities.return_value = 1
 
         mock_services.world_quality.generate_events_with_quality.return_value = []
 
-        world_service._generate_events(sample_story_state, mock_world_db, mock_services)
+        world_service._generate_events(sample_story_state, mock_db, mock_services)
 
         call_args = mock_services.world_quality.generate_events_with_quality.call_args
         entity_context = (
@@ -1078,6 +1083,60 @@ class TestGenerateEvents:
         assert count == 1
         assert "Could not resolve event participant" in caplog.text
         assert "NonExistentEntity" in caplog.text
+
+    def test_generate_events_passes_consequences(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test that consequences from generated events are passed through to world_db.add_event."""
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        expected_consequences = [
+            "The kingdom was split in two",
+            "Famine spread across the land",
+            "A new religion emerged",
+        ]
+
+        mock_services.world_quality.generate_events_with_quality.return_value = [
+            (
+                {
+                    "description": "The Great Schism divided the realm",
+                    "year": 800,
+                    "era_name": "Dark Age",
+                    "participants": [],
+                    "consequences": expected_consequences,
+                },
+                mock_quality_scores,
+            ),
+        ]
+
+        count = world_service._generate_events(sample_story_state, mock_world_db, mock_services)
+
+        assert count == 1
+        events = mock_world_db.list_events()
+        assert len(events) == 1
+        # Verify consequences were stored on the event
+        assert events[0].consequences == expected_consequences
+
+    def test_generate_events_uses_target_count_from_state(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test that state.target_events_min/max override settings defaults."""
+        # Set custom min/max on the state
+        sample_story_state.target_events_min = 10
+        sample_story_state.target_events_max = 10
+
+        mock_services.world_quality.generate_events_with_quality.return_value = []
+
+        world_service._generate_events(sample_story_state, mock_world_db, mock_services)
+
+        # Verify generate_events_with_quality was called with count=10
+        call_args = mock_services.world_quality.generate_events_with_quality.call_args
+        # count is the 4th positional arg (after story_state, existing_descriptions, entity_context)
+        count_arg = (
+            call_args.args[3] if len(call_args.args) > 3 else call_args.kwargs.get("count", None)
+        )
+        assert count_arg == 10
 
 
 def _mock_orphan_recovery_failure(mock_services):

@@ -4,6 +4,7 @@ import logging
 from unittest.mock import MagicMock
 
 from src.services.world_service._event_helpers import (
+    _extract_lifecycle_temporal,
     build_event_entity_context,
     build_event_timestamp,
     resolve_event_participants,
@@ -28,7 +29,7 @@ class TestBuildEventEntityContext:
         entity = MagicMock()
         entity.name = "Aragorn"
         entity.type = "character"
-        entity.attributes = {"birth_year": 2931}
+        entity.attributes = {"lifecycle": {"birth": {"year": 2931}}}
 
         world_db = MagicMock()
         world_db.list_entities.return_value = [entity]
@@ -107,6 +108,30 @@ class TestBuildEventEntityContext:
 
         assert "Mordor (location)" in result
 
+    def test_includes_lifecycle_temporal(self):
+        """Test that entity context includes lifecycle temporal data."""
+        entity = MagicMock()
+        entity.id = "e1"
+        entity.name = "Elara"
+        entity.type = "character"
+        entity.attributes = {
+            "lifecycle": {
+                "birth": {"year": 1200, "era_name": "Golden Age"},
+                "death": {"year": 1280},
+            },
+        }
+
+        world_db = MagicMock()
+        world_db.list_entities.return_value = [entity]
+        world_db.list_relationships.return_value = []
+
+        result = build_event_entity_context(world_db)
+
+        assert "Elara (character)" in result
+        assert "birth_year=1200" in result
+        assert "era=Golden Age" in result
+        assert "death_year=1280" in result
+
 
 class TestBuildEventTimestamp:
     """Tests for build_event_timestamp."""
@@ -132,6 +157,71 @@ class TestBuildEventTimestamp:
         result = build_event_timestamp({})
 
         assert result == ""
+
+    def test_month_only(self):
+        """Test with month but no year and no era_name."""
+        event = {"month": 3}
+
+        result = build_event_timestamp(event)
+
+        assert result == "Month 3"
+
+    def test_era_only(self):
+        """Test with era_name only, no year and no month."""
+        event = {"era_name": "Dark Age"}
+
+        result = build_event_timestamp(event)
+
+        assert result == "Dark Age"
+
+
+class TestExtractLifecycleTemporal:
+    """Tests for _extract_lifecycle_temporal."""
+
+    def test_with_lifecycle_data(self):
+        """Test extraction from a realistic lifecycle dict."""
+        attrs = {
+            "lifecycle": {
+                "birth": {"year": 1200, "era_name": "Golden Age"},
+                "founding_year": 800,
+                "death": {"year": 1260},
+            },
+        }
+
+        result = _extract_lifecycle_temporal(attrs)
+
+        assert "birth_year=1200" in result
+        assert "era=Golden Age" in result
+        assert "death_year=1260" in result
+        assert "founding_year=800" in result
+
+    def test_empty_attrs(self):
+        """Test with empty attributes dict returns empty list."""
+        result = _extract_lifecycle_temporal({})
+
+        assert result == []
+
+    def test_no_lifecycle_key(self):
+        """Test with attributes that have no lifecycle key returns empty list."""
+        result = _extract_lifecycle_temporal({"some_attr": "value"})
+
+        assert result == []
+
+    def test_destruction_year(self):
+        """Test extraction of destruction_year field."""
+        attrs = {"lifecycle": {"destruction_year": 1500}}
+
+        result = _extract_lifecycle_temporal(attrs)
+
+        assert "destruction_year=1500" in result
+
+    def test_temporal_notes(self):
+        """Test extraction of temporal_notes field."""
+        attrs = {"lifecycle": {"temporal_notes": "Founded during the great migration"}}
+
+        result = _extract_lifecycle_temporal(attrs)
+
+        assert "notes=Founded during the great migration" in result
 
 
 class TestResolveEventParticipants:
@@ -161,10 +251,10 @@ class TestResolveEventParticipants:
 
         event = {"participants": ["Gandalf"]}
 
-        with caplog.at_level(logging.WARNING, logger="src.services.world_service._event_helpers"):
+        with caplog.at_level(logging.DEBUG, logger="src.services.world_service._event_helpers"):
             result = resolve_event_participants(event, [entity])
 
-        assert "Unexpected participant format" in caplog.text
+        assert "Participant provided as plain string" in caplog.text
         assert result == [("e1", "affected")]
 
     def test_unresolved_participant(self):
@@ -180,5 +270,19 @@ class TestResolveEventParticipants:
     def test_no_participants_key(self):
         """Test event with no participants key."""
         result = resolve_event_participants({}, [])
+
+        assert result == []
+
+    def test_empty_entity_name(self):
+        """Test that a participant with an empty entity_name is silently skipped."""
+        entity = MagicMock()
+        entity.id = "e1"
+        entity.name = "Gandalf"
+
+        event = {
+            "participants": [{"entity_name": "", "role": "actor"}],
+        }
+
+        result = resolve_event_participants(event, [entity])
 
         assert result == []

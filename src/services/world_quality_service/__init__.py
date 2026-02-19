@@ -40,131 +40,28 @@ from src.memory.world_quality import (
 )
 from src.services.model_mode_service import ModelModeService
 from src.services.world_quality_service import (
+    _analytics,
+    _batch,
     _calendar,
     _chapter_quality,
     _character,
     _concept,
     _event,
     _faction,
+    _formatting,
     _item,
     _location,
+    _model_resolver,
     _plot,
     _relationship,
-)
-from src.services.world_quality_service._analytics import (
-    log_refinement_analytics as _log_refinement_analytics,
-)
-from src.services.world_quality_service._analytics import (
-    record_entity_quality as _record_entity_quality,
-)
-from src.services.world_quality_service._batch import (
-    generate_characters_with_quality as _generate_characters_with_quality,
-)
-from src.services.world_quality_service._batch import (
-    generate_concepts_with_quality as _generate_concepts_with_quality,
-)
-from src.services.world_quality_service._batch import (
-    generate_events_with_quality as _generate_events_with_quality,
-)
-from src.services.world_quality_service._batch import (
-    generate_factions_with_quality as _generate_factions_with_quality,
-)
-from src.services.world_quality_service._batch import (
-    generate_items_with_quality as _generate_items_with_quality,
-)
-from src.services.world_quality_service._batch import (
-    generate_locations_with_quality as _generate_locations_with_quality,
-)
-from src.services.world_quality_service._batch import (
-    generate_relationships_with_quality as _generate_relationships_with_quality,
-)
-from src.services.world_quality_service._batch import (
-    review_chapters_batch as _review_chapters_batch,
-)
-from src.services.world_quality_service._batch import (
-    review_characters_batch as _review_characters_batch,
-)
-from src.services.world_quality_service._calendar import (
-    generate_calendar_with_quality as _generate_calendar_with_quality,
-)
-from src.services.world_quality_service._chapter_quality import (
-    review_chapter_quality as _review_chapter_quality,
-)
-from src.services.world_quality_service._character import (
-    generate_character_with_quality as _generate_character_with_quality,
-)
-from src.services.world_quality_service._character import (
-    review_character_quality as _review_character_quality,
-)
-from src.services.world_quality_service._concept import (
-    generate_concept_with_quality as _generate_concept_with_quality,
-)
-from src.services.world_quality_service._event import (
-    generate_event_with_quality as _generate_event_with_quality,
+    _validation,
 )
 from src.services.world_quality_service._faction import (
     FACTION_IDEOLOGY_HINTS,
     FACTION_NAMING_HINTS,
     FACTION_STRUCTURE_HINTS,
 )
-from src.services.world_quality_service._faction import (
-    generate_faction_with_quality as _generate_faction_with_quality,
-)
-from src.services.world_quality_service._formatting import (
-    calculate_eta as _calculate_eta,
-)
-from src.services.world_quality_service._formatting import (
-    format_existing_names_warning as _format_existing_names_warning,
-)
-from src.services.world_quality_service._formatting import (
-    format_properties as _format_properties,
-)
-from src.services.world_quality_service._item import (
-    generate_item_with_quality as _generate_item_with_quality,
-)
-from src.services.world_quality_service._location import (
-    generate_location_with_quality as _generate_location_with_quality,
-)
 from src.services.world_quality_service._model_cache import ModelResolutionCache
-from src.services.world_quality_service._model_resolver import (
-    get_creator_model as _get_creator_model,
-)
-from src.services.world_quality_service._model_resolver import (
-    get_judge_model as _get_judge_model,
-)
-from src.services.world_quality_service._model_resolver import (
-    resolve_model_for_role as _resolve_model_for_role,
-)
-from src.services.world_quality_service._plot import (
-    review_plot_quality as _review_plot_quality,
-)
-from src.services.world_quality_service._relationship import (
-    generate_relationship_with_quality as _generate_relationship_with_quality,
-)
-from src.services.world_quality_service._validation import (
-    check_contradiction as _check_contradiction,
-)
-from src.services.world_quality_service._validation import (
-    extract_entity_claims as _extract_entity_claims,
-)
-from src.services.world_quality_service._validation import (
-    generate_mini_description as _generate_mini_description,
-)
-from src.services.world_quality_service._validation import (
-    generate_mini_descriptions_batch as _generate_mini_descriptions_batch,
-)
-from src.services.world_quality_service._validation import (
-    refine_entity as _refine_entity,
-)
-from src.services.world_quality_service._validation import (
-    regenerate_entity as _regenerate_entity,
-)
-from src.services.world_quality_service._validation import (
-    suggest_relationships_for_entity as _suggest_relationships_for_entity,
-)
-from src.services.world_quality_service._validation import (
-    validate_entity_consistency as _validate_entity_consistency,
-)
 from src.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -234,8 +131,8 @@ class WorldQualityService:
     FACTION_IDEOLOGY_HINTS: ClassVar[list[str]] = FACTION_IDEOLOGY_HINTS
 
     # Static method delegates
-    _calculate_eta = staticmethod(_calculate_eta)
-    _format_properties = staticmethod(_format_properties)
+    _calculate_eta = staticmethod(_formatting.calculate_eta)
+    _format_properties = staticmethod(_formatting.format_properties)
 
     def __init__(self, settings: Settings, mode_service: ModelModeService):
         """
@@ -376,7 +273,7 @@ class WorldQualityService:
         Notes:
             This method records metrics for analytics and does not return a value.
         """
-        _record_entity_quality(
+        _analytics.record_entity_quality(
             self,
             project_id,
             entity_type,
@@ -436,7 +333,7 @@ class WorldQualityService:
         Returns:
             model (str): Identifier of the model to use for the specified role.
         """
-        return _resolve_model_for_role(self, agent_role)
+        return _model_resolver.resolve_model_for_role(self, agent_role)
 
     def invalidate_model_cache(self) -> None:
         """
@@ -456,7 +353,7 @@ class WorldQualityService:
         Returns:
             str: The model name or identifier to use for creative generation.
         """
-        return _get_creator_model(self, entity_type)
+        return _model_resolver.get_creator_model(self, entity_type)
 
     def _get_judge_model(self, entity_type: str | None = None) -> str:
         """
@@ -468,7 +365,7 @@ class WorldQualityService:
         Returns:
             model_name (str): The resolved judge model identifier.
         """
-        return _get_judge_model(self, entity_type)
+        return _model_resolver.get_judge_model(self, entity_type)
 
     def _format_existing_names_warning(self, existing_names: list[str], entity_type: str) -> str:
         """
@@ -481,7 +378,7 @@ class WorldQualityService:
         Returns:
                 warning (str): A formatted warning message that enumerates existing names and includes clear "DO NOT" duplicate examples.
         """
-        return _format_existing_names_warning(existing_names, entity_type)
+        return _formatting.format_existing_names_warning(existing_names, entity_type)
 
     def _log_refinement_analytics(
         self,
@@ -504,7 +401,7 @@ class WorldQualityService:
             quality_threshold (float | None, optional): The quality threshold that was used, if any.
             max_iterations (int | None, optional): The maximum number of refinement iterations allowed, if configured.
         """
-        _log_refinement_analytics(
+        _analytics.log_refinement_analytics(
             self,
             history,
             project_id,
@@ -524,7 +421,7 @@ class WorldQualityService:
         custom_instructions: str | None = None,
     ) -> tuple[Character, CharacterQualityScores, int]:
         """Generate a character using the creator-judge-refine quality loop."""
-        return _generate_character_with_quality(
+        return _character.generate_character_with_quality(
             self, story_state, existing_names, custom_instructions
         )
 
@@ -534,7 +431,7 @@ class WorldQualityService:
         story_state: StoryState,
     ) -> tuple[Character, CharacterQualityScores, int]:
         """Review and refine an existing character through the quality loop."""
-        return _review_character_quality(self, character, story_state)
+        return _character.review_character_quality(self, character, story_state)
 
     # -- Plot --
     def review_plot_quality(
@@ -543,7 +440,7 @@ class WorldQualityService:
         story_state: StoryState,
     ) -> tuple[PlotOutline, PlotQualityScores, int]:
         """Review and refine a plot outline through the quality loop."""
-        return _review_plot_quality(self, plot_outline, story_state)
+        return _plot.review_plot_quality(self, plot_outline, story_state)
 
     # -- Chapter --
     def review_chapter_quality(
@@ -552,7 +449,7 @@ class WorldQualityService:
         story_state: StoryState,
     ) -> tuple[Chapter, ChapterQualityScores, int]:
         """Review and refine a chapter through the quality loop."""
-        return _review_chapter_quality(self, chapter, story_state)
+        return _chapter_quality.review_chapter_quality(self, chapter, story_state)
 
     # -- Location --
     def generate_location_with_quality(
@@ -561,7 +458,7 @@ class WorldQualityService:
         existing_names: list[str],
     ) -> tuple[dict[str, Any], LocationQualityScores, int]:
         """Generate a location using the creator-judge-refine quality loop."""
-        return _generate_location_with_quality(self, story_state, existing_names)
+        return _location.generate_location_with_quality(self, story_state, existing_names)
 
     # -- Faction --
     def generate_faction_with_quality(
@@ -571,7 +468,9 @@ class WorldQualityService:
         existing_locations: list[str] | None = None,
     ) -> tuple[dict[str, Any], FactionQualityScores, int]:
         """Generate a faction using the creator-judge-refine quality loop."""
-        return _generate_faction_with_quality(self, story_state, existing_names, existing_locations)
+        return _faction.generate_faction_with_quality(
+            self, story_state, existing_names, existing_locations
+        )
 
     # -- Item --
     def generate_item_with_quality(
@@ -580,7 +479,7 @@ class WorldQualityService:
         existing_names: list[str],
     ) -> tuple[dict[str, Any], ItemQualityScores, int]:
         """Generate an item using the creator-judge-refine quality loop."""
-        return _generate_item_with_quality(self, story_state, existing_names)
+        return _item.generate_item_with_quality(self, story_state, existing_names)
 
     # -- Concept --
     def generate_concept_with_quality(
@@ -589,7 +488,7 @@ class WorldQualityService:
         existing_names: list[str],
     ) -> tuple[dict[str, Any], ConceptQualityScores, int]:
         """Generate a concept using the creator-judge-refine quality loop."""
-        return _generate_concept_with_quality(self, story_state, existing_names)
+        return _concept.generate_concept_with_quality(self, story_state, existing_names)
 
     # -- Event --
     def generate_event_with_quality(
@@ -597,10 +496,11 @@ class WorldQualityService:
         story_state: StoryState,
         existing_descriptions: list[str],
         entity_context: str,
+        custom_instructions: str | None = None,
     ) -> tuple[dict[str, Any], EventQualityScores, int]:
         """Generate an event using the creator-judge-refine quality loop."""
-        return _generate_event_with_quality(
-            self, story_state, existing_descriptions, entity_context
+        return _event.generate_event_with_quality(
+            self, story_state, existing_descriptions, entity_context, custom_instructions
         )
 
     # -- Calendar --
@@ -609,7 +509,7 @@ class WorldQualityService:
         story_state: StoryState,
     ) -> tuple[dict[str, Any], CalendarQualityScores, int]:
         """Generate a calendar using the creator-judge-refine quality loop."""
-        return _generate_calendar_with_quality(self, story_state)
+        return _calendar.generate_calendar_with_quality(self, story_state)
 
     # -- Relationship --
     def generate_relationship_with_quality(
@@ -631,7 +531,7 @@ class WorldQualityService:
         Returns:
             Tuple of (relationship_dict, quality_scores, iterations_used).
         """
-        return _generate_relationship_with_quality(
+        return _relationship.generate_relationship_with_quality(
             self, story_state, entity_names, existing_rels, required_entity
         )
 
@@ -646,7 +546,7 @@ class WorldQualityService:
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[dict[str, Any], FactionQualityScores]]:
         """Generate multiple factions with quality refinement."""
-        return _generate_factions_with_quality(
+        return _batch.generate_factions_with_quality(
             self,
             story_state,
             existing_names,
@@ -665,7 +565,7 @@ class WorldQualityService:
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[dict[str, Any], ItemQualityScores]]:
         """Generate multiple items with quality refinement."""
-        return _generate_items_with_quality(
+        return _batch.generate_items_with_quality(
             self, story_state, existing_names, count, cancel_check, progress_callback
         )
 
@@ -678,7 +578,7 @@ class WorldQualityService:
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[dict[str, Any], ConceptQualityScores]]:
         """Generate multiple concepts with quality refinement."""
-        return _generate_concepts_with_quality(
+        return _batch.generate_concepts_with_quality(
             self, story_state, existing_names, count, cancel_check, progress_callback
         )
 
@@ -688,16 +588,18 @@ class WorldQualityService:
         existing_descriptions: list[str],
         entity_context: str,
         count: int = 5,
+        custom_instructions: str | None = None,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[dict[str, Any], EventQualityScores]]:
         """Generate multiple events with quality refinement."""
-        return _generate_events_with_quality(
+        return _batch.generate_events_with_quality(
             self,
             story_state,
             existing_descriptions,
             entity_context,
             count,
+            custom_instructions,
             cancel_check,
             progress_callback,
         )
@@ -712,7 +614,7 @@ class WorldQualityService:
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[Character, CharacterQualityScores]]:
         """Generate multiple characters with quality refinement."""
-        return _generate_characters_with_quality(
+        return _batch.generate_characters_with_quality(
             self,
             story_state,
             existing_names,
@@ -731,7 +633,7 @@ class WorldQualityService:
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[dict[str, Any], LocationQualityScores]]:
         """Generate multiple locations with quality refinement."""
-        return _generate_locations_with_quality(
+        return _batch.generate_locations_with_quality(
             self, story_state, existing_names, count, cancel_check, progress_callback
         )
 
@@ -757,7 +659,7 @@ class WorldQualityService:
         Returns:
             List of (relationship_dict, quality_scores) tuples.
         """
-        return _generate_relationships_with_quality(
+        return _batch.generate_relationships_with_quality(
             self, story_state, entity_names, existing_rels, count, cancel_check, progress_callback
         )
 
@@ -770,7 +672,7 @@ class WorldQualityService:
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[Character, CharacterQualityScores]]:
         """Review and refine a batch of characters through the quality loop."""
-        return _review_characters_batch(
+        return _batch.review_characters_batch(
             self, characters, story_state, cancel_check, progress_callback
         )
 
@@ -782,7 +684,9 @@ class WorldQualityService:
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[Chapter, ChapterQualityScores]]:
         """Review and refine a batch of chapters through the quality loop."""
-        return _review_chapters_batch(self, chapters, story_state, cancel_check, progress_callback)
+        return _batch.review_chapters_batch(
+            self, chapters, story_state, cancel_check, progress_callback
+        )
 
     # -- Private: Character helpers --
     def _create_character(self, story_state, existing_names, temperature, custom_instructions=None):
@@ -854,10 +758,22 @@ class WorldQualityService:
         return _concept._refine_concept(self, concept, scores, story_state, temperature)
 
     # -- Private: Event helpers --
-    def _create_event(self, story_state, existing_descriptions, entity_context, temperature):
+    def _create_event(
+        self,
+        story_state,
+        existing_descriptions,
+        entity_context,
+        temperature,
+        custom_instructions=None,
+    ):
         """Create an event via LLM at the given temperature."""
         return _event._create_event(
-            self, story_state, existing_descriptions, entity_context, temperature
+            self,
+            story_state,
+            existing_descriptions,
+            entity_context,
+            temperature,
+            custom_instructions,
         )
 
     def _judge_event_quality(self, event, story_state, temperature):
@@ -935,14 +851,14 @@ class WorldQualityService:
         full_description: str,
     ) -> str:
         """Generate a short mini-description for an entity."""
-        return _generate_mini_description(self, name, entity_type, full_description)
+        return _validation.generate_mini_description(self, name, entity_type, full_description)
 
     def generate_mini_descriptions_batch(
         self,
         entities: list[dict[str, Any]],
     ) -> dict[str, str]:
         """Generate mini-descriptions for a batch of entities."""
-        return _generate_mini_descriptions_batch(self, entities)
+        return _validation.generate_mini_descriptions_batch(self, entities)
 
     async def refine_entity(
         self,
@@ -950,7 +866,7 @@ class WorldQualityService:
         story_brief: StoryBrief | None,
     ) -> dict[str, Any] | None:
         """Refine an entity using LLM feedback and return updated data."""
-        return await _refine_entity(self, entity, story_brief)
+        return await _validation.refine_entity(self, entity, story_brief)
 
     async def regenerate_entity(
         self,
@@ -959,7 +875,7 @@ class WorldQualityService:
         custom_instructions: str | None = None,
     ) -> dict[str, Any] | None:
         """Regenerate an entity from scratch with optional custom instructions."""
-        return await _regenerate_entity(self, entity, story_brief, custom_instructions)
+        return await _validation.regenerate_entity(self, entity, story_brief, custom_instructions)
 
     async def suggest_relationships_for_entity(
         self,
@@ -970,7 +886,7 @@ class WorldQualityService:
         num_suggestions: int = 3,
     ) -> list[dict[str, Any]]:
         """Suggest new relationships for an entity based on available connections."""
-        return await _suggest_relationships_for_entity(
+        return await _validation.suggest_relationships_for_entity(
             self, entity, available_entities, existing_relationships, story_brief, num_suggestions
         )
 
@@ -979,7 +895,7 @@ class WorldQualityService:
         entity: Entity,
     ) -> list[dict[str, str]]:
         """Extract factual claims from an entity's description for consistency checking."""
-        return await _extract_entity_claims(self, entity)
+        return await _validation.extract_entity_claims(self, entity)
 
     async def check_contradiction(
         self,
@@ -987,7 +903,7 @@ class WorldQualityService:
         claim_b: dict[str, str],
     ) -> dict[str, Any] | None:
         """Check whether two claims contradict each other."""
-        return await _check_contradiction(self, claim_a, claim_b)
+        return await _validation.check_contradiction(self, claim_a, claim_b)
 
     async def validate_entity_consistency(
         self,
@@ -995,4 +911,4 @@ class WorldQualityService:
         max_comparisons: int = 50,
     ) -> list[dict[str, Any]]:
         """Validate consistency across entities by comparing claim pairs."""
-        return await _validate_entity_consistency(self, entities, max_comparisons)
+        return await _validation.validate_entity_consistency(self, entities, max_comparisons)

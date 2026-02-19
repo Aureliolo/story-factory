@@ -18,6 +18,7 @@ from src.memory.story_state import (
 )
 from src.memory.world_quality import EventQualityScores
 from src.services.world_quality_service import WorldQualityService
+from src.services.world_quality_service._event import _format_event_details
 from src.settings import Settings
 from src.utils.exceptions import WorldGenerationError
 
@@ -202,6 +203,30 @@ class TestCreateEvent:
         assert "The Great Fire" in prompt
         assert "The Flood" in prompt
         assert "DO NOT DUPLICATE" in prompt
+
+    @patch("src.services.world_quality_service._event.generate_structured")
+    def test_create_event_includes_custom_instructions_in_prompt(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test that custom_instructions are included in the creation prompt."""
+        mock_event = WorldEventCreation(
+            description="A custom event",
+            year=1850,
+        )
+        mock_generate_structured.return_value = mock_event
+
+        service._create_event(
+            story_state,
+            existing_descriptions=[],
+            entity_context="Test context",
+            temperature=0.9,
+            custom_instructions="Focus on maritime disasters",
+        )
+
+        call_args = mock_generate_structured.call_args
+        prompt = call_args.kwargs["prompt"]
+        assert "SPECIFIC REQUIREMENTS" in prompt
+        assert "Focus on maritime disasters" in prompt
 
 
 class TestJudgeEventQuality:
@@ -569,3 +594,179 @@ class TestGenerateEventsWithQualityBatch:
         for event_dict, scores in results:
             assert event_dict["description"] == "A great battle"
             assert scores.average == 8.0
+
+
+class TestJudgeEventQualityGenreAccess:
+    """Tests for genre and language access in judge and refine functions."""
+
+    @patch("src.services.world_quality_service._event.generate_structured")
+    def test_judge_event_quality_accesses_brief_genre_directly(
+        self, mock_generate_structured, service
+    ):
+        """Test that _judge_event_quality accesses brief.genre directly in the prompt."""
+        state = StoryState(id="genre-test")
+        state.brief = StoryBrief(
+            premise="A space opera with alien diplomats",
+            genre="science_fiction",
+            subgenres=["space opera"],
+            tone="grand and sweeping",
+            themes=["diplomacy"],
+            setting_time="Far future",
+            setting_place="Galactic senate",
+            target_length="novel",
+            language="English",
+            content_rating="none",
+        )
+
+        mock_generate_structured.return_value = EventQualityScores(
+            significance=7.0,
+            temporal_plausibility=7.0,
+            causal_coherence=7.0,
+            narrative_potential=7.0,
+            entity_integration=7.0,
+            feedback="Adequate event",
+        )
+
+        event = {
+            "description": "First Contact with the Zyrathi Empire",
+            "year": 3045,
+            "era_name": "Expansion Era",
+            "participants": [],
+            "consequences": [],
+        }
+
+        service._judge_event_quality(event, state, temperature=0.1)
+
+        # Verify the prompt sent to the LLM contains the genre from brief
+        call_args = mock_generate_structured.call_args
+        prompt = call_args.kwargs["prompt"]
+        assert "science_fiction" in prompt
+
+    @patch("src.services.world_quality_service._event.generate_structured")
+    def test_refine_event_accesses_brief_language_directly(self, mock_generate_structured, service):
+        """Test that _refine_event accesses brief.language directly in the prompt."""
+        state = StoryState(id="lang-test")
+        state.brief = StoryBrief(
+            premise="Un cuento de hadas moderno",
+            genre="fantasy",
+            subgenres=["fairy tale"],
+            tone="whimsical",
+            themes=["love"],
+            setting_time="Modern day",
+            setting_place="Enchanted forest",
+            target_length="short_story",
+            language="Spanish",
+            content_rating="none",
+        )
+
+        refined_event = WorldEventCreation(
+            description="La gran inundación destruyó el pueblo",
+            year=2020,
+            era_name="Era Moderna",
+            participants=[],
+            consequences=["El pueblo fue reconstruido"],
+        )
+        mock_generate_structured.return_value = refined_event
+
+        original = {
+            "description": "Flood",
+            "year": 2020,
+            "era_name": "Modern Era",
+            "participants": [],
+            "consequences": [],
+        }
+
+        scores = EventQualityScores(
+            significance=5.0,
+            temporal_plausibility=5.0,
+            causal_coherence=5.0,
+            narrative_potential=5.0,
+            entity_integration=5.0,
+            feedback="Too vague",
+        )
+
+        service._refine_event(original, scores, state, temperature=0.7)
+
+        # Verify the prompt sent to the LLM contains the language from brief
+        call_args = mock_generate_structured.call_args
+        prompt = call_args.kwargs["prompt"]
+        assert "Spanish" in prompt
+
+
+class TestJudgeAndRefineNoBrief:
+    """Tests that judge and refine raise ValueError when story has no brief."""
+
+    def test_judge_event_quality_no_brief_raises(self, service):
+        """Test _judge_event_quality raises ValueError without brief."""
+        state = StoryState(id="no-brief")
+        state.brief = None
+
+        with pytest.raises(ValueError, match="brief for event judging"):
+            service._judge_event_quality({"description": "Test event"}, state, temperature=0.1)
+
+    def test_refine_event_no_brief_raises(self, service):
+        """Test _refine_event raises ValueError without brief."""
+        state = StoryState(id="no-brief")
+        state.brief = None
+        scores = EventQualityScores(
+            significance=5.0,
+            temporal_plausibility=5.0,
+            causal_coherence=5.0,
+            narrative_potential=5.0,
+            entity_integration=5.0,
+            feedback="Test",
+        )
+
+        with pytest.raises(ValueError, match="brief for event refinement"):
+            service._refine_event({"description": "Test event"}, scores, state, temperature=0.7)
+
+
+class TestFormatEventDetails:
+    """Tests for _format_event_details helper function."""
+
+    def test_format_event_details_with_participants_and_consequences(self):
+        """Test formatting an event with both participants and consequences."""
+        event = {
+            "description": "The Great Siege of Ironhold",
+            "year": 1300,
+            "participants": [
+                {"entity_name": "General Karn", "role": "actor"},
+                {"entity_name": "Ironhold Fortress", "role": "location"},
+                {"entity_name": "Queen Elara", "role": "witness"},
+            ],
+            "consequences": [
+                "The fortress walls were breached",
+                "Trade routes were disrupted for a decade",
+                "A peace treaty was signed",
+            ],
+        }
+
+        result = _format_event_details(event)
+
+        # Verify all participants appear
+        assert "General Karn" in result
+        assert "actor" in result
+        assert "Ironhold Fortress" in result
+        assert "location" in result
+        assert "Queen Elara" in result
+        assert "witness" in result
+
+        # Verify all consequences appear
+        assert "fortress walls were breached" in result
+        assert "Trade routes were disrupted for a decade" in result
+        assert "peace treaty was signed" in result
+
+        # Verify section headers
+        assert "Participants:" in result
+        assert "Consequences:" in result
+
+    def test_format_event_details_empty(self):
+        """Test formatting an event with no participants or consequences."""
+        event = {
+            "description": "A quiet day",
+            "year": 1500,
+        }
+
+        result = _format_event_details(event)
+
+        assert result == ""

@@ -75,18 +75,18 @@ def get_entity_names_by_type(page, entity_type: str) -> list[str]:
     return [e.name for e in page.state.world_db.list_entities() if e.type == entity_type]
 
 
-def get_random_count(page, entity_type: str) -> int:
-    """Get a random count for entity generation based on settings.
+def _get_entity_ranges(settings) -> dict[str, tuple[int, int]]:
+    """Return entity_type -> (min, max) count ranges from settings.
+
+    Centralises the mapping so callers don't duplicate it.
 
     Args:
-        page: WorldPage instance.
-        entity_type: Type of entity.
+        settings: Application settings instance.
 
     Returns:
-        Random integer between min and max from settings.
+        Dictionary mapping each entity type to its (min_count, max_count) tuple.
     """
-    settings = page.services.settings
-    ranges = {
+    return {
         "characters": (settings.world_gen_characters_min, settings.world_gen_characters_max),
         "locations": (settings.world_gen_locations_min, settings.world_gen_locations_max),
         "factions": (settings.world_gen_factions_min, settings.world_gen_factions_max),
@@ -98,6 +98,19 @@ def get_random_count(page, entity_type: str) -> int:
             settings.world_gen_relationships_max,
         ),
     }
+
+
+def get_random_count(page, entity_type: str) -> int:
+    """Get a random count for entity generation based on settings.
+
+    Args:
+        page: WorldPage instance.
+        entity_type: Type of entity.
+
+    Returns:
+        Random integer between min and max from settings.
+    """
+    ranges = _get_entity_ranges(page.services.settings)
     if entity_type not in ranges:
         logger.error("Unknown entity_type '%s' in get_random_count", entity_type)
         raise ValueError(f"Unknown entity_type: {entity_type}")
@@ -115,19 +128,7 @@ def show_generate_dialog(page, entity_type: str) -> None:
     logger.info(f"Showing generate dialog for {entity_type}")
 
     # Get default count range from settings
-    settings = page.services.settings
-    ranges = {
-        "characters": (settings.world_gen_characters_min, settings.world_gen_characters_max),
-        "locations": (settings.world_gen_locations_min, settings.world_gen_locations_max),
-        "factions": (settings.world_gen_factions_min, settings.world_gen_factions_max),
-        "items": (settings.world_gen_items_min, settings.world_gen_items_max),
-        "concepts": (settings.world_gen_concepts_min, settings.world_gen_concepts_max),
-        "events": (settings.world_gen_events_min, settings.world_gen_events_max),
-        "relationships": (
-            settings.world_gen_relationships_min,
-            settings.world_gen_relationships_max,
-        ),
-    }
+    ranges = _get_entity_ranges(page.services.settings)
     if entity_type not in ranges:
         logger.error("Unknown entity_type '%s' in show_generate_dialog", entity_type)
         raise ValueError(f"Unknown entity_type: {entity_type}")
@@ -319,7 +320,7 @@ def show_entity_preview_dialog(
 
     Args:
         page: WorldPage instance.
-        entity_type: Type of entity (character, location, faction, item, concept)
+        entity_type: Type of entity (character, location, faction, item, concept, event, relationship)
         entities: List of (entity_data, quality_scores) tuples
         on_confirm: Callback function that receives selected entities list
     """

@@ -1,5 +1,6 @@
 """Event generation, judgment, and refinement functions."""
 
+import copy
 import logging
 from typing import Any
 
@@ -17,11 +18,47 @@ from src.utils.exceptions import WorldGenerationError, summarize_llm_error
 logger = logging.getLogger(__name__)
 
 
+def _format_event_details(event: dict[str, Any]) -> str:
+    """Format an event's participants and consequences into a display string.
+
+    Produces a multi-line text block listing participant names with their roles
+    and consequence descriptions, suitable for embedding in LLM prompts.
+
+    Parameters:
+        event: Event data dict containing optional 'participants' and 'consequences' keys.
+
+    Returns:
+        Formatted string with participants and consequences sections (may be empty).
+    """
+    logger.debug(
+        "Formatting event details for '%s'",
+        str(event.get("description", "Unknown"))[:60],
+    )
+
+    parts: list[str] = []
+
+    participants = event.get("participants", [])
+    if participants:
+        lines = []
+        for p in participants:
+            name = p.get("entity_name", "Unknown") if isinstance(p, dict) else str(p)
+            role = p.get("role", "affected") if isinstance(p, dict) else "affected"
+            lines.append(f"  - {name} ({role})")
+        parts.append("Participants:\n" + "\n".join(lines))
+
+    consequences = event.get("consequences", [])
+    if consequences:
+        parts.append("Consequences:\n" + "\n".join(f"  - {c}" for c in consequences))
+
+    return "\n".join(parts)
+
+
 def generate_event_with_quality(
     svc,
     story_state: StoryState,
     existing_descriptions: list[str],
     entity_context: str,
+    custom_instructions: str | None = None,
 ) -> tuple[dict[str, Any], EventQualityScores, int]:
     """Generate a world event with iterative quality refinement.
 
@@ -33,6 +70,7 @@ def generate_event_with_quality(
         story_state: Current story state with brief.
         existing_descriptions: Descriptions of existing events to avoid duplicates.
         entity_context: Pre-formatted string of all entities/relationships/lifecycle data.
+        custom_instructions: Optional additional instructions for the creator model.
 
     Returns:
         Tuple of (event_dict, quality_scores, iterations_used).
@@ -45,6 +83,12 @@ def generate_event_with_quality(
     if not brief:
         raise ValueError("Story must have a brief for event generation")
 
+    logger.info(
+        "Generating event with quality for story %s (custom_instructions=%s)",
+        story_state.id,
+        custom_instructions[:50] if custom_instructions else None,
+    )
+
     return quality_refinement_loop(
         entity_type="event",
         create_fn=lambda retries: svc._create_event(
@@ -52,6 +96,7 @@ def generate_event_with_quality(
             existing_descriptions,
             entity_context,
             retry_temperature(config, retries),
+            custom_instructions,
         ),
         judge_fn=lambda evt: svc._judge_event_quality(
             evt,
@@ -65,7 +110,7 @@ def generate_event_with_quality(
             config.get_refinement_temperature(iteration),
         ),
         get_name=lambda evt: evt.get("description", "Unknown")[:60],
-        serialize=lambda evt: evt.copy(),
+        serialize=lambda evt: copy.deepcopy(evt),
         is_empty=lambda evt: not evt.get("description"),
         score_cls=EventQualityScores,
         config=config,
@@ -80,12 +125,29 @@ def _create_event(
     existing_descriptions: list[str],
     entity_context: str,
     temperature: float,
+    custom_instructions: str | None = None,
 ) -> dict[str, Any]:
-    """Create a new world event using the creator model with structured generation."""
+    """Create a new world event using the creator model with structured generation.
+
+    Args:
+        svc: WorldQualityService instance.
+        story_state: Current story state.
+        existing_descriptions: Descriptions of existing events to avoid duplicates.
+        entity_context: Pre-formatted string of all entities/relationships/lifecycle data.
+        temperature: Generation temperature.
+        custom_instructions: Optional custom instructions to refine generation.
+
+    Returns:
+        Event data dict, or empty dict on failure.
+
+    Raises:
+        WorldGenerationError: If the LLM call fails.
+    """
     logger.debug(
-        "Creating event for story %s (existing: %d)",
+        "Creating event for story %s (existing: %d, custom_instructions=%s)",
         story_state.id,
         len(existing_descriptions),
+        custom_instructions[:50] if custom_instructions else None,
     )
     brief = story_state.brief
     if not brief:
@@ -103,6 +165,12 @@ def _create_event(
 Create something COMPLETELY DIFFERENT from the above events.
 """
 
+    # Build custom instructions section if provided
+    custom_section = ""
+    if custom_instructions:
+        custom_section = f"\n\nSPECIFIC REQUIREMENTS:\n{custom_instructions}\n"
+        logger.debug("Including custom instructions in event creation prompt")
+
     calendar_context = svc.get_calendar_context()
 
     prompt = f"""Create a world-shaping event for a {brief.genre} story.
@@ -114,7 +182,7 @@ TONE: {brief.tone}
 {existing_block}
 WORLD CONTEXT (entities, relationships, timeline):
 {entity_context}
-
+{custom_section}
 Create a significant world event with:
 1. A clear, specific description of what happened
 2. When it occurred (year and/or era from the calendar if available)
@@ -169,23 +237,11 @@ def _judge_event_quality(
         WorldGenerationError: If the judge model call fails or returns invalid data.
     """
     brief = story_state.brief
-    genre = brief.genre if brief else "fiction"
+    if not brief:
+        raise ValueError("Story must have a brief for event judging")
+    genre = brief.genre
 
-    # Format participants for display
-    participants = event.get("participants", [])
-    participants_str = ""
-    if participants:
-        parts = []
-        for p in participants:
-            name = p.get("entity_name", "Unknown") if isinstance(p, dict) else str(p)
-            role = p.get("role", "affected") if isinstance(p, dict) else "affected"
-            parts.append(f"  - {name} ({role})")
-        participants_str = "Participants:\n" + "\n".join(parts)
-
-    consequences = event.get("consequences", [])
-    consequences_str = ""
-    if consequences:
-        consequences_str = "Consequences:\n" + "\n".join(f"  - {c}" for c in consequences)
+    event_details = _format_event_details(event)
 
     prompt = f"""You are evaluating a world event for a {genre} story.
 
@@ -193,8 +249,7 @@ EVENT TO EVALUATE:
 Description: {event.get("description", "Unknown")}
 Year: {event.get("year", "N/A")}
 Era: {event.get("era_name", "N/A")}
-{participants_str}
-{consequences_str}
+{event_details}
 
 {JUDGE_CALIBRATION_BLOCK}
 
@@ -259,6 +314,8 @@ def _refine_event(
         story_state.id,
     )
     brief = story_state.brief
+    if not brief:
+        raise ValueError("Story must have a brief for event refinement")
 
     threshold = svc.get_config().get_threshold("event")
     improvement_focus = []
@@ -273,21 +330,7 @@ def _refine_event(
     if scores.entity_integration < threshold:
         improvement_focus.append("Better integrate participants with meaningful roles")
 
-    # Format participants for display
-    participants = event.get("participants", [])
-    participants_str = ""
-    if participants:
-        parts = []
-        for p in participants:
-            name = p.get("entity_name", "Unknown") if isinstance(p, dict) else str(p)
-            role = p.get("role", "affected") if isinstance(p, dict) else "affected"
-            parts.append(f"  - {name} ({role})")
-        participants_str = "Participants:\n" + "\n".join(parts)
-
-    consequences = event.get("consequences", [])
-    consequences_str = ""
-    if consequences:
-        consequences_str = "Consequences:\n" + "\n".join(f"  - {c}" for c in consequences)
+    event_details = _format_event_details(event)
 
     prompt = f"""TASK: Improve this world event to score HIGHER on the weak dimensions.
 
@@ -295,8 +338,7 @@ ORIGINAL EVENT:
 Description: {event.get("description", "Unknown")}
 Year: {event.get("year", "N/A")}
 Era: {event.get("era_name", "N/A")}
-{participants_str}
-{consequences_str}
+{event_details}
 
 CURRENT SCORES (need {threshold}+ in all areas):
 - Significance: {scores.significance}/10
@@ -314,7 +356,7 @@ REQUIREMENTS:
 1. Keep the core event concept but make SUBSTANTIAL improvements
 2. Preserve existing participants and add more if needed
 3. Strengthen causes and consequences
-4. Output in {brief.language if brief else "English"}
+4. Output in {brief.language}
 
 Return ONLY the improved event."""
 
