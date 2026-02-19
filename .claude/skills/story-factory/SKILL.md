@@ -165,7 +165,7 @@ async def refine_character(character: Character, scores: CharacterScores) -> Cha
 1. **Update schema version** and add migration in `src/memory/world_database/_schema.py`:
    ```python
    CURRENT_VERSION = 3
-   
+
    def migrate_v2_to_v3(conn):
        conn.execute("ALTER TABLE entities ADD COLUMN new_field TEXT")
    ```
@@ -201,11 +201,11 @@ async def refine_character(character: Character, scores: CharacterScores) -> Cha
    # scripts/investigate_model_performance.py
    import asyncio
    from src.services.llm_client import LLMClient
-   
+
    async def main():
        # Investigation logic
        pass
-   
+
    if __name__ == "__main__":
        asyncio.run(main())
    ```
@@ -247,10 +247,10 @@ class TestQualityLoop:
     async def test_quality_loop_improvement(self):
         # Arrange
         mock_entity = create_mock_entity()
-        
+
         # Act
         result = await QualityLoop.run(mock_entity)
-        
+
         # Assert
         assert result.quality_score > 0.8
 ```
