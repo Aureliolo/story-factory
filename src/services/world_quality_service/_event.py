@@ -17,6 +17,41 @@ from src.utils.exceptions import WorldGenerationError, summarize_llm_error
 logger = logging.getLogger(__name__)
 
 
+def _format_participants(participants: list[Any]) -> str:
+    """Format an event's participant list for prompt display.
+
+    Args:
+        participants: List of participant dicts or strings from an event.
+
+    Returns:
+        Formatted multi-line string, or empty string if no participants.
+    """
+    if not participants:
+        return ""
+    parts = []
+    for p in participants:
+        name = p.get("entity_name", "Unknown") if isinstance(p, dict) else str(p)
+        role = p.get("role", "affected") if isinstance(p, dict) else "affected"
+        parts.append(f"  - {name} ({role})")
+    logger.debug("Formatted %d participants for prompt display", len(parts))
+    return "Participants:\n" + "\n".join(parts)
+
+
+def _format_consequences(consequences: list[Any]) -> str:
+    """Format an event's consequence list for prompt display.
+
+    Args:
+        consequences: List of consequence strings from an event.
+
+    Returns:
+        Formatted multi-line string, or empty string if no consequences.
+    """
+    if not consequences:
+        return ""
+    logger.debug("Formatted %d consequences for prompt display", len(consequences))
+    return "Consequences:\n" + "\n".join(f"  - {c}" for c in consequences)
+
+
 def generate_event_with_quality(
     svc,
     story_state: StoryState,
@@ -171,21 +206,8 @@ def _judge_event_quality(
     brief = story_state.brief
     genre = brief.genre if brief else "fiction"
 
-    # Format participants for display
-    participants = event.get("participants", [])
-    participants_str = ""
-    if participants:
-        parts = []
-        for p in participants:
-            name = p.get("entity_name", "Unknown") if isinstance(p, dict) else str(p)
-            role = p.get("role", "affected") if isinstance(p, dict) else "affected"
-            parts.append(f"  - {name} ({role})")
-        participants_str = "Participants:\n" + "\n".join(parts)
-
-    consequences = event.get("consequences", [])
-    consequences_str = ""
-    if consequences:
-        consequences_str = "Consequences:\n" + "\n".join(f"  - {c}" for c in consequences)
+    participants_str = _format_participants(event.get("participants", []))
+    consequences_str = _format_consequences(event.get("consequences", []))
 
     prompt = f"""You are evaluating a world event for a {genre} story.
 
@@ -273,21 +295,8 @@ def _refine_event(
     if scores.entity_integration < threshold:
         improvement_focus.append("Better integrate participants with meaningful roles")
 
-    # Format participants for display
-    participants = event.get("participants", [])
-    participants_str = ""
-    if participants:
-        parts = []
-        for p in participants:
-            name = p.get("entity_name", "Unknown") if isinstance(p, dict) else str(p)
-            role = p.get("role", "affected") if isinstance(p, dict) else "affected"
-            parts.append(f"  - {name} ({role})")
-        participants_str = "Participants:\n" + "\n".join(parts)
-
-    consequences = event.get("consequences", [])
-    consequences_str = ""
-    if consequences:
-        consequences_str = "Consequences:\n" + "\n".join(f"  - {c}" for c in consequences)
+    participants_str = _format_participants(event.get("participants", []))
+    consequences_str = _format_consequences(event.get("consequences", []))
 
     prompt = f"""TASK: Improve this world event to score HIGHER on the weak dimensions.
 

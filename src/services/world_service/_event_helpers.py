@@ -247,7 +247,7 @@ def _generate_events(
         else svc.settings.world_gen_events_max
     )
     if event_min > event_max:
-        logger.error("Invalid event count range: min=%d > max=%d, swapping", event_min, event_max)
+        logger.warning("Invalid event count range: min=%d > max=%d, swapping", event_min, event_max)
         event_min, event_max = event_max, event_min
     event_count = random.randint(event_min, event_max)
 
@@ -266,29 +266,36 @@ def _generate_events(
             logger.info("Event processing cancelled after %d events", added_count)
             break
 
-        description = event.get("description", "")
-        if not description:
-            logger.warning("Skipping event with empty description: %s", event)
-            continue
+        try:
+            description = event.get("description", "")
+            if not description:
+                logger.warning("Skipping event with empty description: %s", event)
+                continue
 
-        timestamp_in_story = build_event_timestamp(event)
-        participants = resolve_event_participants(event, all_entities)
+            timestamp_in_story = build_event_timestamp(event)
+            participants = resolve_event_participants(event, all_entities)
 
-        consequences = event.get("consequences", [])
+            consequences = event.get("consequences", [])
 
-        world_db.add_event(
-            description=description,
-            participants=participants if participants else None,
-            timestamp_in_story=timestamp_in_story,
-            consequences=consequences if consequences else None,
-        )
-        added_count += 1
-        logger.debug(
-            "Added event '%s' (quality: %.1f, participants: %d)",
-            description[:60],
-            event_scores.average,
-            len(participants),
-        )
+            world_db.add_event(
+                description=description,
+                participants=participants if participants else None,
+                timestamp_in_story=timestamp_in_story,
+                consequences=consequences if consequences else None,
+            )
+            added_count += 1
+            logger.debug(
+                "Added event '%s' (quality: %.1f, participants: %d)",
+                description[:60],
+                event_scores.average,
+                len(participants),
+            )
+        except Exception as exc:
+            logger.error(
+                "Failed to add event to database (non-fatal), skipping: %s",
+                exc,
+                exc_info=True,
+            )
 
     logger.info(
         "Event generation complete: added %d/%d events to world database",

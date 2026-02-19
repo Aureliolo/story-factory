@@ -523,6 +523,9 @@ def _generate_locations(
         if state.target_locations_max is not None
         else svc.settings.world_gen_locations_max
     )
+    if loc_min > loc_max:
+        logger.warning("Invalid location count range: min=%d > max=%d, swapping", loc_min, loc_max)
+        loc_min, loc_max = loc_max, loc_min
     location_count = random.randint(loc_min, loc_max)
 
     location_names = [e.name for e in world_db.list_entities() if e.type == "location"]
@@ -585,6 +588,9 @@ def _generate_factions(
         if state.target_factions_max is not None
         else svc.settings.world_gen_factions_max
     )
+    if fac_min > fac_max:
+        logger.warning("Invalid faction count range: min=%d > max=%d, swapping", fac_min, fac_max)
+        fac_min, fac_max = fac_max, fac_min
     faction_count = random.randint(fac_min, fac_max)
 
     faction_results = services.world_quality.generate_factions_with_quality(
@@ -666,6 +672,9 @@ def _generate_items(
         if state.target_items_max is not None
         else svc.settings.world_gen_items_max
     )
+    if item_min > item_max:
+        logger.warning("Invalid item count range: min=%d > max=%d, swapping", item_min, item_max)
+        item_min, item_max = item_max, item_min
     item_count = random.randint(item_min, item_max)
 
     item_results = services.world_quality.generate_items_with_quality(
@@ -718,6 +727,11 @@ def _generate_concepts(
         if state.target_concepts_max is not None
         else svc.settings.world_gen_concepts_max
     )
+    if concept_min > concept_max:
+        logger.warning(
+            "Invalid concept count range: min=%d > max=%d, swapping", concept_min, concept_max
+        )
+        concept_min, concept_max = concept_max, concept_min
     concept_count = random.randint(concept_min, concept_max)
 
     concept_results = services.world_quality.generate_concepts_with_quality(

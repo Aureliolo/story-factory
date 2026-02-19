@@ -606,3 +606,56 @@ class TestGenerateEventsWithQualityBatch:
         for event_dict, scores in results:
             assert event_dict["description"] == "A great battle"
             assert scores.average == 8.0
+
+
+class TestFormatHelpers:
+    """Tests for _format_participants and _format_consequences helpers."""
+
+    def test_format_participants_empty(self):
+        """Test that empty participants returns empty string."""
+        from src.services.world_quality_service._event import _format_participants
+
+        assert _format_participants([]) == ""
+
+    def test_format_participants_dict_entries(self):
+        """Test formatting dict-style participant entries."""
+        from src.services.world_quality_service._event import _format_participants
+
+        participants = [
+            {"entity_name": "Hero", "role": "actor"},
+            {"entity_name": "Castle", "role": "location"},
+        ]
+        result = _format_participants(participants)
+        assert "Participants:" in result
+        assert "Hero (actor)" in result
+        assert "Castle (location)" in result
+
+    def test_format_participants_string_entries(self):
+        """Test formatting plain string participant entries."""
+        from src.services.world_quality_service._event import _format_participants
+
+        result = _format_participants(["Hero", "Villain"])
+        assert "Hero (affected)" in result
+        assert "Villain (affected)" in result
+
+    def test_format_participants_missing_fields(self):
+        """Test formatting participant dicts with missing fields uses defaults."""
+        from src.services.world_quality_service._event import _format_participants
+
+        result = _format_participants([{}])
+        assert "Unknown (affected)" in result
+
+    def test_format_consequences_empty(self):
+        """Test that empty consequences returns empty string."""
+        from src.services.world_quality_service._event import _format_consequences
+
+        assert _format_consequences([]) == ""
+
+    def test_format_consequences_with_items(self):
+        """Test formatting consequence strings."""
+        from src.services.world_quality_service._event import _format_consequences
+
+        result = _format_consequences(["Peace restored", "Kingdom united"])
+        assert "Consequences:" in result
+        assert "Peace restored" in result
+        assert "Kingdom united" in result

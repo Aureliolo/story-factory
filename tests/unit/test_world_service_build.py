@@ -1105,7 +1105,7 @@ class TestGenerateEvents:
 
         mock_services.world_quality.generate_events_with_quality.return_value = []
 
-        with caplog.at_level(logging.ERROR):
+        with caplog.at_level(logging.WARNING):
             world_service._generate_events(sample_story_state, mock_world_db, mock_services)
 
         assert "Invalid event count range: min=10 > max=3, swapping" in caplog.text
@@ -1115,6 +1115,91 @@ class TestGenerateEvents:
             call_args.args[3] if len(call_args.args) > 3 else call_args.kwargs.get("event_count")
         )
         assert 3 <= event_count <= 10
+
+    def test_event_add_db_error_nonfatal(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test that a database error in add_event is caught and skipped."""
+        import sqlite3
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        mock_services.world_quality.generate_events_with_quality.return_value = [
+            (
+                {"description": "Exploding event", "year": 100, "participants": []},
+                mock_quality_scores,
+            ),
+        ]
+
+        # Patch add_event to raise a database error
+        original_add_event = mock_world_db.add_event
+        mock_world_db.add_event = MagicMock(side_effect=sqlite3.OperationalError("disk I/O error"))
+
+        with caplog.at_level(logging.ERROR):
+            count = world_service._generate_events(sample_story_state, mock_world_db, mock_services)
+
+        assert count == 0
+        assert "Failed to add event to database (non-fatal)" in caplog.text
+
+        # Restore
+        mock_world_db.add_event = original_add_event
+
+
+class TestMinMaxSwapEntityTypes:
+    """Tests for min/max swap validation on locations, factions, items, concepts."""
+
+    def test_location_min_max_swap(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test that _generate_locations swaps min/max when min > max."""
+        sample_story_state.target_locations_min = 8
+        sample_story_state.target_locations_max = 2
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+
+        with caplog.at_level(logging.WARNING):
+            world_service._generate_locations(sample_story_state, mock_world_db, mock_services)
+
+        assert "Invalid location count range: min=8 > max=2, swapping" in caplog.text
+
+    def test_faction_min_max_swap(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test that _generate_factions swaps min/max when min > max."""
+        sample_story_state.target_factions_min = 6
+        sample_story_state.target_factions_max = 1
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+
+        with caplog.at_level(logging.WARNING):
+            world_service._generate_factions(sample_story_state, mock_world_db, mock_services)
+
+        assert "Invalid faction count range: min=6 > max=1, swapping" in caplog.text
+
+    def test_item_min_max_swap(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test that _generate_items swaps min/max when min > max."""
+        sample_story_state.target_items_min = 7
+        sample_story_state.target_items_max = 2
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+
+        with caplog.at_level(logging.WARNING):
+            world_service._generate_items(sample_story_state, mock_world_db, mock_services)
+
+        assert "Invalid item count range: min=7 > max=2, swapping" in caplog.text
+
+    def test_concept_min_max_swap(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test that _generate_concepts swaps min/max when min > max."""
+        sample_story_state.target_concepts_min = 5
+        sample_story_state.target_concepts_max = 1
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+
+        with caplog.at_level(logging.WARNING):
+            world_service._generate_concepts(sample_story_state, mock_world_db, mock_services)
+
+        assert "Invalid concept count range: min=5 > max=1, swapping" in caplog.text
 
 
 def _mock_orphan_recovery_failure(mock_services):
