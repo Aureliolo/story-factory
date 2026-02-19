@@ -208,10 +208,6 @@ Write all text in {brief.language}."""
             temperature=temperature,
         )
 
-        if not event.description:
-            logger.warning("Event creation returned empty description, clearing to force retry")
-            return {}
-
         return event.model_dump()
     except Exception as e:
         summary = summarize_llm_error(e)
