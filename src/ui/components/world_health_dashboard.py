@@ -289,6 +289,12 @@ class WorldHealthDashboard:
 
     def _build_temporal_section(self) -> None:
         """Build temporal consistency issues section."""
+        logger.debug(
+            "Building temporal section: errors=%d, warnings=%d, issues=%d",
+            self.metrics.temporal_error_count,
+            self.metrics.temporal_warning_count,
+            len(self.metrics.temporal_issues),
+        )
         error_count = self.metrics.temporal_error_count
         warning_count = self.metrics.temporal_warning_count
         has_issues = error_count > 0 or warning_count > 0
@@ -341,14 +347,46 @@ class WorldHealthDashboard:
                         # List issues (max 5)
                         with ui.column().classes("gap-1"):
                             for issue in self.metrics.temporal_issues[:5]:
-                                severity = issue.get("severity", "warning")
+                                message = issue.get("message") or "<missing message>"
+                                severity = issue.get("severity")
+                                if severity not in ("error", "warning"):
+                                    logger.debug("Temporal issue has invalid severity: %s", issue)
+                                    severity = "warning"
+                                if not issue.get("message"):
+                                    logger.debug("Temporal issue missing message field: %s", issue)
                                 icon_name = "error" if severity == "error" else "warning"
                                 icon_color = (
                                     "text-red-500" if severity == "error" else "text-yellow-500"
                                 )
-                                with ui.row().classes("items-start gap-2"):
-                                    ui.icon(icon_name, size="xs").classes(icon_color)
-                                    ui.label(issue.get("message", "")).classes("text-sm")
+                                entity_name = issue.get("entity_name", "")
+                                entity_type = issue.get("entity_type", "")
+                                error_type = issue.get("error_type", "")
+                                suggestion = issue.get("suggestion", "")
+
+                                with ui.column().classes("gap-0 mb-1"):
+                                    with ui.row().classes("items-start gap-2"):
+                                        ui.icon(icon_name, size="xs").classes(icon_color)
+                                        with ui.column().classes("gap-0"):
+                                            # Entity name and type
+                                            if entity_name:
+                                                entity_label = entity_name
+                                                if entity_type:
+                                                    entity_label += f" ({entity_type})"
+                                                ui.label(entity_label).classes(
+                                                    "text-sm font-medium"
+                                                )
+                                            ui.label(message).classes("text-sm")
+                                            # Error type badge
+                                            if error_type:
+                                                ui.badge(
+                                                    error_type.replace("_", " "),
+                                                    color="grey",
+                                                ).props("outline").classes("text-xs")
+                                            # Suggestion
+                                            if suggestion:
+                                                ui.label(suggestion).classes(
+                                                    "text-xs text-gray-400 italic"
+                                                )
                             total_issues = error_count + warning_count
                             if total_issues > 5:
                                 ui.label(f"+{total_issues - 5} more...").classes(

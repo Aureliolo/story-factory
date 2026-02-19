@@ -54,12 +54,13 @@ def _retrieve_world_context(orc: StoryOrchestrator, task_description: str) -> st
 def _retrieve_temporal_context(orc: StoryOrchestrator) -> str:
     """Retrieve temporal context from timeline data for prompt enrichment.
 
-    Uses the orchestrator's world_db and settings to build a readable temporal
-    context string. Returns empty string if world_db is not set, temporal
-    validation is disabled, or retrieval fails.
+    Uses the orchestrator's timeline service and world_db to build a readable
+    temporal context string. Returns empty string if world_db is not set,
+    temporal validation is disabled, timeline service is not configured,
+    or retrieval fails.
 
     Args:
-        orc: StoryOrchestrator instance with optional world_db.
+        orc: StoryOrchestrator instance with optional world_db and timeline.
 
     Returns:
         Formatted temporal context string, or empty string if unavailable.
@@ -70,11 +71,12 @@ def _retrieve_temporal_context(orc: StoryOrchestrator) -> str:
     if not orc.settings.validate_temporal_consistency:
         return ""
 
-    from src.services.timeline_service import TimelineService
+    if not orc.timeline:
+        logger.debug("No timeline service configured, skipping temporal context")
+        return ""
 
     try:
-        timeline_svc = TimelineService(orc.settings)
-        context = timeline_svc.build_temporal_context(orc.world_db)
+        context = orc.timeline.build_temporal_context(orc.world_db)
         if context:
             logger.debug("Retrieved temporal context: %d chars", len(context))
         return context
@@ -93,9 +95,16 @@ def _combine_contexts(world_context: str, temporal_context: str) -> str:
     Returns:
         Combined context string, or empty string if both inputs are empty.
     """
+    logger.debug(
+        "Combining contexts: world=%d chars, temporal=%d chars",
+        len(world_context),
+        len(temporal_context),
+    )
     if not temporal_context:
         return world_context
-    return f"{world_context}\n\n{temporal_context}" if world_context else temporal_context
+    result = f"{world_context}\n\n{temporal_context}" if world_context else temporal_context
+    logger.debug("Combined context: %d chars", len(result))
+    return result
 
 
 def write_short_story(orc: StoryOrchestrator) -> Generator[WorkflowEvent, None, str]:
@@ -532,7 +541,9 @@ def write_all_chapters(
     world_context = _retrieve_world_context(orc, "Final story review for continuity")
     temporal_context = _retrieve_temporal_context(orc)
     combined_context = _combine_contexts(world_context, temporal_context)
-    if not combined_context and (orc.context_retrieval or orc.world_db):
+    rag_enabled = bool(orc.context_retrieval and orc.world_db)
+    temporal_enabled = bool(orc.world_db and orc.settings.validate_temporal_consistency)
+    if not combined_context and (rag_enabled or temporal_enabled):
         logger.warning(
             "Final story review proceeding without any world/temporal context "
             "despite context sources being configured"

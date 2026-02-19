@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from src.memory.world_database import WorldDatabase
     from src.services.context_retrieval_service import ContextRetrievalService
     from src.services.model_mode_service import ModelModeService
+    from src.services.timeline_service import TimelineService
 
 from src.agents.continuity import ContinuityIssue
 from src.memory.story_state import Character, StoryBrief, StoryState
@@ -45,6 +46,7 @@ class StoryService:
         settings: Settings,
         mode_service: ModelModeService | None = None,
         context_retrieval: ContextRetrievalService | None = None,
+        timeline: TimelineService | None = None,
     ):
         """Create a StoryService configured with application settings and an optional mode service.
 
@@ -55,6 +57,8 @@ class StoryService:
                 learning hooks; stored on the instance for use by orchestrators.
             context_retrieval (ContextRetrievalService | None): Optional context retrieval service
                 for RAG-based prompt enrichment in agent calls.
+            timeline (TimelineService | None): Optional timeline service for temporal context
+                in agent prompts.
         """
         validate_not_none(settings, "settings")
         validate_type(settings, "settings", Settings)
@@ -62,6 +66,7 @@ class StoryService:
         self.settings = settings
         self.mode_service = mode_service  # For learning hooks
         self.context_retrieval = context_retrieval  # For RAG context injection
+        self.timeline = timeline  # For temporal context in prompts
         # Use OrderedDict for LRU cache behavior
         self._orchestrators: OrderedDict[str, StoryOrchestrator] = OrderedDict()
         logger.debug("StoryService initialized successfully")
@@ -89,6 +94,7 @@ class StoryService:
             settings=self.settings,
             mode_service=self.mode_service,
             context_retrieval=self.context_retrieval,
+            timeline=self.timeline,
         )
         orchestrator.story_state = state
         self._orchestrators[state.id] = orchestrator

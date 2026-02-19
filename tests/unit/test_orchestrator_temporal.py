@@ -17,6 +17,7 @@ def mock_orc():
     orc.world_db = MagicMock()
     orc.story_state = MagicMock()
     orc.context_retrieval = MagicMock()
+    orc.timeline = MagicMock()
     return orc
 
 
@@ -24,16 +25,13 @@ class TestRetrieveTemporalContext:
     """Tests for _retrieve_temporal_context helper."""
 
     def test_returns_context_when_world_db_exists(self, mock_orc):
-        """Returns temporal context when world_db is available."""
-        with patch("src.services.timeline_service.TimelineService") as mock_tl_cls:
-            mock_tl = MagicMock()
-            mock_tl.build_temporal_context.return_value = "CHARACTERS:\n- Hero: Year 100"
-            mock_tl_cls.return_value = mock_tl
+        """Returns temporal context when world_db and timeline are available."""
+        mock_orc.timeline.build_temporal_context.return_value = "CHARACTERS:\n- Hero: Year 100"
 
-            result = _retrieve_temporal_context(mock_orc)
+        result = _retrieve_temporal_context(mock_orc)
 
         assert result == "CHARACTERS:\n- Hero: Year 100"
-        mock_tl.build_temporal_context.assert_called_once_with(mock_orc.world_db)
+        mock_orc.timeline.build_temporal_context.assert_called_once_with(mock_orc.world_db)
 
     def test_returns_empty_when_no_world_db(self, mock_orc):
         """Returns empty string when world_db is None."""
@@ -45,12 +43,9 @@ class TestRetrieveTemporalContext:
 
     def test_returns_empty_on_exception(self, mock_orc):
         """Returns empty string when timeline service raises."""
-        with patch("src.services.timeline_service.TimelineService") as mock_tl_cls:
-            mock_tl = MagicMock()
-            mock_tl.build_temporal_context.side_effect = RuntimeError("Boom")
-            mock_tl_cls.return_value = mock_tl
+        mock_orc.timeline.build_temporal_context.side_effect = RuntimeError("Boom")
 
-            result = _retrieve_temporal_context(mock_orc)
+        result = _retrieve_temporal_context(mock_orc)
 
         assert result == ""
 
@@ -64,12 +59,17 @@ class TestRetrieveTemporalContext:
 
     def test_returns_empty_when_build_returns_empty(self, mock_orc):
         """Returns empty string when build_temporal_context returns empty."""
-        with patch("src.services.timeline_service.TimelineService") as mock_tl_cls:
-            mock_tl = MagicMock()
-            mock_tl.build_temporal_context.return_value = ""
-            mock_tl_cls.return_value = mock_tl
+        mock_orc.timeline.build_temporal_context.return_value = ""
 
-            result = _retrieve_temporal_context(mock_orc)
+        result = _retrieve_temporal_context(mock_orc)
+
+        assert result == ""
+
+    def test_returns_empty_when_no_timeline_service(self, mock_orc):
+        """Returns empty string when timeline service is not configured."""
+        mock_orc.timeline = None
+
+        result = _retrieve_temporal_context(mock_orc)
 
         assert result == ""
 
@@ -123,6 +123,7 @@ class TestWriteAllChaptersFinalReviewContextWarning:
         mock_orc.interaction_mode = "auto"
         mock_orc.settings.max_revision_iterations = 0
         mock_orc.settings.chapters_between_checkpoints = 5
+        mock_orc.settings.validate_temporal_consistency = True
         mock_orc._total_chapters = 0
         mock_orc._completed_chapters = 0
         mock_orc.events = []
@@ -168,6 +169,7 @@ class TestReviewFullStoryContextWarning:
         mock_orc.events = []
         mock_orc.context_retrieval = MagicMock()
         mock_orc.world_db = MagicMock()
+        mock_orc.settings.validate_temporal_consistency = True
 
         def fake_emit(*args, **kwargs):
             """Append a mock event on each emit call."""

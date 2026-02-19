@@ -174,40 +174,20 @@ class TestBuildPipelineTemporalStep:
 class TestCalculateTotalSteps:
     """Tests for _calculate_total_steps with validate_temporal."""
 
-    def test_total_steps_increments_with_validate_temporal(self):
+    def test_total_steps_increments_with_validate_temporal(self, disabled_options):
         """Step count increases by 1 when validate_temporal is True."""
         from src.services.world_service._build import _calculate_total_steps
 
-        options = MagicMock()
-        options.clear_existing = False
-        options.generate_structure = False
-        options.generate_locations = False
-        options.generate_factions = False
-        options.generate_items = False
-        options.generate_concepts = False
-        options.generate_relationships = False
-        options.generate_events = False
-
-        steps_without = _calculate_total_steps(options, validate_temporal=False)
-        steps_with = _calculate_total_steps(options, validate_temporal=True)
+        steps_without = _calculate_total_steps(disabled_options, validate_temporal=False)
+        steps_with = _calculate_total_steps(disabled_options, validate_temporal=True)
 
         assert steps_with == steps_without + 1
 
-    def test_total_steps_unchanged_without_validate_temporal(self):
+    def test_total_steps_unchanged_without_validate_temporal(self, disabled_options):
         """Step count unchanged when validate_temporal is False (default)."""
         from src.services.world_service._build import _calculate_total_steps
 
-        options = MagicMock()
-        options.clear_existing = False
-        options.generate_structure = False
-        options.generate_locations = False
-        options.generate_factions = False
-        options.generate_items = False
-        options.generate_concepts = False
-        options.generate_relationships = False
-        options.generate_events = False
-
-        steps_default = _calculate_total_steps(options)
-        steps_explicit = _calculate_total_steps(options, validate_temporal=False)
+        steps_default = _calculate_total_steps(disabled_options)
+        steps_explicit = _calculate_total_steps(disabled_options, validate_temporal=False)
 
         assert steps_default == steps_explicit

@@ -16,7 +16,6 @@ def mock_story_state():
         premise="A hero's journey",
         genre="fantasy",
         tone="epic",
-        num_chapters=2,
         language="English",
         setting_time="Medieval",
         setting_place="Fantasy realm",

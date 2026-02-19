@@ -92,10 +92,15 @@ class ServiceContainer:
         self.mode = ModelModeService(self.settings)
         self.scoring = ScoringService(self.mode)
         self.context_retrieval = ContextRetrievalService(self.settings, self.embedding)
-        # StoryService needs mode_service for adaptive learning hooks
-        # and context_retrieval for RAG-based prompt enrichment
+        self.timeline = TimelineService(self.settings)
+        # StoryService needs mode_service for adaptive learning hooks,
+        # context_retrieval for RAG-based prompt enrichment,
+        # and timeline for temporal context in agent prompts
         self.story = StoryService(
-            self.settings, mode_service=self.mode, context_retrieval=self.context_retrieval
+            self.settings,
+            mode_service=self.mode,
+            context_retrieval=self.context_retrieval,
+            timeline=self.timeline,
         )
         self.world_quality = WorldQualityService(self.settings, self.mode)
         self.suggestion = SuggestionService(self.settings)
@@ -103,7 +108,6 @@ class ServiceContainer:
         self.backup = BackupService(self.settings)
         self.import_svc = ImportService(self.settings, self.mode)
         self.comparison = ComparisonService(self.settings)
-        self.timeline = TimelineService(self.settings)
         self.conflict_analysis = ConflictAnalysisService(self.settings)
         self.world_template = WorldTemplateService(self.settings)
         self.content_guidelines = ContentGuidelinesService(self.settings)

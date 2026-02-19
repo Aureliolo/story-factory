@@ -157,7 +157,7 @@ def build_world(
             except Exception as e:
                 logger.warning("Calendar generation failed (non-fatal), continuing without: %s", e)
 
-        # Steps 2-9: entity generation (inside try/finally for calendar context cleanup)
+        # Steps 2-10: entity generation (inside try/finally for calendar context cleanup)
         _build_world_entities(
             svc,
             state,
@@ -198,7 +198,7 @@ def _build_world_entities(
 
     Steps: structure generation, character extraction, quality review (characters,
     plot, chapters), locations, factions, items, concepts, relationships, orphan
-    recovery, events, embeddings, and temporal validation.
+    recovery, events, temporal validation, and embeddings.
     """
     # Step 2: Generate story structure (characters, chapters) if requested
     if options.generate_structure:
@@ -375,16 +375,7 @@ def _build_world_entities(
         except (WorldGenerationError, ValueError) as e:
             logger.warning("Event generation failed (non-fatal), continuing without events: %s", e)
 
-    # Step 9: Batch-embed all world content for RAG context retrieval
-    check_cancelled()
-    report_progress("Embedding world content for RAG...")
-    try:
-        embed_counts = services.embedding.embed_all_world_data(world_db, state)
-        logger.info("World embedding complete: %s", embed_counts)
-    except Exception as e:
-        logger.warning("World embedding failed (non-fatal), RAG context unavailable: %s", e)
-
-    # Step 10: Validate temporal consistency (non-fatal)
+    # Step 9: Validate temporal consistency (non-fatal, before embedding)
     if svc.settings.validate_temporal_consistency:
         check_cancelled()
         report_progress("Validating temporal consistency...")
@@ -403,6 +394,15 @@ def _build_world_entities(
             raise
         except Exception as e:
             logger.warning("Temporal validation failed (non-fatal): %s", e, exc_info=True)
+
+    # Step 10: Batch-embed all world content for RAG context retrieval
+    check_cancelled()
+    report_progress("Embedding world content for RAG...")
+    try:
+        embed_counts = services.embedding.embed_all_world_data(world_db, state)
+        logger.info("World embedding complete: %s", embed_counts)
+    except Exception as e:
+        logger.warning("World embedding failed (non-fatal), RAG context unavailable: %s", e)
 
 
 def _calculate_total_steps(
@@ -437,6 +437,12 @@ def _calculate_total_steps(
         steps += 1
     if validate_temporal:
         steps += 1
+    logger.debug(
+        "_calculate_total_steps: %d steps (calendar=%s, temporal=%s)",
+        steps,
+        generate_calendar,
+        validate_temporal,
+    )
     return steps
 
 
