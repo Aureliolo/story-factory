@@ -730,3 +730,98 @@ class TestTimelineService:
         # Should only have one item (the one with temporal data)
         assert len(data["items"]) == 1
         assert data["items"][0]["id"] == "item-1"
+
+    def test_build_temporal_context_empty_world(self, timeline_service, mock_world_db):
+        """Return empty string when no timeline items exist."""
+        result = timeline_service.build_temporal_context(mock_world_db)
+        assert result == ""
+
+    def test_build_temporal_context_with_entities(self, timeline_service, mock_world_db):
+        """Return formatted sections grouped by entity type."""
+        entity = Entity(
+            id="char-1",
+            type="character",
+            name="Hero",
+            description="The protagonist",
+            created_at=datetime.now(),
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 100, "raw_text": "Year 100"},
+                    "death": {"year": 180, "raw_text": "Year 180"},
+                }
+            },
+        )
+        mock_world_db.list_entities.return_value = [entity]
+
+        result = timeline_service.build_temporal_context(mock_world_db)
+
+        assert "CHARACTERS:" in result
+        assert "Hero" in result
+        assert "Year 100" in result
+        assert "Year 180" in result
+
+    def test_build_temporal_context_multiple_types(self, timeline_service, mock_world_db):
+        """Return sections for each entity type present."""
+        char = Entity(
+            id="char-1",
+            type="character",
+            name="Hero",
+            description="Protagonist",
+            created_at=datetime.now(),
+            attributes={"lifecycle": {"birth": {"year": 100}}},
+        )
+        faction = Entity(
+            id="fac-1",
+            type="faction",
+            name="Knights",
+            description="A faction",
+            created_at=datetime.now(),
+            attributes={"lifecycle": {"first_appearance": {"year": 50}}},
+        )
+        mock_world_db.list_entities.return_value = [char, faction]
+
+        result = timeline_service.build_temporal_context(mock_world_db)
+
+        assert "CHARACTERS:" in result
+        assert "FACTIONS:" in result
+        # Characters should come before factions (type_order)
+        assert result.index("CHARACTERS:") < result.index("FACTIONS:")
+
+    def test_build_temporal_context_point_event(self, timeline_service, mock_world_db):
+        """Format items without end date as point events (no 'to')."""
+        entity = Entity(
+            id="char-1",
+            type="character",
+            name="Wanderer",
+            description="A traveler",
+            created_at=datetime.now(),
+            attributes={"lifecycle": {"first_appearance": {"year": 200}}},
+        )
+        mock_world_db.list_entities.return_value = [entity]
+
+        result = timeline_service.build_temporal_context(mock_world_db)
+
+        assert "Wanderer: " in result
+        assert " to " not in result
+
+    def test_build_temporal_context_caps_at_twenty(self, timeline_service, mock_world_db):
+        """Cap each type section at 20 items."""
+        entities = [
+            Entity(
+                id=f"char-{i}",
+                type="character",
+                name=f"Char{i}",
+                description=f"Character {i}",
+                created_at=datetime.now(),
+                attributes={"lifecycle": {"birth": {"year": 1000 + i}}},
+            )
+            for i in range(25)
+        ]
+        mock_world_db.list_entities.return_value = entities
+
+        result = timeline_service.build_temporal_context(mock_world_db)
+
+        assert "... and 5 more" in result
+        # Should have exactly 20 "- Char" lines
+        char_lines = [line for line in result.split("\n") if line.startswith("- Char")]
+        assert len(char_lines) == 20
