@@ -804,6 +804,83 @@ class TestTimelineService:
         assert "Wanderer: " in result
         assert " to " not in result
 
+    def test_build_temporal_context_year_zero_preserved(self, timeline_service, mock_world_db):
+        """Year 0 is preserved (not treated as falsy 'unknown')."""
+        entity = Entity(
+            id="char-1",
+            type="character",
+            name="AncientOne",
+            description="Born at year zero",
+            created_at=datetime.now(),
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 0},
+                    "death": {"year": 100},
+                }
+            },
+        )
+        mock_world_db.list_entities.return_value = [entity]
+
+        result = timeline_service.build_temporal_context(mock_world_db)
+
+        assert "AncientOne" in result
+        # Year 0 should display as "0", not "unknown"
+        assert "unknown" not in result.lower()
+        assert "0 to" in result or "0\n" in result
+
+    def test_build_temporal_context_no_year_no_raw_text(self, timeline_service, mock_world_db):
+        """Entities with neither raw_text nor year show 'unknown'."""
+        from unittest.mock import patch as mock_patch
+
+        item = TimelineItem(
+            id="char-1",
+            entity_id="e1",
+            label="MysteryEntity",
+            item_type="character",
+            start=StoryTimestamp(),  # no year, no raw_text
+            color="#000",
+            group="character",
+        )
+
+        with mock_patch.object(timeline_service, "get_timeline_items", return_value=[item]):
+            result = timeline_service.build_temporal_context(mock_world_db)
+
+        assert "MysteryEntity" in result
+        assert "unknown" in result
+
+    def test_build_temporal_context_unknown_type(self, timeline_service, mock_world_db):
+        """Unknown entity types are sorted to the end and formatted correctly."""
+        from unittest.mock import patch as mock_patch
+
+        char_item = TimelineItem(
+            id="char-1",
+            entity_id="e1",
+            label="Hero",
+            item_type="character",
+            start=StoryTimestamp(year=100),
+            color="#000",
+            group="character",
+        )
+        custom_item = TimelineItem(
+            id="custom-1",
+            entity_id="e2",
+            label="Artifact",
+            item_type="mystical_artifact",
+            start=StoryTimestamp(year=200),
+            color="#000",
+            group="mystical_artifact",
+        )
+
+        with mock_patch.object(
+            timeline_service, "get_timeline_items", return_value=[custom_item, char_item]
+        ):
+            result = timeline_service.build_temporal_context(mock_world_db)
+
+        # Characters should come before unknown type
+        assert result.index("CHARACTERS:") < result.index("MYSTICAL_ARTIFACTS:")
+        assert "Hero" in result
+        assert "Artifact" in result
+
     def test_build_temporal_context_caps_at_twenty(self, timeline_service, mock_world_db):
         """Cap each type section at 20 items."""
         entities = [

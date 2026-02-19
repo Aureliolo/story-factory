@@ -194,16 +194,18 @@ def review_full_story(
     yield orc.events[-1]
 
     from src.services.orchestrator._writing import (
+        _combine_contexts,
         _retrieve_temporal_context,
         _retrieve_world_context,
     )
 
     world_context = _retrieve_world_context(orc, "Full story review for continuity")
     temporal_context = _retrieve_temporal_context(orc)
-    combined_context = world_context
-    if temporal_context:
-        combined_context = (
-            f"{combined_context}\n\n{temporal_context}" if combined_context else temporal_context
+    combined_context = _combine_contexts(world_context, temporal_context)
+    if not combined_context and (orc.context_retrieval or orc.world_db):
+        logger.warning(
+            "Full story review proceeding without any world/temporal context "
+            "despite context sources being configured"
         )
     issues = orc.continuity.check_full_story(orc.story_state, world_context=combined_context)
 

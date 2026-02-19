@@ -99,7 +99,7 @@ class TimelineService:
         logger.info(f"Generated {len(items)} timeline items")
         return items
 
-    def _entity_to_timeline_item(self, entity: Entity) -> TimelineItem | None:
+    def _entity_to_timeline_item(self, entity: Entity) -> TimelineItem:
         """
         Convert an Entity into a TimelineItem for timeline visualization.
 
@@ -158,11 +158,15 @@ class TimelineService:
         logger.debug(f"Created timeline item for entity {entity.name}: {item.id}")
         return item
 
-    def _event_to_timeline_item(self, event: WorldEvent) -> TimelineItem | None:
+    def _event_to_timeline_item(self, event: WorldEvent) -> TimelineItem:
         """
         Create a TimelineItem representing a world event for timeline display.
 
-        The start timestamp is taken from `event.timestamp_in_story` when present, otherwise from `event.chapter_number`, and falls back to `event.created_at` if neither is available.
+        The start timestamp is taken from `event.timestamp_in_story` when present, otherwise
+        from `event.chapter_number`, and falls back to `event.created_at` if neither is available.
+
+        Parameters:
+            event (WorldEvent): The world event to convert into a timeline item.
 
         Returns:
             TimelineItem representing the event for the timeline.
@@ -192,7 +196,7 @@ class TimelineService:
             label=event.description[:50] + ("..." if len(event.description) > 50 else ""),
             item_type="event",
             start=start,
-            end=None,  # Events are points, not ranges
+            end=None,
             color="#FF5722",  # Orange for events
             description=event.description,
             group="event",
@@ -206,6 +210,8 @@ class TimelineService:
 
         Retrieves all timeline items, groups them by type, and formats
         them as a readable text block suitable for injection into agent prompts.
+        Groups are sorted in display order: character, faction, location, item,
+        concept, event. Unknown types are appended at the end.
         Caps at 20 items per type to avoid prompt bloat.
 
         Args:
@@ -222,28 +228,37 @@ class TimelineService:
             return ""
 
         # Group items by type
-        groups: dict[str, list[TimelineItem]] = {}
+        from collections import defaultdict
+
+        groups: dict[str, list[TimelineItem]] = defaultdict(list)
         for item in items:
-            group_key = item.item_type
-            if group_key not in groups:
-                groups[group_key] = []
-            groups[group_key].append(item)
+            groups[item.item_type].append(item)
 
         # Build formatted output
         sections: list[str] = []
         type_order = ["character", "faction", "location", "item", "concept", "event"]
+        plural_map = {
+            "character": "CHARACTERS",
+            "faction": "FACTIONS",
+            "location": "LOCATIONS",
+            "item": "ITEMS",
+            "concept": "CONCEPTS",
+            "event": "EVENTS",
+        }
         sorted_keys = sorted(
             groups.keys(), key=lambda k: type_order.index(k) if k in type_order else 999
         )
 
         for group_key in sorted_keys:
             group_items = groups[group_key]
-            header = group_key.upper() + "S"
+            header = plural_map.get(group_key, group_key.upper() + "S")
             lines: list[str] = [header + ":"]
             for item in group_items[:20]:
-                start_text = item.start.raw_text or str(item.start.year or "unknown")
+                start_year_display = item.start.year if item.start.year is not None else "unknown"
+                start_text = item.start.raw_text or str(start_year_display)
                 if item.end:
-                    end_text = item.end.raw_text or str(item.end.year or "ongoing")
+                    end_year_display = item.end.year if item.end.year is not None else "ongoing"
+                    end_text = item.end.raw_text or str(end_year_display)
                     lines.append(f"- {item.label}: {start_text} to {end_text}")
                 else:
                     lines.append(f"- {item.label}: {start_text}")
@@ -367,6 +382,7 @@ class TimelineService:
         Parameters:
             world_db (WorldDatabase): Database providing entities and events to include in the timeline.
             entity_types (list[str] | None): Optional list of entity type names to include; include all types if None.
+            include_events (bool): If True, include world events in the timeline data. Defaults to True.
 
         Returns:
             dict: A mapping with keys "items" (list of vis.js item dicts) and "groups" (list of vis.js group dicts). Items without temporal information are omitted.

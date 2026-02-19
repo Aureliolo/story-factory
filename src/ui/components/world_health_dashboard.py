@@ -38,6 +38,7 @@ class WorldHealthDashboard:
     - Entity count summary
     - Orphan entity warnings
     - Circular relationship warnings with view/accept
+    - Temporal consistency issue display with validate/re-validate
     - Quality distribution chart with per-entity improve buttons
     - Actionable recommendations (shown directly, not in expansion panel)
     """
@@ -78,6 +79,7 @@ class WorldHealthDashboard:
         - Header row: health score + refresh button
         - Stats row: entity counts + relationship stats side by side
         - Warnings row: orphans + circular chains in a grid
+        - Temporal row: temporal consistency issues (conditional)
         - Bottom row: quality distribution + recommendations (shown directly)
         """
         logger.debug(

@@ -54,6 +54,59 @@ class TestRetrieveTemporalContext:
 
         assert result == ""
 
+    def test_returns_empty_when_temporal_disabled(self, mock_orc):
+        """Returns empty string when validate_temporal_consistency is False."""
+        mock_orc.settings.validate_temporal_consistency = False
+
+        result = _retrieve_temporal_context(mock_orc)
+
+        assert result == ""
+
+    def test_returns_empty_when_build_returns_empty(self, mock_orc):
+        """Returns empty string when build_temporal_context returns empty."""
+        with patch("src.services.timeline_service.TimelineService") as mock_tl_cls:
+            mock_tl = MagicMock()
+            mock_tl.build_temporal_context.return_value = ""
+            mock_tl_cls.return_value = mock_tl
+
+            result = _retrieve_temporal_context(mock_orc)
+
+        assert result == ""
+
+
+class TestCombineContexts:
+    """Tests for _combine_contexts helper."""
+
+    def test_both_contexts_present(self):
+        """Combines both contexts with separator."""
+        from src.services.orchestrator._writing import _combine_contexts
+
+        result = _combine_contexts("RAG data", "Timeline data")
+        assert "RAG data" in result
+        assert "Timeline data" in result
+        assert "\n\n" in result
+
+    def test_only_world_context(self):
+        """Returns world context when temporal is empty."""
+        from src.services.orchestrator._writing import _combine_contexts
+
+        result = _combine_contexts("RAG data", "")
+        assert result == "RAG data"
+
+    def test_only_temporal_context(self):
+        """Returns temporal context when world is empty."""
+        from src.services.orchestrator._writing import _combine_contexts
+
+        result = _combine_contexts("", "Timeline data")
+        assert result == "Timeline data"
+
+    def test_both_empty(self):
+        """Returns empty string when both are empty."""
+        from src.services.orchestrator._writing import _combine_contexts
+
+        result = _combine_contexts("", "")
+        assert result == ""
+
 
 class TestWriteAllChaptersFinalReview:
     """Tests for temporal context in write_all_chapters final review."""

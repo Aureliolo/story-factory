@@ -522,10 +522,17 @@ class WorldService:
 
     @staticmethod
     def _calculate_total_steps(
-        options: WorldBuildOptions, *, generate_calendar: bool = False
+        options: WorldBuildOptions,
+        *,
+        generate_calendar: bool = False,
+        validate_temporal: bool = False,
     ) -> int:
         """Calculate total number of steps for progress reporting."""
-        return _build._calculate_total_steps(options, generate_calendar=generate_calendar)
+        return _build._calculate_total_steps(
+            options,
+            generate_calendar=generate_calendar,
+            validate_temporal=validate_temporal,
+        )
 
     @staticmethod
     def _clear_world_db(world_db: WorldDatabase) -> None:

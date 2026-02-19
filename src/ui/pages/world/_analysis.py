@@ -61,7 +61,11 @@ def refresh_health_dashboard(page, notify: bool = True) -> None:
             on_improve_quality=page._handle_improve_quality,
             # User-initiated refresh from dashboard button should show toast
             on_refresh=lambda: refresh_health_dashboard(page, notify=True),
-            on_validate_timeline=lambda: _handle_validate_timeline(page),
+            on_validate_timeline=(
+                (lambda: _handle_validate_timeline(page))
+                if page.services.world.settings.validate_temporal_consistency
+                else None
+            ),
         )
         dashboard.build()
     if notify:

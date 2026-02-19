@@ -46,36 +46,47 @@ def mock_world_db():
     return MagicMock()
 
 
+@pytest.fixture
+def default_counts():
+    """Default entity counts for build tests."""
+    return {
+        "characters": 0,
+        "locations": 0,
+        "factions": 0,
+        "items": 0,
+        "concepts": 0,
+        "events": 0,
+        "relationships": 0,
+        "implicit_relationships": 0,
+    }
+
+
+@pytest.fixture
+def disabled_options():
+    """WorldBuildOptions with all generation flags disabled."""
+    from src.services.world_service import WorldBuildOptions
+
+    options = MagicMock(spec=WorldBuildOptions)
+    options.is_cancelled.return_value = False
+    options.generate_structure = False
+    options.generate_locations = False
+    options.generate_factions = False
+    options.generate_items = False
+    options.generate_concepts = False
+    options.generate_relationships = False
+    options.generate_events = False
+    return options
+
+
 class TestBuildPipelineTemporalStep:
     """Tests for temporal validation in _build_world_entities."""
 
     def test_build_calls_temporal_validation_when_enabled(
-        self, mock_svc, mock_state, mock_world_db, mock_services
+        self, mock_svc, mock_state, mock_world_db, mock_services, disabled_options, default_counts
     ):
         """Build calls temporal validation when setting is enabled."""
-        from src.services.world_service import WorldBuildOptions
         from src.services.world_service._build import _build_world_entities
 
-        options = MagicMock(spec=WorldBuildOptions)
-        options.is_cancelled.return_value = False
-        options.generate_structure = False
-        options.generate_locations = False
-        options.generate_factions = False
-        options.generate_items = False
-        options.generate_concepts = False
-        options.generate_relationships = False
-        options.generate_events = False
-
-        counts = {
-            "characters": 0,
-            "locations": 0,
-            "factions": 0,
-            "items": 0,
-            "concepts": 0,
-            "events": 0,
-            "relationships": 0,
-            "implicit_relationships": 0,
-        }
         progress_calls = []
 
         def capture_progress(msg, entity_type=None, count=0):
@@ -87,8 +98,8 @@ class TestBuildPipelineTemporalStep:
             mock_state,
             mock_world_db,
             mock_services,
-            options,
-            counts,
+            disabled_options,
+            default_counts,
             lambda: None,
             capture_progress,
         )
@@ -97,42 +108,20 @@ class TestBuildPipelineTemporalStep:
         assert "Validating temporal consistency..." in progress_calls
 
     def test_build_skips_temporal_when_disabled(
-        self, mock_svc, mock_state, mock_world_db, mock_services
+        self, mock_svc, mock_state, mock_world_db, mock_services, disabled_options, default_counts
     ):
         """Build skips temporal validation when setting is disabled."""
-        from src.services.world_service import WorldBuildOptions
         from src.services.world_service._build import _build_world_entities
 
         mock_svc.settings.validate_temporal_consistency = False
-
-        options = MagicMock(spec=WorldBuildOptions)
-        options.is_cancelled.return_value = False
-        options.generate_structure = False
-        options.generate_locations = False
-        options.generate_factions = False
-        options.generate_items = False
-        options.generate_concepts = False
-        options.generate_relationships = False
-        options.generate_events = False
-
-        counts = {
-            "characters": 0,
-            "locations": 0,
-            "factions": 0,
-            "items": 0,
-            "concepts": 0,
-            "events": 0,
-            "relationships": 0,
-            "implicit_relationships": 0,
-        }
 
         _build_world_entities(
             mock_svc,
             mock_state,
             mock_world_db,
             mock_services,
-            options,
-            counts,
+            disabled_options,
+            default_counts,
             lambda: None,
             lambda msg, entity_type=None, count=0: None,
         )
@@ -140,34 +129,12 @@ class TestBuildPipelineTemporalStep:
         mock_services.temporal_validation.validate_world.assert_not_called()
 
     def test_temporal_validation_failure_is_nonfatal(
-        self, mock_svc, mock_state, mock_world_db, mock_services
+        self, mock_svc, mock_state, mock_world_db, mock_services, disabled_options, default_counts
     ):
         """Temporal validation failure does not crash the build."""
-        from src.services.world_service import WorldBuildOptions
         from src.services.world_service._build import _build_world_entities
 
         mock_services.temporal_validation.validate_world.side_effect = RuntimeError("Boom")
-
-        options = MagicMock(spec=WorldBuildOptions)
-        options.is_cancelled.return_value = False
-        options.generate_structure = False
-        options.generate_locations = False
-        options.generate_factions = False
-        options.generate_items = False
-        options.generate_concepts = False
-        options.generate_relationships = False
-        options.generate_events = False
-
-        counts = {
-            "characters": 0,
-            "locations": 0,
-            "factions": 0,
-            "items": 0,
-            "concepts": 0,
-            "events": 0,
-            "relationships": 0,
-            "implicit_relationships": 0,
-        }
 
         # Should not raise
         _build_world_entities(
@@ -175,43 +142,21 @@ class TestBuildPipelineTemporalStep:
             mock_state,
             mock_world_db,
             mock_services,
-            options,
-            counts,
+            disabled_options,
+            default_counts,
             lambda: None,
             lambda msg, entity_type=None, count=0: None,
         )
 
     def test_temporal_validation_cancelled_propagates(
-        self, mock_svc, mock_state, mock_world_db, mock_services
+        self, mock_svc, mock_state, mock_world_db, mock_services, disabled_options, default_counts
     ):
         """GenerationCancelledError during temporal validation propagates."""
-        from src.services.world_service import WorldBuildOptions
         from src.services.world_service._build import _build_world_entities
 
         mock_services.temporal_validation.validate_world.side_effect = GenerationCancelledError(
             "Cancelled"
         )
-
-        options = MagicMock(spec=WorldBuildOptions)
-        options.is_cancelled.return_value = False
-        options.generate_structure = False
-        options.generate_locations = False
-        options.generate_factions = False
-        options.generate_items = False
-        options.generate_concepts = False
-        options.generate_relationships = False
-        options.generate_events = False
-
-        counts = {
-            "characters": 0,
-            "locations": 0,
-            "factions": 0,
-            "items": 0,
-            "concepts": 0,
-            "events": 0,
-            "relationships": 0,
-            "implicit_relationships": 0,
-        }
 
         with pytest.raises(GenerationCancelledError):
             _build_world_entities(
@@ -219,8 +164,8 @@ class TestBuildPipelineTemporalStep:
                 mock_state,
                 mock_world_db,
                 mock_services,
-                options,
-                counts,
+                disabled_options,
+                default_counts,
                 lambda: None,
                 lambda msg, entity_type=None, count=0: None,
             )

@@ -194,11 +194,11 @@ def _build_world_entities(
     check_cancelled: Callable[[], None],
     report_progress: Callable[..., None],
 ) -> None:
-    """Execute entity generation steps 2-9 of the world build.
+    """Execute entity generation steps 2-10 of the world build.
 
     Steps: structure generation, character extraction, quality review (characters,
     plot, chapters), locations, factions, items, concepts, relationships, orphan
-    recovery, events, and embeddings.
+    recovery, events, embeddings, and temporal validation.
     """
     # Step 2: Generate story structure (characters, chapters) if requested
     if options.generate_structure:
@@ -402,7 +402,7 @@ def _build_world_entities(
         except GenerationCancelledError:
             raise
         except Exception as e:
-            logger.warning("Temporal validation failed (non-fatal): %s", e)
+            logger.warning("Temporal validation failed (non-fatal): %s", e, exc_info=True)
 
 
 def _calculate_total_steps(

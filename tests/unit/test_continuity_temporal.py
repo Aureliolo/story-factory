@@ -55,7 +55,9 @@ class TestCheckFullStoryWorldContext:
 
         assert len(captured_prompts) >= 1
         prompt = captured_prompts[0]
+        assert "[START CONTEXT]" in prompt
         assert "RETRIEVED WORLD CONTEXT:" in prompt
+        assert "[END CONTEXT]" in prompt
         assert "Hero: born Year 100" in prompt
         assert "Villain: born Year 50" in prompt
 

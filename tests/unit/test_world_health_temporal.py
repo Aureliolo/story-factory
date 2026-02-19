@@ -189,10 +189,14 @@ class TestHealthMetricsTemporalDisabled:
         assert metrics.temporal_error_count == 0
         assert metrics.temporal_warning_count == 0
         assert metrics.temporal_issues == []
-        assert metrics.average_temporal_consistency == 10.0
+        assert metrics.average_temporal_consistency == 0.0
+
+
+class TestHealthMetricsTemporalFailure:
+    """Tests for temporal validation when it raises an exception."""
 
     def test_temporal_validation_failure_is_nonfatal(self, mock_svc, mock_world_db):
-        """If temporal validation raises, health metrics still compute."""
+        """If temporal validation raises, health metrics still compute with error info."""
         from src.services.world_service._health import get_world_health_metrics
 
         with patch(
@@ -204,7 +208,10 @@ class TestHealthMetricsTemporalDisabled:
 
             metrics = get_world_health_metrics(mock_svc, mock_world_db)
 
-        # Should still return valid metrics with default temporal values
-        assert metrics.temporal_error_count == 0
+        # Should still return valid metrics, but with failure info
+        assert metrics.temporal_error_count == 1
         assert metrics.temporal_warning_count == 0
+        assert len(metrics.temporal_issues) == 1
+        assert "could not complete" in metrics.temporal_issues[0]["message"]
+        assert metrics.average_temporal_consistency == 0.0
         assert metrics.health_score is not None
