@@ -178,6 +178,7 @@ def init_schema(db: WorldDatabase) -> None:
                 chapter_number INTEGER,
                 timestamp_in_story TEXT DEFAULT '',
                 consequences TEXT DEFAULT '[]',
+                attributes TEXT DEFAULT '{}',
                 created_at TEXT NOT NULL
             )
         """
@@ -206,6 +207,15 @@ def init_schema(db: WorldDatabase) -> None:
             )
         """
         )
+
+        # Migration: add attributes column to events table (v7)
+        if current_version < 7:
+            try:
+                cursor.execute("ALTER TABLE events ADD COLUMN attributes TEXT DEFAULT '{}'")
+                logger.info("Migration v7: added 'attributes' column to events table")
+            except Exception:
+                # Column may already exist (e.g., fresh database)
+                pass
 
         # Indexes for fast queries
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_rel_source ON relationships(source_id)")

@@ -117,7 +117,9 @@ def get_random_count(page, entity_type: str) -> int:
         logger.error("Unknown entity_type '%s' in get_random_count", entity_type)
         raise ValueError(f"Unknown entity_type: {entity_type}")
     min_val, max_val = ranges[entity_type]
-    return random.randint(min_val, max_val)
+    count = random.randint(min_val, max_val)
+    logger.debug("Random %s count selected: %d (range %d-%d)", entity_type, count, min_val, max_val)
+    return count
 
 
 def show_generate_dialog(page, entity_type: str) -> None:
@@ -127,7 +129,7 @@ def show_generate_dialog(page, entity_type: str) -> None:
         page: WorldPage instance.
         entity_type: Type of entities to generate.
     """
-    logger.info(f"Showing generate dialog for {entity_type}")
+    logger.info("Showing generate dialog for %s", entity_type)
 
     # Get default count range from settings
     ranges = _get_entity_ranges(page.services.settings)
@@ -330,7 +332,7 @@ def show_entity_preview_dialog(
         ui.notify("No entities to preview", type="warning")
         return
 
-    logger.info(f"Showing preview dialog for {len(entities)} {entity_type}(s)")
+    logger.info("Showing preview dialog for %d %s(s)", len(entities), entity_type)
 
     # Track selected entities
     selected = dict.fromkeys(range(len(entities)), True)  # All selected by default

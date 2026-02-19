@@ -31,7 +31,6 @@ class RefinementHistory(BaseModel):
     iterations: list[IterationRecord] = Field(default_factory=list)
     best_iteration: int = Field(default=0, description="1-indexed best iteration (0 = none)")
     final_iteration: int = Field(default=0, description="Which iteration was returned")
-    improvement_detected: bool = Field(default=False, description="Did iterations improve quality")
     peak_score: float = Field(default=0.0, description="Highest score achieved")
     final_score: float = Field(default=0.0, description="Score of returned entity")
     consecutive_degradations: int = Field(

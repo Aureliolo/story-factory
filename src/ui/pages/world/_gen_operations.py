@@ -47,8 +47,10 @@ async def generate_more(
         custom_instructions: Optional custom instructions to refine generation.
     """
     logger.info(
-        f"Generate more: entity_type={entity_type}, count={count}, "
-        f"custom_instructions={custom_instructions[:50] if custom_instructions else None}"
+        "Generate more: entity_type=%s, count=%s, custom_instructions=%s",
+        entity_type,
+        count,
+        custom_instructions[:50] if custom_instructions else None,
     )
 
     if not page.state.project or not page.state.world_db:
@@ -56,22 +58,22 @@ async def generate_more(
         ui.notify("No project loaded", type="negative")
         return
 
-    logger.info(f"Starting generation of {entity_type} for project {page.state.project.id}")
+    logger.info("Starting generation of %s for project %s", entity_type, page.state.project.id)
 
     # Check if quality refinement is enabled
     use_quality = (
         page.state.quality_refinement_enabled and page.services.settings.world_quality_enabled
     )
-    logger.info(f"Quality refinement enabled: {use_quality}")
+    logger.info("Quality refinement enabled: %s", use_quality)
 
     # Use provided count or get random from settings
     if count is None:
         count = get_random_count(page, entity_type)
-    logger.info(f"Will generate {count} {entity_type}")
+    logger.info("Will generate %d %s", count, entity_type)
 
     # Get ALL existing entity names to avoid duplicates
     all_existing_names = get_all_entity_names(page)
-    logger.info(f"Found {len(all_existing_names)} existing entities to avoid duplicates")
+    logger.info("Found %d existing entities to avoid duplicates", len(all_existing_names))
 
     # Create cancellation infrastructure for quality generation
     page._generation_cancel_event = threading.Event()
@@ -189,25 +191,25 @@ async def generate_more(
 
         # Save the project
         if page.state.project:
-            logger.info(f"Saving project {page.state.project.id}...")
+            logger.info("Saving project %s...", page.state.project.id)
             page.services.project.save_project(page.state.project)
             logger.info("Project saved successfully")
 
-        logger.info(f"Generation of {entity_type} completed successfully")
+        logger.info("Generation of %s completed successfully", entity_type)
 
     except WorldGenerationError as e:
         if page._generation_dialog:
             page._generation_dialog.close()
         elif notification:
             notification.dismiss()
-        logger.error(f"World generation failed for {entity_type}: {e}")
+        logger.error("World generation failed for %s: %s", entity_type, e)
         ui.notify(f"Generation failed: {e}", type="negative", close_button=True, timeout=10)
     except Exception as e:
         if page._generation_dialog:
             page._generation_dialog.close()
         elif notification:
             notification.dismiss()
-        logger.exception(f"Unexpected error generating {entity_type}: {e}")
+        logger.exception("Unexpected error generating %s: %s", entity_type, e)
         ui.notify(f"Error: {e}", type="negative")
     finally:
         page.state.end_background_task(f"generate_{entity_type}")
@@ -251,7 +253,7 @@ async def _generate_characters(
             should_cancel,
             update_progress,
         )
-        logger.info(f"Generated {len(results)} characters with quality refinement")
+        logger.info("Generated %d characters with quality refinement", len(results))
 
         notify_partial_failure(len(results), count, "characters", should_cancel)
         if len(results) == 0:
@@ -323,7 +325,7 @@ async def _generate_characters(
         new_chars = await run.io_bound(
             page.services.story.generate_more_characters, page.state.project, count
         )
-        logger.info(f"Generated {len(new_chars)} characters from LLM")
+        logger.info("Generated %d characters from LLM", len(new_chars))
         for char in new_chars:
             page.services.world.add_entity(
                 page.state.world_db,
@@ -337,7 +339,7 @@ async def _generate_characters(
                     "arc": char.arc_notes,
                 },
             )
-        logger.info(f"Added {len(new_chars)} characters to world database")
+        logger.info("Added %d characters to world database", len(new_chars))
         if notification:
             notification.dismiss()
         ui.notify(f"Added {len(new_chars)} new characters!", type="positive")
@@ -378,7 +380,7 @@ async def _generate_locations(
             should_cancel,
             update_progress,
         )
-        logger.info(f"Generated {len(loc_results)} locations with quality refinement")
+        logger.info("Generated %d locations with quality refinement", len(loc_results))
 
         notify_partial_failure(len(loc_results), count, "locations", should_cancel)
         if len(loc_results) == 0:
@@ -449,7 +451,7 @@ async def _generate_locations(
         locations = await run.io_bound(
             page.services.story.generate_locations, page.state.project, count
         )
-        logger.info(f"Generated {len(locations)} locations from LLM")
+        logger.info("Generated %d locations from LLM", len(locations))
         added_count = 0
         for loc in locations:
             if isinstance(loc, dict) and "name" in loc:
@@ -462,8 +464,8 @@ async def _generate_locations(
                 )
                 added_count += 1
             else:
-                logger.warning(f"Skipping invalid location: {loc}")
-        logger.info(f"Added {added_count} locations to world database")
+                logger.warning("Skipping invalid location: %s", loc)
+        logger.info("Added %d locations to world database", added_count)
         if notification:
             notification.dismiss()
         ui.notify(f"Added {added_count} new locations!", type="positive")

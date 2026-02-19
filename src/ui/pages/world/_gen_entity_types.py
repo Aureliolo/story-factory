@@ -476,6 +476,7 @@ async def _generate_events(
                 participants=participants if participants else None,
                 timestamp_in_story=timestamp_in_story,
                 consequences=consequences if consequences else None,
+                attributes={"quality_scores": scores.to_dict()},
             )
             added += 1
             added_scores.append(scores)

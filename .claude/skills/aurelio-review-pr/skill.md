@@ -94,7 +94,7 @@ Fetch from three GitHub API sources **in parallel** using `gh api`:
 
 **Important:** Use `gh api` with `--jq` for filtering. Keep it simple and robust — no complex Python scripts to parse JSON.
 
-**Important:** When review bodies are large (e.g. CodeRabbit's review with embedded outside-diff comments), fetch the **full body** without truncation. Use a projection that preserves all fields while limiting body length, e.g.: `--jq '[.[] | {author: (.user.login // .author.login), state: .state, body: (.body | .[:15000])}]'` rather than slicing only the body (`.[].body | .[:15000]`), which discards author and state entirely. Note that jq's string slicing operates on bytes, not Unicode code points. Outside-diff comments are typically at the top of the review body.
+**Note:** When review bodies are large (e.g., CodeRabbit's review with embedded outside-diff comments), fetch the **full body** without truncation. Use a projection that preserves all fields while limiting body length, e.g., `--jq '[.[] | {author: (.user.login // .author.login), state: .state, body: (.body | .[:15000])}]'` rather than slicing only the body (`.[].body | .[:15000]`), which discards author and state entirely. Note that jq's string slicing operates on Unicode code points (not bytes), so `.[:15000]` will never split a multi-byte character. Outside-diff comments are typically at the top of the review body.
 
 ## Phase 4: Consolidate and triage
 

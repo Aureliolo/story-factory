@@ -185,7 +185,7 @@ class Relationship(BaseModel):
 class EventParticipantEntry(BaseModel):
     """A participant reference in a generated world event."""
 
-    entity_name: str
+    entity_name: str = Field(min_length=1)
     role: Literal["actor", "location", "affected", "witness"] = "affected"
 
 

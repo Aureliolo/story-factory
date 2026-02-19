@@ -17,6 +17,7 @@ def add_event(
     chapter_number: int | None = None,
     timestamp_in_story: str = "",
     consequences: list[str] | None = None,
+    attributes: dict | None = None,
 ) -> str:
     """Add an event.
 
@@ -27,6 +28,7 @@ def add_event(
         chapter_number: Chapter where event occurs
         timestamp_in_story: In-world timing
         consequences: List of consequences
+        attributes: Optional metadata dict (e.g. quality_scores)
 
     Returns:
         Event ID
@@ -34,16 +36,26 @@ def add_event(
     event_id = str(uuid.uuid4())
     now = datetime.now().isoformat()
     consequences_json = json.dumps(consequences or [])
+    attributes_json = json.dumps(attributes or {})
 
     with db._lock:
         db._ensure_open()
         cursor = db.conn.cursor()
         cursor.execute(
             """
-            INSERT INTO events (id, description, chapter_number, timestamp_in_story, consequences, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO events
+                (id, description, chapter_number, timestamp_in_story, consequences, attributes, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (event_id, description, chapter_number, timestamp_in_story, consequences_json, now),
+            (
+                event_id,
+                description,
+                chapter_number,
+                timestamp_in_story,
+                consequences_json,
+                attributes_json,
+                now,
+            ),
         )
 
         # Add participants
@@ -169,11 +181,13 @@ def list_events(db, limit: int | None = None) -> list[WorldEvent]:
 
 def row_to_event(row) -> WorldEvent:
     """Convert a database row to a WorldEvent."""
+    raw_attrs = row["attributes"] if "attributes" in row.keys() else "{}"
     return WorldEvent(
         id=row["id"],
         description=row["description"],
         chapter_number=row["chapter_number"],
         timestamp_in_story=row["timestamp_in_story"],
         consequences=json.loads(row["consequences"]),
+        attributes=json.loads(raw_attrs),
         created_at=datetime.fromisoformat(row["created_at"]),
     )

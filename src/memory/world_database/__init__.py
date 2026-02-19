@@ -5,7 +5,6 @@ import logging
 import sqlite3
 import threading
 from collections.abc import Callable
-from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -26,13 +25,14 @@ from . import (
     _io,
     _relationships,
     _schema,
+    _settings,
     _versions,
 )
 
 logger = logging.getLogger(__name__)
 
 # Schema version for new databases and migration target for existing ones
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 # Valid entity types (whitelist)
 VALID_ENTITY_TYPES = frozenset({"character", "location", "item", "faction", "concept"})
@@ -499,6 +499,7 @@ class WorldDatabase:
         chapter_number: int | None = None,
         timestamp_in_story: str = "",
         consequences: list[str] | None = None,
+        attributes: dict | None = None,
     ) -> str:
         """Add a world event.
 
@@ -508,12 +509,19 @@ class WorldDatabase:
             chapter_number: Optional chapter where the event occurs.
             timestamp_in_story: Optional in-story timestamp.
             consequences: Optional list of consequence descriptions.
+            attributes: Optional metadata dict (e.g. quality_scores).
 
         Returns:
             The generated event ID.
         """
         return _events.add_event(
-            self, description, participants, chapter_number, timestamp_in_story, consequences
+            self,
+            description,
+            participants,
+            chapter_number,
+            timestamp_in_story,
+            consequences,
+            attributes,
         )
 
     def get_events_for_entity(self, entity_id: str) -> list[WorldEvent]:
@@ -774,41 +782,7 @@ class WorldDatabase:
         Returns:
             WorldSettings instance or None if not configured.
         """
-        # Import here to avoid circular imports
-        from src.memory.world_settings import WorldSettings
-
-        logger.debug("Loading world settings from database")
-        with self._lock:
-            self._ensure_open()
-            cursor = self.conn.cursor()
-            cursor.execute(
-                """
-                SELECT id, calendar_json, timeline_start_year, timeline_end_year,
-                       validate_temporal_consistency, created_at, updated_at
-                FROM world_settings
-                LIMIT 1
-                """
-            )
-            row = cursor.fetchone()
-
-        if not row:
-            logger.debug("No world settings found in database")
-            return None
-
-        calendar_data = json.loads(row[1]) if row[1] else None
-        settings_data = {
-            "id": row[0],
-            "calendar": calendar_data,
-            "timeline_start_year": row[2],
-            "timeline_end_year": row[3],
-            "validate_temporal_consistency": bool(row[4]),
-            "created_at": row[5],
-            "updated_at": row[6],
-        }
-        logger.debug(
-            f"Loaded world settings: id={row[0]}, has_calendar={calendar_data is not None}"
-        )
-        return WorldSettings.from_dict(settings_data)
+        return _settings.get_world_settings(self)
 
     @property
     def vec_available(self) -> bool:
@@ -948,34 +922,7 @@ class WorldDatabase:
         Args:
             settings: WorldSettings instance to save.
         """
-        logger.debug(f"Saving world settings: id={settings.id}")
-        calendar_json = json.dumps(settings.calendar.to_dict()) if settings.calendar else None
-        now = datetime.now().isoformat()
-
-        with self._lock:
-            self._ensure_open()
-            cursor = self.conn.cursor()
-            cursor.execute(
-                """
-                INSERT OR REPLACE INTO world_settings
-                (id, calendar_json, timeline_start_year, timeline_end_year,
-                 validate_temporal_consistency, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    settings.id,
-                    calendar_json,
-                    settings.timeline_start_year,
-                    settings.timeline_end_year,
-                    int(settings.validate_temporal_consistency),
-                    settings.created_at.isoformat()
-                    if hasattr(settings.created_at, "isoformat")
-                    else now,
-                    now,
-                ),
-            )
-            self.conn.commit()
-        logger.info(f"Saved world settings: id={settings.id}")
+        _settings.save_world_settings(self, settings)
 
 
 # Re-export for backward compatibility

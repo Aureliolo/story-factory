@@ -40,6 +40,7 @@ class WorldEvent(BaseModel):
     chapter_number: int | None = None
     timestamp_in_story: str = ""  # In-world timing (e.g., "Day 3", "Year 1042")
     consequences: list[str] = Field(default_factory=list)
+    attributes: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=datetime.now)
 
 

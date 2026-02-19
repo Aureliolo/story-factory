@@ -1,5 +1,6 @@
 """Tests for calendar quality loop functions."""
 
+import logging
 import threading
 from unittest.mock import MagicMock, patch
 
@@ -369,8 +370,6 @@ class TestGeneratedDataToWorldCalendar:
 
     def test_logs_warning_for_missing_days(self, caplog):
         """Test warning logged when month is missing 'days' field."""
-        import logging
-
         caplog.set_level(logging.WARNING, logger="src.services.world_quality_service._calendar")
         data = GeneratedCalendarData(
             era_name="Test",
@@ -386,8 +385,6 @@ class TestGeneratedDataToWorldCalendar:
 
     def test_logs_warning_for_missing_start_year(self, caplog):
         """Test warning logged when era is missing 'start_year' field."""
-        import logging
-
         caplog.set_level(logging.WARNING, logger="src.services.world_quality_service._calendar")
         data = GeneratedCalendarData(
             era_name="Lost Age",

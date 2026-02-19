@@ -349,7 +349,7 @@ CURRENT SCORES (need {threshold}+ in all areas):
 JUDGE'S FEEDBACK: {scores.feedback}
 
 SPECIFIC IMPROVEMENTS NEEDED:
-{"\n".join(f"- {imp}" for imp in improvement_focus) if improvement_focus else "- Enhance all areas"}
+{chr(10).join(f"- {imp}" for imp in improvement_focus) if improvement_focus else "- Enhance all areas"}
 
 REQUIREMENTS:
 1. Keep the core event concept but make SUBSTANTIAL improvements

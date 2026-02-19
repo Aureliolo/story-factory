@@ -371,8 +371,14 @@ def _build_world_entities(
     try:
         embed_counts = services.embedding.embed_all_world_data(world_db, state)
         logger.info("World embedding complete: %s", embed_counts)
-    except (ValueError, RuntimeError, OSError) as e:
-        logger.warning("World embedding failed (non-fatal), RAG context unavailable: %s", e)
+    except GenerationCancelledError:
+        raise
+    except Exception as e:
+        logger.warning(
+            "World embedding failed (non-fatal), RAG context unavailable: %s",
+            e,
+            exc_info=True,
+        )
 
 
 def _calculate_total_steps(options: WorldBuildOptions, *, generate_calendar: bool = False) -> int:
@@ -915,6 +921,7 @@ def _generate_events(
             participants=participants if participants else None,
             timestamp_in_story=timestamp_in_story,
             consequences=consequences if consequences else None,
+            attributes={"quality_scores": event_scores.to_dict()},
         )
         added_count += 1
         logger.debug(

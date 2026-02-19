@@ -840,6 +840,7 @@ class TestGenerateEvents:
 
         mock_quality_scores = MagicMock()
         mock_quality_scores.average = 8.0
+        mock_quality_scores.to_dict.return_value = {"average": 8.0}
 
         mock_services.world_quality.generate_events_with_quality.return_value = [
             (
@@ -871,6 +872,7 @@ class TestGenerateEvents:
         """Test skips events with empty description."""
         mock_quality_scores = MagicMock()
         mock_quality_scores.average = 5.0
+        mock_quality_scores.to_dict.return_value = {"average": 5.0}
 
         mock_services.world_quality.generate_events_with_quality.return_value = [
             (
@@ -891,6 +893,7 @@ class TestGenerateEvents:
 
         mock_quality_scores = MagicMock()
         mock_quality_scores.average = 8.0
+        mock_quality_scores.to_dict.return_value = {"average": 8.0}
 
         mock_services.world_quality.generate_events_with_quality.return_value = [
             (
@@ -923,6 +926,7 @@ class TestGenerateEvents:
         """Test timestamp_in_story is built from year, month, and era_name."""
         mock_quality_scores = MagicMock()
         mock_quality_scores.average = 8.0
+        mock_quality_scores.to_dict.return_value = {"average": 8.0}
 
         mock_services.world_quality.generate_events_with_quality.return_value = [
             (
@@ -1001,6 +1005,7 @@ class TestGenerateEvents:
         """Test cancel check stops event processing mid-iteration."""
         mock_quality_scores = MagicMock()
         mock_quality_scores.average = 8.0
+        mock_quality_scores.to_dict.return_value = {"average": 8.0}
 
         mock_services.world_quality.generate_events_with_quality.return_value = [
             (
@@ -1037,6 +1042,7 @@ class TestGenerateEvents:
 
         mock_quality_scores = MagicMock()
         mock_quality_scores.average = 8.0
+        mock_quality_scores.to_dict.return_value = {"average": 8.0}
 
         mock_services.world_quality.generate_events_with_quality.return_value = [
             (
@@ -1064,6 +1070,7 @@ class TestGenerateEvents:
 
         mock_quality_scores = MagicMock()
         mock_quality_scores.average = 8.0
+        mock_quality_scores.to_dict.return_value = {"average": 8.0}
 
         mock_services.world_quality.generate_events_with_quality.return_value = [
             (
@@ -1077,7 +1084,7 @@ class TestGenerateEvents:
             ),
         ]
 
-        with caplog.at_level(logging.DEBUG):
+        with caplog.at_level(logging.WARNING):
             count = world_service._generate_events(sample_story_state, mock_world_db, mock_services)
 
         assert count == 1
@@ -1090,6 +1097,7 @@ class TestGenerateEvents:
         """Test that consequences from generated events are passed through to world_db.add_event."""
         mock_quality_scores = MagicMock()
         mock_quality_scores.average = 8.0
+        mock_quality_scores.to_dict.return_value = {"average": 8.0}
 
         expected_consequences = [
             "The kingdom was split in two",
@@ -1532,6 +1540,7 @@ class TestBuildWorld:
 
         mock_quality_scores = MagicMock()
         mock_quality_scores.average = 8.0
+        mock_quality_scores.to_dict.return_value = {"average": 8.0}
 
         mock_services.world_quality.generate_events_with_quality.return_value = [
             (

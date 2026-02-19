@@ -105,11 +105,21 @@ def build_generation_toolbar(page) -> None:
                 icon="lightbulb",
             ).props("outline dense").classes("text-pink-600").tooltip("Add thematic concepts")
 
+            _events_enabled = (
+                page.state.quality_refinement_enabled
+                and page.services.settings.world_quality_enabled
+            )
             ui.button(
                 "Events",
                 on_click=lambda: page._show_generate_dialog("events"),
                 icon="event",
-            ).props("outline dense").classes("text-orange-600").tooltip("Add world events")
+            ).props(f"outline dense {'disable' if not _events_enabled else ''}").classes(
+                "text-orange-600"
+            ).tooltip(
+                "Add world events"
+                if _events_enabled
+                else "Enable Quality Refinement to generate events"
+            )
 
             ui.button(
                 "Relationships",
