@@ -434,7 +434,6 @@ class EventQualityScores(BaseQualityScores):
             + self.narrative_potential
             + self.entity_integration
         ) / 5.0
-        logger.debug("EventQualityScores.average=%.3f", avg)
         return avg
 
     def to_dict(self) -> dict[str, float | str]:
@@ -454,7 +453,6 @@ class EventQualityScores(BaseQualityScores):
             "average": self.average,
             "feedback": self.feedback,
         }
-        logger.debug("EventQualityScores.to_dict keys=%s", list(payload))
         return payload
 
     def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
@@ -478,7 +476,6 @@ class EventQualityScores(BaseQualityScores):
             weak.append("narrative_potential")
         if self.entity_integration < threshold:
             weak.append("entity_integration")
-        logger.debug("EventQualityScores.weak_dimensions threshold=%.2f weak=%s", threshold, weak)
         return weak
 
 

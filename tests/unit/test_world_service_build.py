@@ -321,6 +321,22 @@ class TestClearWorldDb:
         world_service._clear_world_db(mock_world_db)
         assert mock_world_db.count_entities() == 0
 
+    def test_clears_events_on_rebuild(self, world_service, mock_world_db):
+        """Test events are cleared when rebuilding world."""
+        id1 = mock_world_db.add_entity("character", "Hero", "Brave")
+        mock_world_db.add_event(
+            description="Battle of the Plains",
+            participants=[(id1, "actor")],
+            chapter_number=1,
+        )
+
+        assert len(mock_world_db.list_events()) == 1
+
+        world_service._clear_world_db(mock_world_db)
+
+        assert len(mock_world_db.list_events()) == 0
+        assert mock_world_db.count_entities() == 0
+
 
 class TestExtractCharactersToWorld:
     """Tests for _extract_characters_to_world method."""
@@ -973,7 +989,7 @@ class TestGenerateEvents:
             "character",
             "Hero",
             "The hero",
-            attributes={"birth_year": 1200, "death_year": 1260},
+            attributes={"lifecycle": {"birth": {"year": 1200}, "death": {"year": 1260}}},
         )
         assert eid  # entity added
 

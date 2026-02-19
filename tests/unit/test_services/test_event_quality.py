@@ -41,6 +41,7 @@ def settings():
             "relationship": 7.0,
             "plot": 7.0,
             "chapter": 7.0,
+            "calendar": 7.5,
         },
         world_quality_creator_temp=0.9,
         world_quality_judge_temp=0.1,

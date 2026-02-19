@@ -355,15 +355,20 @@ def _build_world_entities(
             counts["relationships"] += orphan_count
             logger.info(f"Orphan recovery added {orphan_count} relationships")
 
-    # Step 8b: Generate world events if requested
+    # Step 8b: Generate world events if requested (non-fatal — build continues if this fails)
     if options.generate_events:
         check_cancelled()
         report_progress("Generating world events...", "event")
-        event_count = _generate_events(
-            svc, state, world_db, services, cancel_check=options.is_cancelled
-        )
-        counts["events"] = event_count
-        logger.info("Generated %d world events", event_count)
+        try:
+            event_count = _generate_events(
+                svc, state, world_db, services, cancel_check=options.is_cancelled
+            )
+            counts["events"] = event_count
+            logger.info("Generated %d world events", event_count)
+        except GenerationCancelledError:
+            raise
+        except Exception as e:
+            logger.warning("Event generation failed (non-fatal), continuing without events: %s", e)
 
     # Step 9: Batch-embed all world content for RAG context retrieval
     check_cancelled()
@@ -404,8 +409,19 @@ def _calculate_total_steps(options: WorldBuildOptions, *, generate_calendar: boo
 
 
 def _clear_world_db(world_db: WorldDatabase) -> None:
-    """Clear all entities and relationships from world database."""
-    # Delete relationships first (they reference entities)
+    """Clear all entities, relationships, and events from world database."""
+    # Delete events first (they reference entities via participants)
+    events = world_db.list_events()
+    if events:
+        logger.info("Deleting %d existing events...", len(events))
+        with world_db._lock:
+            world_db._ensure_open()
+            cursor = world_db.conn.cursor()
+            cursor.execute("DELETE FROM event_participants")
+            cursor.execute("DELETE FROM events")
+            world_db.conn.commit()
+
+    # Delete relationships (they reference entities)
     relationships = world_db.list_relationships()
     logger.info(f"Deleting {len(relationships)} existing relationships...")
     for rel in relationships:

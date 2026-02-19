@@ -2,6 +2,7 @@
 
 import logging
 from collections.abc import Generator
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -458,7 +459,7 @@ class TestWorldDatabaseEvents:
         # Participants are tuples of (entity_id, role)
         event_id = db.add_event(
             description="Alice discovers a secret",
-            participants=[(char_id, "protagonist")],
+            participants=[(char_id, "actor")],
             chapter_number=1,
         )
 
@@ -469,7 +470,7 @@ class TestWorldDatabaseEvents:
         char_id = db.add_entity("character", "Alice")
         db.add_event(
             description="First event",
-            participants=[(char_id, "protagonist")],
+            participants=[(char_id, "actor")],
             chapter_number=1,
         )
 
@@ -481,9 +482,9 @@ class TestWorldDatabaseEvents:
     def test_get_events_for_chapter(self, db):
         """Test getting events for a specific chapter."""
         char_id = db.add_entity("character", "Alice")
-        db.add_event("Event 1", [(char_id, "main")], chapter_number=1)
-        db.add_event("Event 2", [(char_id, "main")], chapter_number=1)
-        db.add_event("Event 3", [(char_id, "main")], chapter_number=2)
+        db.add_event("Event 1", [(char_id, "actor")], chapter_number=1)
+        db.add_event("Event 2", [(char_id, "actor")], chapter_number=1)
+        db.add_event("Event 3", [(char_id, "actor")], chapter_number=2)
 
         events = db.get_events_for_chapter(1)
 
@@ -495,7 +496,7 @@ class TestWorldDatabaseEvents:
         char2 = db.add_entity("character", "Bob")
         event_id = db.add_event(
             description="A battle",
-            participants=[(char1, "hero"), (char2, "villain")],
+            participants=[(char1, "actor"), (char2, "affected")],
             chapter_number=1,
         )
 
@@ -507,7 +508,7 @@ class TestWorldDatabaseEvents:
         """Test list_events with limit."""
         char_id = db.add_entity("character", "Alice")
         for i in range(5):
-            db.add_event(f"Event {i}", [(char_id, "main")], chapter_number=1)
+            db.add_event(f"Event {i}", [(char_id, "actor")], chapter_number=1)
 
         events = db.list_events(limit=3)
 
@@ -516,7 +517,7 @@ class TestWorldDatabaseEvents:
     def test_list_events_zero_limit(self, db):
         """Test list_events with limit=0 returns empty list."""
         char_id = db.add_entity("character", "Alice")
-        db.add_event("Event 1", [(char_id, "main")], chapter_number=1)
+        db.add_event("Event 1", [(char_id, "actor")], chapter_number=1)
 
         events = db.list_events(limit=0)
 
@@ -525,7 +526,7 @@ class TestWorldDatabaseEvents:
     def test_list_events_negative_limit(self, db):
         """Test list_events with negative limit returns empty list."""
         char_id = db.add_entity("character", "Alice")
-        db.add_event("Event 1", [(char_id, "main")], chapter_number=1)
+        db.add_event("Event 1", [(char_id, "actor")], chapter_number=1)
 
         events = db.list_events(limit=-1)
 
@@ -535,7 +536,7 @@ class TestWorldDatabaseEvents:
         """Test list_events without limit."""
         char_id = db.add_entity("character", "Alice")
         for i in range(3):
-            db.add_event(f"Event {i}", [(char_id, "main")], chapter_number=1)
+            db.add_event(f"Event {i}", [(char_id, "actor")], chapter_number=1)
 
         events = db.list_events()
 
@@ -547,7 +548,7 @@ class TestWorldDatabaseEvents:
 
         db.add_event(
             description="Major event",
-            participants=[(char_id, "main")],
+            participants=[(char_id, "actor")],
             chapter_number=1,
             consequences=["Changed the world", "Awakened powers"],
         )
@@ -566,6 +567,49 @@ class TestWorldDatabaseEvents:
         assert event_id is not None
         events = db.list_events()
         assert len(events) == 1
+
+
+class TestRowToEventErrorHandling:
+    """Tests for row_to_event with corrupt data."""
+
+    def test_corrupt_consequences_json(self, db, caplog):
+        """Test that corrupt consequences JSON defaults to empty list."""
+        # Insert an event with corrupt consequences directly via SQL
+        with db._lock:
+            db._ensure_open()
+            cursor = db.conn.cursor()
+            cursor.execute(
+                "INSERT INTO events (id, description, chapter_number, timestamp_in_story, "
+                "consequences, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                ("e1", "Test event", 1, "", "not valid json{", "2024-01-01T00:00:00"),
+            )
+            db.conn.commit()
+
+        with caplog.at_level(logging.ERROR, logger="src.memory.world_database._events"):
+            events = db.list_events()
+
+        assert len(events) == 1
+        assert events[0].consequences == []
+        assert "Corrupt consequences JSON" in caplog.text
+
+    def test_invalid_created_at_timestamp(self, db, caplog):
+        """Test that invalid created_at falls back to datetime.min."""
+        with db._lock:
+            db._ensure_open()
+            cursor = db.conn.cursor()
+            cursor.execute(
+                "INSERT INTO events (id, description, chapter_number, timestamp_in_story, "
+                "consequences, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                ("e2", "Test event", 1, "", "[]", "not-a-date"),
+            )
+            db.conn.commit()
+
+        with caplog.at_level(logging.ERROR, logger="src.memory.world_database._events"):
+            events = db.list_events()
+
+        assert len(events) == 1
+        assert events[0].created_at == datetime.min
+        assert "Invalid created_at timestamp" in caplog.text
 
 
 class TestWorldDatabaseGraphOperations:
@@ -1157,7 +1201,7 @@ class TestWorldDatabaseImportExportEvents:
         char_id = db.add_entity("character", "Alice")
         db.add_event(
             "Test event",
-            participants=[(char_id, "main")],
+            participants=[(char_id, "actor")],
             chapter_number=1,
             consequences=["Result 1"],
         )
@@ -1183,7 +1227,7 @@ class TestWorldDatabaseImportExportEvents:
         char2 = db.add_entity("character", "Bob")
         db.add_event(
             "Group event",
-            participants=[(char1, "hero"), (char2, "sidekick")],
+            participants=[(char1, "actor"), (char2, "witness")],
             chapter_number=1,
         )
 
@@ -2354,7 +2398,7 @@ class TestEventCallbacks:
 
         event_id = db.add_event(
             description="Alice discovers a secret",
-            participants=[(char_id, "protagonist")],
+            participants=[(char_id, "actor")],
             chapter_number=3,
         )
 

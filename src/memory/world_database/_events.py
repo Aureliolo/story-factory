@@ -169,11 +169,32 @@ def list_events(db, limit: int | None = None) -> list[WorldEvent]:
 
 def row_to_event(row) -> WorldEvent:
     """Convert a database row to a WorldEvent."""
+    event_id = row["id"]
+    try:
+        consequences = json.loads(row["consequences"])
+    except (json.JSONDecodeError, TypeError) as e:
+        logger.error(
+            "Corrupt consequences JSON for event %s: %s. Defaulting to empty list.",
+            event_id,
+            e,
+        )
+        consequences = []
+
+    try:
+        created_at = datetime.fromisoformat(row["created_at"])
+    except (ValueError, TypeError) as e:
+        logger.error(
+            "Invalid created_at timestamp for event %s: %s. Using epoch.",
+            event_id,
+            e,
+        )
+        created_at = datetime.min
+
     return WorldEvent(
-        id=row["id"],
+        id=event_id,
         description=row["description"],
         chapter_number=row["chapter_number"],
         timestamp_in_story=row["timestamp_in_story"],
-        consequences=json.loads(row["consequences"]),
-        created_at=datetime.fromisoformat(row["created_at"]),
+        consequences=consequences,
+        created_at=created_at,
     )

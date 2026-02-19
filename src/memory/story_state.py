@@ -3,11 +3,12 @@
 import logging
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.memory.content_guidelines import ContentProfile
+from src.memory.entities import EventRole
 from src.memory.templates import PersonalityTrait, TargetLength, normalize_traits
 
 if TYPE_CHECKING:
@@ -186,7 +187,7 @@ class EventParticipantEntry(BaseModel):
     """A participant reference in a generated world event."""
 
     entity_name: str
-    role: Literal["actor", "location", "affected", "witness"] = "affected"
+    role: EventRole = "affected"
 
 
 class WorldEventCreation(BaseModel):

@@ -1,7 +1,7 @@
 """Entity models for worldbuilding database."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -43,12 +43,15 @@ class WorldEvent(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now)
 
 
+EventRole = Literal["actor", "location", "affected", "witness"]
+
+
 class EventParticipant(BaseModel):
     """Links an entity to an event with a role."""
 
     event_id: str
     entity_id: str
-    role: str  # actor, location, affected, witness
+    role: EventRole
 
 
 class EntityVersion(BaseModel):

@@ -151,15 +151,9 @@ class TestRecoverOrphansCancellation:
         mock_world_db.add_entity("character", "Hero", "A brave hero")
         mock_world_db.add_entity("character", "Villain", "Evil")
 
-        cancel_called = False
-
         def cancel_check():
-            """Return True to cancel after first check."""
-            nonlocal cancel_called
-            if cancel_called:
-                return True
-            cancel_called = True
-            return True  # Cancel immediately
+            """Return True to cancel immediately."""
+            return True
 
         count = _recover_orphans(
             mock_svc, story_state, mock_world_db, mock_services, cancel_check=cancel_check

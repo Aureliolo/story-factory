@@ -4,23 +4,71 @@ Contains utility functions for building event context, timestamps,
 and resolving event participants during world generation.
 """
 
+import json
 import logging
+from typing import Any
 
+from src.memory.entities import Entity
 from src.memory.world_database import WorldDatabase
 from src.services.world_service._name_matching import _find_entity_by_name
 
 logger = logging.getLogger(__name__)
 
-# Temporal attribute keys used for entity context building
-TEMPORAL_KEYS = (
-    "birth_year",
-    "founded_year",
-    "creation_year",
-    "origin_year",
-    "death_year",
-    "dissolved_year",
-    "destruction_year",
-)
+# Lifecycle sub-dict keys that may contain temporal 'year' values
+_LIFECYCLE_TEMPORAL_KEYS = ("birth", "death", "founding", "dissolution", "creation")
+
+
+def _parse_lifecycle_sub(value: Any) -> dict[str, Any] | None:
+    """Parse a lifecycle sub-entry that may be a dict or a JSON string.
+
+    WorldDatabase flattens attributes at nesting depth 3, so lifecycle sub-dicts
+    like ``{"year": 1200}`` become the JSON string ``'{"year": 1200}'`` after
+    storage and retrieval.
+
+    Args:
+        value: Raw value from the lifecycle dict — either a dict or a JSON string.
+
+    Returns:
+        Parsed dict if successful, None otherwise.
+    """
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError, TypeError:
+            pass
+    return None
+
+
+def _extract_lifecycle_temporal(attrs: dict[str, Any]) -> list[str]:
+    """Extract temporal annotations from entity lifecycle attributes.
+
+    Lifecycle data is stored under attrs["lifecycle"][key]["year"], where key
+    is one of birth, death, founding, dissolution, creation.  After WorldDatabase
+    storage (max nesting depth 3), the inner dicts may be JSON strings instead of
+    dicts — this function handles both forms.
+
+    Args:
+        attrs: Entity attributes dict.
+
+    Returns:
+        List of formatted temporal strings (e.g. "birth_year=1200").
+    """
+    lifecycle = attrs.get("lifecycle")
+    if not lifecycle or not isinstance(lifecycle, dict):
+        return []
+
+    parts: list[str] = []
+    for key in _LIFECYCLE_TEMPORAL_KEYS:
+        sub = _parse_lifecycle_sub(lifecycle.get(key))
+        if sub is not None and sub.get("year") is not None:
+            parts.append(f"{key}_year={sub['year']}")
+
+    logger.debug("Extracted %d temporal parts from lifecycle attributes", len(parts))
+    return parts
 
 
 def build_event_entity_context(world_db: WorldDatabase) -> str:
@@ -46,10 +94,9 @@ def build_event_entity_context(world_db: WorldDatabase) -> str:
         for e in all_entities:
             line = f"  - {e.name} ({e.type})"
             attrs = e.attributes or {}
-            for temporal_key in TEMPORAL_KEYS:
-                val = attrs.get(temporal_key)
-                if val is not None:
-                    line += f", {temporal_key}={val}"
+            temporal_parts = _extract_lifecycle_temporal(attrs)
+            for part in temporal_parts:
+                line += f", {part}"
             entity_lines.append(line)
         context_parts.append("ENTITIES:\n" + "\n".join(entity_lines))
 
@@ -72,10 +119,16 @@ def build_event_entity_context(world_db: WorldDatabase) -> str:
         if rel_lines:
             context_parts.append("RELATIONSHIPS:\n" + "\n".join(rel_lines))
 
-    return "\n\n".join(context_parts) if context_parts else "No entities yet."
+    if not context_parts:
+        logger.warning(
+            "build_event_entity_context: no entities or relationships found in world database. "
+            "Events will be generated without entity context."
+        )
+        return "No entities yet."
+    return "\n\n".join(context_parts)
 
 
-def build_event_timestamp(event: dict) -> str:
+def build_event_timestamp(event: dict[str, Any]) -> str:
     """Build a human-readable timestamp string from an event's temporal fields.
 
     Args:
@@ -95,10 +148,16 @@ def build_event_timestamp(event: dict) -> str:
         timestamp_parts.append(f"Month {month}")
     if era_name:
         timestamp_parts.append(era_name)
-    return ", ".join(timestamp_parts)
+    result = ", ".join(timestamp_parts)
+    logger.debug(
+        "build_event_timestamp: year=%s month=%s era=%s -> '%s'", year, month, era_name, result
+    )
+    return result
 
 
-def resolve_event_participants(event: dict, all_entities: list) -> list[tuple[str, str]]:
+def resolve_event_participants(
+    event: dict[str, Any], all_entities: list[Entity]
+) -> list[tuple[str, str]]:
     """Resolve event participant names to entity IDs.
 
     Each participant entry can be a dict with 'entity_name' and 'role',
@@ -129,8 +188,10 @@ def resolve_event_participants(event: dict, all_entities: list) -> list[tuple[st
             if matched:
                 participants.append((matched.id, role))
             else:
-                logger.debug(
-                    "Could not resolve event participant '%s' to an entity",
+                logger.warning(
+                    "Could not resolve event participant '%s' to any of %d entities "
+                    "-- participant will be dropped from event",
                     entity_name,
+                    len(all_entities),
                 )
     return participants
