@@ -201,6 +201,65 @@ class TimelineService:
         logger.debug(f"Created timeline item for event {event.id}")
         return item
 
+    def build_temporal_context(self, world_db: WorldDatabase) -> str:
+        """Build a readable temporal context string for agent prompts.
+
+        Retrieves all timeline items, groups them by type, and formats
+        them as a readable text block suitable for injection into agent prompts.
+        Caps at 20 items per type to avoid prompt bloat.
+
+        Args:
+            world_db: WorldDatabase to extract timeline data from.
+
+        Returns:
+            Formatted temporal context string, or empty string if no timeline data.
+        """
+        validate_not_none(world_db, "world_db")
+
+        items = self.get_timeline_items(world_db)
+        if not items:
+            logger.debug("No timeline items found, returning empty temporal context")
+            return ""
+
+        # Group items by type
+        groups: dict[str, list[TimelineItem]] = {}
+        for item in items:
+            group_key = item.item_type
+            if group_key not in groups:
+                groups[group_key] = []
+            groups[group_key].append(item)
+
+        # Build formatted output
+        sections: list[str] = []
+        type_order = ["character", "faction", "location", "item", "concept", "event"]
+        sorted_keys = sorted(
+            groups.keys(), key=lambda k: type_order.index(k) if k in type_order else 999
+        )
+
+        for group_key in sorted_keys:
+            group_items = groups[group_key]
+            header = group_key.upper() + "S"
+            lines: list[str] = [header + ":"]
+            for item in group_items[:20]:
+                start_text = item.start.raw_text or str(item.start.year or "unknown")
+                if item.end:
+                    end_text = item.end.raw_text or str(item.end.year or "ongoing")
+                    lines.append(f"- {item.label}: {start_text} to {end_text}")
+                else:
+                    lines.append(f"- {item.label}: {start_text}")
+            if len(group_items) > 20:
+                lines.append(f"  ... and {len(group_items) - 20} more")
+            sections.append("\n".join(lines))
+
+        result = "\n\n".join(sections)
+        logger.debug(
+            "Built temporal context: %d sections, %d total items, %d chars",
+            len(sections),
+            len(items),
+            len(result),
+        )
+        return result
+
     def get_entity_lifecycle(self, entity: Entity) -> EntityLifecycle | None:
         """
         Return the entity's lifecycle extracted from its attributes.

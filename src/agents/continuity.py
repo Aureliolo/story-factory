@@ -361,13 +361,14 @@ Return voice inconsistencies found. Set category to "voice". If no issues, retur
             raise LLMGenerationError(f"Failed to check character voice: {e}") from e
 
     def check_full_story(
-        self, story_state: StoryState, check_voice: bool = True
+        self, story_state: StoryState, check_voice: bool = True, world_context: str = ""
     ) -> list[ContinuityIssue]:
         """Check the entire story for continuity issues.
 
         Args:
             story_state: Current story state
             check_voice: Whether to perform voice consistency checks (default: True)
+            world_context: Optional world context (RAG + temporal) for richer consistency checks.
 
         Returns:
             List of continuity issues found.
@@ -384,6 +385,14 @@ Return voice inconsistencies found. Set category to "voice". If no issues, retur
         if not full_content:
             return []
 
+        world_context_block = ""
+        if world_context:
+            logger.debug(
+                "Injecting world context into full story continuity check prompt (%d chars)",
+                len(world_context),
+            )
+            world_context_block = f"\nRETRIEVED WORLD CONTEXT:\n{world_context}\n"
+
         brief = story_state.brief
         if not brief:
             raise ValueError("Story brief is required to check full story continuity")
@@ -396,7 +405,7 @@ STORY PREMISE:
 
 CHARACTERS:
 {chr(10).join(f"- {c.name} ({c.role})" for c in story_state.characters)}
-
+{world_context_block}
 FULL STORY:
 {full_content[:8000]}
 

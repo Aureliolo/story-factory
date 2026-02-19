@@ -50,6 +50,7 @@ class WorldHealthDashboard:
         on_accept_circular: Callable[[CycleInfo], Any] | None = None,
         on_improve_quality: Callable[[str], Any] | None = None,
         on_refresh: Callable[[], Any] | None = None,
+        on_validate_timeline: Callable[[], Any] | None = None,
     ):
         """Initialize world health dashboard.
 
@@ -60,6 +61,7 @@ class WorldHealthDashboard:
             on_accept_circular: Callback to accept a circular chain as intentional.
             on_improve_quality: Callback to improve a low-quality entity.
             on_refresh: Callback to refresh metrics after changes.
+            on_validate_timeline: Callback to trigger temporal validation.
         """
         self.metrics = metrics
         self.on_fix_orphan = on_fix_orphan
@@ -67,6 +69,7 @@ class WorldHealthDashboard:
         self.on_accept_circular = on_accept_circular
         self.on_improve_quality = on_improve_quality
         self.on_refresh = on_refresh
+        self.on_validate_timeline = on_validate_timeline
 
     def build(self) -> None:
         """Build the dashboard UI.
@@ -105,6 +108,13 @@ class WorldHealthDashboard:
                     self._build_orphan_section()
                 with ui.element("div").classes("flex-1 min-w-[220px]"):
                     self._build_circular_section()
+
+            # Temporal issues section (between warnings and bottom row)
+            has_temporal_issues = (
+                self.metrics.temporal_error_count > 0 or self.metrics.temporal_warning_count > 0
+            )
+            if has_temporal_issues or self.on_validate_timeline:
+                self._build_temporal_section()
 
             # Bottom row: quality distribution + recommendations
             with ui.row().classes("w-full gap-4"):
@@ -275,6 +285,82 @@ class WorldHealthDashboard:
                 if circular_count > 3:
                     ui.label(f"+{circular_count - 3} more...").classes("text-xs text-gray-400")
 
+    def _build_temporal_section(self) -> None:
+        """Build temporal consistency issues section."""
+        error_count = self.metrics.temporal_error_count
+        warning_count = self.metrics.temporal_warning_count
+        has_issues = error_count > 0 or warning_count > 0
+
+        with ui.row().classes("w-full gap-4 mb-4"):
+            with ui.element("div").classes("flex-1"):
+                if not has_issues:
+                    with ui.row().classes("items-center gap-2 p-2 bg-green-900 rounded"):
+                        ui.icon("schedule", size="sm").classes("text-green-500")
+                        ui.label("No temporal issues").classes("text-sm text-green-300")
+                        if self.on_validate_timeline:
+                            ui.space()
+                            ui.button(
+                                "Validate Timeline",
+                                on_click=self.on_validate_timeline,
+                                icon="update",
+                            ).props("flat size=sm")
+                else:
+                    bg_color = "red-900" if error_count > 0 else "yellow-900"
+                    with ui.card().classes(f"p-3 bg-{bg_color}"):
+                        with ui.row().classes("items-center gap-2 mb-2"):
+                            ui.icon("schedule", size="sm").classes(
+                                "text-red-600" if error_count > 0 else "text-yellow-600"
+                            )
+                            label_parts = []
+                            if error_count > 0:
+                                label_parts.append(
+                                    f"{error_count} error{'s' if error_count != 1 else ''}"
+                                )
+                            if warning_count > 0:
+                                label_parts.append(
+                                    f"{warning_count} warning{'s' if warning_count != 1 else ''}"
+                                )
+                            ui.label(f"Temporal: {', '.join(label_parts)}").classes(
+                                "text-sm font-medium text-red-200"
+                                if error_count > 0
+                                else "text-sm font-medium text-yellow-200"
+                            )
+
+                            # Consistency score badge
+                            score = self.metrics.average_temporal_consistency
+                            score_color = (
+                                "green" if score >= 7 else "orange" if score >= 4 else "red"
+                            )
+                            ui.badge(
+                                f"{score:.1f}/10",
+                                color=score_color,
+                            ).props("outline").classes("text-xs ml-auto")
+
+                        # List issues (max 5)
+                        with ui.column().classes("gap-1"):
+                            for issue in self.metrics.temporal_issues[:5]:
+                                severity = issue.get("severity", "warning")
+                                icon_name = "error" if severity == "error" else "warning"
+                                icon_color = (
+                                    "text-red-500" if severity == "error" else "text-yellow-500"
+                                )
+                                with ui.row().classes("items-start gap-2"):
+                                    ui.icon(icon_name, size="xs").classes(icon_color)
+                                    ui.label(issue.get("message", "")).classes("text-sm")
+                            total_issues = error_count + warning_count
+                            if total_issues > 5:
+                                ui.label(f"+{total_issues - 5} more...").classes(
+                                    "text-xs text-gray-400"
+                                )
+
+                        if self.on_validate_timeline:
+                            with ui.row().classes("mt-2"):
+                                ui.button(
+                                    "Re-validate Timeline",
+                                    on_click=self.on_validate_timeline,
+                                    icon="update",
+                                ).props("flat size=sm")
+
     def _build_quality_section(self) -> None:
         """Build quality distribution section with per-entity improve buttons."""
         with ui.card().classes("p-3 bg-gray-800 h-full"):
@@ -398,7 +484,16 @@ def build_health_summary_compact(metrics: WorldHealthMetrics) -> None:
                         f"{metrics.circular_count} cycles",
                         color="orange",
                     ).props("outline").classes("text-xs")
-                if metrics.orphan_count == 0 and metrics.circular_count == 0:
+                if metrics.temporal_error_count > 0:
+                    ui.badge(
+                        f"{metrics.temporal_error_count} temporal",
+                        color="red",
+                    ).props("outline").classes("text-xs")
+                if (
+                    metrics.orphan_count == 0
+                    and metrics.circular_count == 0
+                    and metrics.temporal_error_count == 0
+                ):
                     ui.badge(
                         "Healthy",
                         color="green",

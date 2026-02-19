@@ -18,6 +18,11 @@ template: |
   - {{ char.name }} ({{ char.role }})
   {% endfor %}
 
+  {% if world_context %}
+  RETRIEVED WORLD CONTEXT:
+  {{ world_context }}
+  {% endif %}
+
   FULL STORY:
   {{ full_content }}
 
@@ -37,4 +42,5 @@ variables:
     - premise
     - characters
     - full_content
-  optional: []
+  optional:
+    - world_context

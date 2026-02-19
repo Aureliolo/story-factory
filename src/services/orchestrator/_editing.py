@@ -193,7 +193,19 @@ def review_full_story(
     orc._emit("agent_start", "Continuity", "Reviewing complete story...")
     yield orc.events[-1]
 
-    issues = orc.continuity.check_full_story(orc.story_state)
+    from src.services.orchestrator._writing import (
+        _retrieve_temporal_context,
+        _retrieve_world_context,
+    )
+
+    world_context = _retrieve_world_context(orc, "Full story review for continuity")
+    temporal_context = _retrieve_temporal_context(orc)
+    combined_context = world_context
+    if temporal_context:
+        combined_context = (
+            f"{combined_context}\n\n{temporal_context}" if combined_context else temporal_context
+        )
+    issues = orc.continuity.check_full_story(orc.story_state, world_context=combined_context)
 
     if issues:
         feedback = orc.continuity.format_revision_feedback(issues)

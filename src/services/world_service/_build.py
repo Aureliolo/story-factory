@@ -84,7 +84,11 @@ def build_world(
     # Reconcile calendar option with settings gate before computing steps
     effective_calendar = options.generate_calendar and svc.settings.generate_calendar_on_world_build
     # Calculate total steps for progress reporting
-    total_steps = _calculate_total_steps(options, generate_calendar=effective_calendar)
+    total_steps = _calculate_total_steps(
+        options,
+        generate_calendar=effective_calendar,
+        validate_temporal=svc.settings.validate_temporal_consistency,
+    )
     current_step = 0
 
     def report_progress(message: str, entity_type: str | None = None, count: int = 0) -> None:
@@ -380,8 +384,33 @@ def _build_world_entities(
     except Exception as e:
         logger.warning("World embedding failed (non-fatal), RAG context unavailable: %s", e)
 
+    # Step 10: Validate temporal consistency (non-fatal)
+    if svc.settings.validate_temporal_consistency:
+        check_cancelled()
+        report_progress("Validating temporal consistency...")
+        try:
+            result = services.temporal_validation.validate_world(world_db)
+            for issue in result.errors:
+                logger.warning("Temporal error: %s", issue.message)
+            for issue in result.warnings:
+                logger.debug("Temporal warning: %s", issue.message)
+            logger.info(
+                "Temporal validation complete: %d errors, %d warnings",
+                result.error_count,
+                result.warning_count,
+            )
+        except GenerationCancelledError:
+            raise
+        except Exception as e:
+            logger.warning("Temporal validation failed (non-fatal): %s", e)
 
-def _calculate_total_steps(options: WorldBuildOptions, *, generate_calendar: bool = False) -> int:
+
+def _calculate_total_steps(
+    options: WorldBuildOptions,
+    *,
+    generate_calendar: bool = False,
+    validate_temporal: bool = False,
+) -> int:
     """Calculate total number of steps for progress reporting."""
     steps = 3  # Character extraction + embedding + completion
     if options.clear_existing:
@@ -405,6 +434,8 @@ def _calculate_total_steps(options: WorldBuildOptions, *, generate_calendar: boo
         # +1 for orphan recovery step after relationship generation
         steps += 1
     if options.generate_events:
+        steps += 1
+    if validate_temporal:
         steps += 1
     return steps
 

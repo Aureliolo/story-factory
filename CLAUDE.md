@@ -131,7 +131,8 @@ WorldDatabase (sqlite-vec) → EmbeddingService → ContextRetrievalService → 
 11. Orphan recovery
 12. Generate events (quality loop, non-fatal — build continues if this fails)
 13. Generate embeddings
-14. Build complete
+14. Validate temporal consistency (non-fatal, gated by settings.validate_temporal_consistency)
+15. Build complete
 ```
 
 Each quality loop entity type (locations, factions, items, concepts, relationships, events, calendar) follows the same pattern: `_create_fn` → `_judge_fn` → `_refine_fn` via `quality_refinement_loop()` in `src/services/world_quality_service/`. Calendar uses `CalendarQualityScores` (4 dimensions: internal_consistency, thematic_fit, completeness, uniqueness) and the `architect` creator role. Events use `EventQualityScores` (5 dimensions: significance, temporal_plausibility, causal_coherence, narrative_potential, entity_integration) and the `architect` creator role.

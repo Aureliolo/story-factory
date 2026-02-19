@@ -50,4 +50,5 @@ variables:
     - previous_content
     - chapter_number
     - chapter_content
-  optional: []
+  optional:
+    - world_context

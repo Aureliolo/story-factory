@@ -51,6 +51,34 @@ def _retrieve_world_context(orc: StoryOrchestrator, task_description: str) -> st
         return ""
 
 
+def _retrieve_temporal_context(orc: StoryOrchestrator) -> str:
+    """Retrieve temporal context from timeline data for prompt enrichment.
+
+    Uses the orchestrator's world_db and settings to build a readable temporal
+    context string. Returns empty string if world_db is not set or retrieval fails.
+
+    Args:
+        orc: StoryOrchestrator instance with optional world_db.
+
+    Returns:
+        Formatted temporal context string, or empty string if unavailable.
+    """
+    if not orc.world_db:
+        return ""
+
+    try:
+        from src.services.timeline_service import TimelineService
+
+        timeline_svc = TimelineService(orc.settings)
+        context = timeline_svc.build_temporal_context(orc.world_db)
+        if context:
+            logger.debug("Retrieved temporal context: %d chars", len(context))
+        return context
+    except Exception as e:
+        logger.error("Temporal context retrieval failed (non-fatal): %s", e, exc_info=True)
+        return ""
+
+
 def write_short_story(orc: StoryOrchestrator) -> Generator[WorkflowEvent, None, str]:
     """Write a short story with revision loop.
 
@@ -482,7 +510,14 @@ def write_all_chapters(
     orc._emit("agent_start", "Continuity", "Performing final story review...")
     yield orc.events[-1]
 
-    final_issues = orc.continuity.check_full_story(orc.story_state)
+    world_context = _retrieve_world_context(orc, "Final story review for continuity")
+    temporal_context = _retrieve_temporal_context(orc)
+    combined_context = world_context
+    if temporal_context:
+        combined_context = (
+            f"{combined_context}\n\n{temporal_context}" if combined_context else temporal_context
+        )
+    final_issues = orc.continuity.check_full_story(orc.story_state, world_context=combined_context)
     if final_issues:
         # Report any remaining issues but don't block completion
         issue_summary = orc.continuity.format_revision_feedback(final_issues)

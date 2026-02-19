@@ -236,6 +236,46 @@ def get_world_health_metrics(
     # Relationship density
     relationship_density = total_relationships / total_entities if total_entities > 0 else 0.0
 
+    # Temporal validation (if enabled)
+    temporal_error_count = 0
+    temporal_warning_count = 0
+    temporal_issues: list[dict] = []
+    average_temporal_consistency = 10.0
+
+    if svc.settings.validate_temporal_consistency:
+        from src.services.temporal_validation_service import TemporalValidationService
+
+        try:
+            temporal_service = TemporalValidationService(svc.settings)
+            temporal_result = temporal_service.validate_world(world_db)
+            temporal_error_count = temporal_result.error_count
+            temporal_warning_count = temporal_result.warning_count
+            temporal_issues = [
+                {
+                    "entity_id": issue.entity_id,
+                    "entity_name": issue.entity_name,
+                    "entity_type": issue.entity_type,
+                    "message": issue.message,
+                    "severity": str(issue.severity),
+                    "error_type": str(issue.error_type),
+                    "suggestion": issue.suggestion,
+                }
+                for issue in temporal_result.errors + temporal_result.warnings
+            ]
+            average_temporal_consistency = temporal_service.calculate_temporal_consistency_score(
+                temporal_result
+            )
+            logger.debug(
+                "Temporal validation: %d errors, %d warnings, consistency=%.1f",
+                temporal_error_count,
+                temporal_warning_count,
+                average_temporal_consistency,
+            )
+        except Exception as e:
+            logger.warning("Temporal validation failed (non-fatal): %s", e)
+    else:
+        logger.debug("Temporal validation disabled by settings")
+
     # Build metrics object
     metrics = WorldHealthMetrics(
         total_entities=total_entities,
@@ -251,6 +291,10 @@ def get_world_health_metrics(
         quality_distribution=quality_distribution,
         low_quality_entities=low_quality_entities,
         relationship_density=relationship_density,
+        temporal_error_count=temporal_error_count,
+        temporal_warning_count=temporal_warning_count,
+        temporal_issues=temporal_issues,
+        average_temporal_consistency=average_temporal_consistency,
     )
 
     # Calculate health score and generate recommendations

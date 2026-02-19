@@ -61,6 +61,7 @@ def refresh_health_dashboard(page, notify: bool = True) -> None:
             on_improve_quality=page._handle_improve_quality,
             # User-initiated refresh from dashboard button should show toast
             on_refresh=lambda: refresh_health_dashboard(page, notify=True),
+            on_validate_timeline=lambda: _handle_validate_timeline(page),
         )
         dashboard.build()
     if notify:
@@ -211,6 +212,20 @@ async def handle_improve_quality(page, entity_id: str) -> None:
         )
     else:
         logger.warning(f"Could not find entity with id={entity_id} for quality improvement")
+
+
+def _handle_validate_timeline(page) -> None:
+    """Handle validate timeline button click.
+
+    Invalidates cached health metrics and refreshes the dashboard
+    to trigger a fresh temporal validation.
+
+    Args:
+        page: WorldPage instance.
+    """
+    logger.debug("Validating timeline: invalidating cache and refreshing dashboard")
+    page.services.world.invalidate_health_cache()
+    refresh_health_dashboard(page, notify=True)
 
 
 def build_analysis_section(page) -> None:
