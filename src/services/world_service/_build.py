@@ -9,11 +9,13 @@ from src.memory.story_state import PlotOutline, StoryState
 from src.memory.world_calendar import WorldCalendar
 from src.memory.world_database import WorldDatabase
 from src.memory.world_settings import WorldSettings
+from src.services.world_service._event_helpers import _generate_events
 from src.services.world_service._lifecycle_helpers import (
     build_character_lifecycle,
     build_entity_lifecycle,
 )
 from src.services.world_service._name_matching import _find_entity_by_name
+from src.services.world_service._orphan_recovery import _recover_orphans
 from src.utils.exceptions import GenerationCancelledError, WorldGenerationError
 from src.utils.validation import validate_not_none, validate_type
 
@@ -74,6 +76,7 @@ def build_world(
         "factions": 0,
         "items": 0,
         "concepts": 0,
+        "events": 0,
         "relationships": 0,
         "implicit_relationships": 0,
     }
@@ -187,7 +190,12 @@ def _build_world_entities(
     check_cancelled: Callable[[], None],
     report_progress: Callable[..., None],
 ) -> None:
-    """Execute entity generation steps 2-9 of the world build."""
+    """Execute entity generation steps 2-9 of the world build.
+
+    Steps: structure generation, character extraction, quality review (characters,
+    plot, chapters), locations, factions, items, concepts, relationships, orphan
+    recovery, events, and embeddings.
+    """
     # Step 2: Generate story structure (characters, chapters) if requested
     if options.generate_structure:
         check_cancelled()
@@ -348,6 +356,21 @@ def _build_world_entities(
             counts["relationships"] += orphan_count
             logger.info(f"Orphan recovery added {orphan_count} relationships")
 
+    # Step 8b: Generate world events if requested (non-fatal — build continues if this fails)
+    if options.generate_events:
+        check_cancelled()
+        report_progress("Generating world events...", "event")
+        try:
+            event_count = _generate_events(
+                svc, state, world_db, services, cancel_check=options.is_cancelled
+            )
+            counts["events"] = event_count
+            logger.info("Generated %d world events", event_count)
+        except GenerationCancelledError:
+            raise
+        except (WorldGenerationError, ValueError) as e:
+            logger.warning("Event generation failed (non-fatal), continuing without events: %s", e)
+
     # Step 9: Batch-embed all world content for RAG context retrieval
     check_cancelled()
     report_progress("Embedding world content for RAG...")
@@ -381,12 +404,17 @@ def _calculate_total_steps(options: WorldBuildOptions, *, generate_calendar: boo
         steps += 1
         # +1 for orphan recovery step after relationship generation
         steps += 1
+    if options.generate_events:
+        steps += 1
     return steps
 
 
 def _clear_world_db(world_db: WorldDatabase) -> None:
-    """Clear all entities and relationships from world database."""
-    # Delete relationships first (they reference entities)
+    """Clear all entities, relationships, and events from world database."""
+    # Delete events first (they reference entities via participants)
+    world_db.clear_events()
+
+    # Delete relationships (they reference entities)
     relationships = world_db.list_relationships()
     logger.info(f"Deleting {len(relationships)} existing relationships...")
     for rel in relationships:
@@ -485,8 +513,19 @@ def _generate_locations(
 ) -> int:
     """Generate and add locations to world database using quality refinement."""
     # Use project-level settings if available, otherwise fall back to global
-    loc_min = state.target_locations_min or svc.settings.world_gen_locations_min
-    loc_max = state.target_locations_max or svc.settings.world_gen_locations_max
+    loc_min = (
+        state.target_locations_min
+        if state.target_locations_min is not None
+        else svc.settings.world_gen_locations_min
+    )
+    loc_max = (
+        state.target_locations_max
+        if state.target_locations_max is not None
+        else svc.settings.world_gen_locations_max
+    )
+    if loc_min > loc_max:
+        logger.warning("Invalid location count range: min=%d > max=%d, swapping", loc_min, loc_max)
+        loc_min, loc_max = loc_max, loc_min
     location_count = random.randint(loc_min, loc_max)
 
     location_names = [e.name for e in world_db.list_entities() if e.type == "location"]
@@ -539,8 +578,19 @@ def _generate_factions(
     existing_locations = [e.name for e in all_entities if e.type == "location"]
 
     # Use project-level settings if available, otherwise fall back to global
-    fac_min = state.target_factions_min or svc.settings.world_gen_factions_min
-    fac_max = state.target_factions_max or svc.settings.world_gen_factions_max
+    fac_min = (
+        state.target_factions_min
+        if state.target_factions_min is not None
+        else svc.settings.world_gen_factions_min
+    )
+    fac_max = (
+        state.target_factions_max
+        if state.target_factions_max is not None
+        else svc.settings.world_gen_factions_max
+    )
+    if fac_min > fac_max:
+        logger.warning("Invalid faction count range: min=%d > max=%d, swapping", fac_min, fac_max)
+        fac_min, fac_max = fac_max, fac_min
     faction_count = random.randint(fac_min, fac_max)
 
     faction_results = services.world_quality.generate_factions_with_quality(
@@ -612,8 +662,19 @@ def _generate_items(
     item_names = [e.name for e in world_db.list_entities() if e.type == "item"]
 
     # Use project-level settings if available, otherwise fall back to global
-    item_min = state.target_items_min or svc.settings.world_gen_items_min
-    item_max = state.target_items_max or svc.settings.world_gen_items_max
+    item_min = (
+        state.target_items_min
+        if state.target_items_min is not None
+        else svc.settings.world_gen_items_min
+    )
+    item_max = (
+        state.target_items_max
+        if state.target_items_max is not None
+        else svc.settings.world_gen_items_max
+    )
+    if item_min > item_max:
+        logger.warning("Invalid item count range: min=%d > max=%d, swapping", item_min, item_max)
+        item_min, item_max = item_max, item_min
     item_count = random.randint(item_min, item_max)
 
     item_results = services.world_quality.generate_items_with_quality(
@@ -656,8 +717,21 @@ def _generate_concepts(
     concept_names = [e.name for e in world_db.list_entities() if e.type == "concept"]
 
     # Use project-level settings if available, otherwise fall back to global
-    concept_min = state.target_concepts_min or svc.settings.world_gen_concepts_min
-    concept_max = state.target_concepts_max or svc.settings.world_gen_concepts_max
+    concept_min = (
+        state.target_concepts_min
+        if state.target_concepts_min is not None
+        else svc.settings.world_gen_concepts_min
+    )
+    concept_max = (
+        state.target_concepts_max
+        if state.target_concepts_max is not None
+        else svc.settings.world_gen_concepts_max
+    )
+    if concept_min > concept_max:
+        logger.warning(
+            "Invalid concept count range: min=%d > max=%d, swapping", concept_min, concept_max
+        )
+        concept_min, concept_max = concept_max, concept_min
     concept_count = random.randint(concept_min, concept_max)
 
     concept_results = services.world_quality.generate_concepts_with_quality(
@@ -789,165 +863,4 @@ def _generate_relationships(
         else:
             logger.warning(f"Skipping invalid relationship: {rel}")
 
-    return added_count
-
-
-MAX_RETRIES_PER_ORPHAN = 2  # Up to 3 total attempts per orphan (1 + 2 retries)
-
-
-def _recover_orphans(
-    svc: WorldService,
-    state: StoryState,
-    world_db: WorldDatabase,
-    services: ServiceContainer,
-    cancel_check: Callable[[], bool] | None = None,
-) -> int:
-    """Connect orphan entities by generating relationships (up to MAX_RETRIES_PER_ORPHAN+1 attempts each)."""
-    orphans = world_db.find_orphans()
-    if not orphans:
-        logger.debug("No orphan entities found, skipping recovery")
-        return 0
-
-    logger.info(
-        "Orphan recovery: found %d orphan entities: %s",
-        len(orphans),
-        [o.name for o in orphans],
-    )
-
-    all_entities = world_db.list_entities()
-    entity_by_id = {e.id: e.name for e in all_entities}
-
-    # Build existing relationships list
-    existing_rels: list[tuple[str, str, str]] = []
-    for r in world_db.list_relationships():
-        source_name = entity_by_id.get(r.source_id)
-        target_name = entity_by_id.get(r.target_id)
-        if source_name and target_name:
-            existing_rels.append((source_name, target_name, r.relation_type))
-
-    # Track orphan names still needing connections (mutable set for fast lookup)
-    orphan_names = {o.name.lower() for o in orphans}
-
-    added_count = 0
-
-    for orphan in orphans:
-        if cancel_check and cancel_check():
-            logger.info("Orphan recovery cancelled")
-            break
-
-        # Skip if this orphan was already connected by a previous orphan's relationship
-        if orphan.name.lower() not in orphan_names:
-            logger.debug(
-                "Orphan '%s' already connected by a previous relationship, skipping",
-                orphan.name,
-            )
-            continue
-
-        # Build entity list with orphan first (primacy bias) + all potential partners
-        partner_names = [e.name for e in all_entities if e.id != orphan.id]
-        if not partner_names:
-            logger.warning("Orphan recovery: only one entity '%s' available; skipping", orphan.name)
-            continue
-        constrained_names = [orphan.name, *partner_names]
-
-        for attempt in range(MAX_RETRIES_PER_ORPHAN + 1):
-            if cancel_check and cancel_check():
-                logger.info("Orphan recovery cancelled during retries for '%s'", orphan.name)
-                break
-
-            logger.debug(
-                "Orphan recovery: orphan '%s' attempt %d/%d",
-                orphan.name,
-                attempt + 1,
-                MAX_RETRIES_PER_ORPHAN + 1,
-            )
-
-            try:
-                rel, scores, _iterations = (
-                    services.world_quality.generate_relationship_with_quality(
-                        state,
-                        constrained_names,
-                        existing_rels,
-                        required_entity=orphan.name,
-                    )
-                )
-
-                if not rel or not rel.get("source") or not rel.get("target"):
-                    logger.warning(
-                        "Orphan recovery: empty relationship for '%s' (attempt %d)",
-                        orphan.name,
-                        attempt + 1,
-                    )
-                    continue
-
-                # Find entities and add to database
-                source_entity = _find_entity_by_name(all_entities, rel["source"])
-                target_entity = _find_entity_by_name(all_entities, rel["target"])
-
-                if source_entity and target_entity:
-                    # Safety check: verify at least one endpoint is an orphan
-                    # (should always pass due to required_entity constraint in quality loop)
-                    source_is_orphan = source_entity.name.lower() in orphan_names
-                    target_is_orphan = target_entity.name.lower() in orphan_names
-                    if not source_is_orphan and not target_is_orphan:
-                        logger.warning(
-                            "Orphan recovery: skipping relationship %s -> %s"
-                            " (neither is an orphan)",
-                            rel["source"],
-                            rel["target"],
-                        )
-                        continue
-
-                    relation_type = rel.get("relation_type")
-                    if not relation_type:
-                        logger.debug(
-                            "Orphan recovery: no relation_type in generated relationship,"
-                            " defaulting to 'related_to'"
-                        )
-                        relation_type = "related_to"
-                    world_db.add_relationship(
-                        source_id=source_entity.id,
-                        target_id=target_entity.id,
-                        relation_type=relation_type,
-                        description=rel.get("description", ""),
-                    )
-                    existing_rels.append((source_entity.name, target_entity.name, relation_type))
-                    added_count += 1
-                    logger.info(
-                        "Orphan recovery: added %s -> %s (%s), quality: %.1f",
-                        rel["source"],
-                        rel["target"],
-                        relation_type,
-                        scores.average,
-                    )
-
-                    # Remove connected orphan(s) from tracking set
-                    if source_is_orphan:
-                        orphan_names.discard(source_entity.name.lower())
-                    if target_is_orphan:
-                        orphan_names.discard(target_entity.name.lower())
-                    break  # Success — move to the next orphan
-                else:
-                    logger.warning(
-                        "Orphan recovery: could not resolve entities for %s -> %s",
-                        rel.get("source"),
-                        rel.get("target"),
-                    )
-
-            except GenerationCancelledError:
-                raise
-            except WorldGenerationError as e:
-                logger.warning(
-                    "Orphan recovery: attempt %d for '%s' failed: %s",
-                    attempt + 1,
-                    orphan.name,
-                    e,
-                )
-                continue
-
-    logger.info(
-        "Orphan recovery complete: generated %d relationships for %d orphan entities",
-        added_count,
-        len(orphans),
-    )
     return added_count

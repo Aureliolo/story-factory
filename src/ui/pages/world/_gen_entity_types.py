@@ -1,6 +1,6 @@
 """Entity-type-specific generation functions for the World page.
 
-Contains generators for factions, items, concepts, relationships,
+Contains generators for factions, items, concepts, events, relationships,
 and the generate_relationships_for_entities helper.
 """
 
@@ -375,6 +375,119 @@ async def _generate_concepts(
             notification.dismiss()
         ui.notify("Enable Quality Refinement to generate concepts", type="warning")
         return
+
+
+async def _generate_events(
+    page,
+    count,
+    use_quality,
+    all_existing_names,
+    should_cancel,
+    update_progress,
+    progress_label,
+    notification,
+) -> None:
+    """Generate events (quality only).
+
+    Args:
+        page: WorldPage instance.
+        count: Number to generate.
+        use_quality: Whether quality refinement is enabled.
+        all_existing_names: Existing entity names to avoid duplicates.
+        should_cancel: Cancel check callable.
+        update_progress: Progress update callback.
+        progress_label: Progress label widget.
+        notification: Notification widget.
+    """
+    from nicegui import run
+
+    if not use_quality:
+        if notification:
+            notification.dismiss()
+        ui.notify("Enable Quality Refinement to generate events", type="warning")
+        return
+
+    # Build entity context using shared helper
+    from src.services.world_service import build_event_entity_context
+
+    entity_context = build_event_entity_context(page.state.world_db)
+
+    # Get existing event descriptions for dedup
+    existing_events = page.state.world_db.list_events()
+    existing_descriptions = [e.description for e in existing_events]
+
+    logger.info("Calling world quality service to generate events...")
+    event_results = await run.io_bound(
+        page.services.world_quality.generate_events_with_quality,
+        page.state.project,
+        existing_descriptions,
+        entity_context,
+        count,
+        should_cancel,
+        update_progress,
+    )
+    logger.info("Generated %d events with quality refinement", len(event_results))
+
+    notify_partial_failure(len(event_results), count, "events", should_cancel)
+    if len(event_results) == 0:
+        if page._generation_dialog:
+            page._generation_dialog.close()
+        ui.notify("Failed to generate any events", type="negative")
+        return
+
+    if page._generation_dialog:
+        page._generation_dialog.close()
+
+    def add_selected_events(selected: list[tuple[Any, Any]]) -> None:
+        """Add selected events to the world database."""
+        if not selected:
+            ui.notify("No events selected", type="info")
+            return
+        if not page.state.world_db or not page.state.project:
+            ui.notify("No project loaded", type="negative")
+            return
+
+        from src.services.world_service import (
+            build_event_timestamp,
+            resolve_event_participants,
+        )
+
+        all_entities = page.state.world_db.list_entities()
+        added = 0
+        added_scores: list[Any] = []
+        for event, scores in selected:
+            description = event.get("description", "")
+            if not description:
+                logger.warning("Skipping event with empty description in add flow")
+                continue
+
+            timestamp_in_story = build_event_timestamp(event)
+            participants = resolve_event_participants(event, all_entities)
+            consequences = event.get("consequences", [])
+
+            page.state.world_db.add_event(
+                description=description,
+                participants=participants if participants else None,
+                timestamp_in_story=timestamp_in_story,
+                consequences=consequences if consequences else None,
+            )
+            added += 1
+            added_scores.append(scores)
+
+        page.state.world_db.invalidate_graph_cache()
+        page._refresh_entity_list()
+        if page._graph:
+            page._graph.refresh()
+        page.services.project.save_project(page.state.project)
+        avg_quality = (
+            sum(s.average for s in added_scores) / len(added_scores) if added_scores else 0
+        )
+        ui.notify(
+            f"Added {added} events (avg quality: {avg_quality:.1f})",
+            type="positive",
+        )
+
+    show_entity_preview_dialog(page, "event", event_results, add_selected_events)
 
 
 async def _generate_relationships(

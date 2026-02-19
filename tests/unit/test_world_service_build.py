@@ -1,5 +1,6 @@
 """Tests for WorldService.build_world and related methods."""
 
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -36,6 +37,7 @@ class TestWorldBuildOptions:
         assert options.generate_factions is True
         assert options.generate_items is True
         assert options.generate_concepts is True
+        assert options.generate_events is True
         assert options.generate_relationships is True
 
     def test_full_factory(self):
@@ -48,6 +50,7 @@ class TestWorldBuildOptions:
         assert options.generate_factions is True
         assert options.generate_items is True
         assert options.generate_concepts is True
+        assert options.generate_events is True
         assert options.generate_relationships is True
 
     def test_full_rebuild_factory(self):
@@ -60,6 +63,7 @@ class TestWorldBuildOptions:
         assert options.generate_factions is True
         assert options.generate_items is True
         assert options.generate_concepts is True
+        assert options.generate_events is True
         assert options.generate_relationships is True
 
     def test_custom_options(self):
@@ -72,6 +76,7 @@ class TestWorldBuildOptions:
             generate_factions=False,
             generate_items=True,
             generate_concepts=False,
+            generate_events=True,
             generate_relationships=True,
         )
         assert options.clear_existing is True
@@ -81,6 +86,7 @@ class TestWorldBuildOptions:
         assert options.generate_factions is False
         assert options.generate_items is True
         assert options.generate_concepts is False
+        assert options.generate_events is True
         assert options.generate_relationships is True
 
 
@@ -196,6 +202,7 @@ def mock_services():
     services.world_quality.generate_items_with_quality = MagicMock(return_value=[])
     services.world_quality.generate_concepts_with_quality = MagicMock(return_value=[])
     services.world_quality.generate_relationships_with_quality = MagicMock(return_value=[])
+    services.world_quality.generate_events_with_quality = MagicMock(return_value=[])
     # Calendar quality mock - returns a valid calendar dict and scores
     services.world_quality.generate_calendar_with_quality = MagicMock(
         return_value=(
@@ -238,8 +245,8 @@ class TestCalculateTotalSteps:
         # Base (3: character extraction + embedding + completion)
         # + calendar (1) + structure (1) + quality review (3: characters, plot, chapters)
         # + locations (1) + factions (1)
-        # + items (1) + concepts (1) + relationships (1) + orphan recovery (1) = 14
-        assert world_service._calculate_total_steps(options, generate_calendar=True) == 14
+        # + items (1) + concepts (1) + relationships (1) + orphan recovery (1) + events (1) = 15
+        assert world_service._calculate_total_steps(options, generate_calendar=True) == 15
 
     def test_full_rebuild_options(self, world_service):
         """Test step count for full rebuild options."""
@@ -247,8 +254,8 @@ class TestCalculateTotalSteps:
         # Base (3: character extraction + embedding + completion)
         # + clear (1) + calendar (1) + structure (1) + quality review (3: characters, plot, chapters)
         # + locations (1) + factions (1)
-        # + items (1) + concepts (1) + relationships (1) + orphan recovery (1) = 15
-        assert world_service._calculate_total_steps(options, generate_calendar=True) == 15
+        # + items (1) + concepts (1) + relationships (1) + orphan recovery (1) + events (1) = 16
+        assert world_service._calculate_total_steps(options, generate_calendar=True) == 16
 
     def test_custom_options(self, world_service):
         """Test step count for custom options."""
@@ -260,6 +267,7 @@ class TestCalculateTotalSteps:
             generate_factions=False,
             generate_items=False,
             generate_concepts=True,
+            generate_events=False,
             generate_relationships=False,
         )
         # Clear (1) + characters (1) + embedding (1) + locations (1) + concepts (1) + completion (1) = 6
@@ -312,6 +320,22 @@ class TestClearWorldDb:
         """Test handles empty database gracefully."""
         assert mock_world_db.count_entities() == 0
         world_service._clear_world_db(mock_world_db)
+        assert mock_world_db.count_entities() == 0
+
+    def test_clears_events_on_rebuild(self, world_service, mock_world_db):
+        """Test events are cleared when rebuilding world."""
+        id1 = mock_world_db.add_entity("character", "Hero", "Brave")
+        mock_world_db.add_event(
+            description="Battle of the Plains",
+            participants=[(id1, "actor")],
+            chapter_number=1,
+        )
+
+        assert len(mock_world_db.list_events()) == 1
+
+        world_service._clear_world_db(mock_world_db)
+
+        assert len(mock_world_db.list_events()) == 0
         assert mock_world_db.count_entities() == 0
 
 
@@ -820,6 +844,364 @@ class TestGenerateRelationships:
         assert call_kwargs.kwargs["cancel_check"] is my_cancel_check
 
 
+class TestGenerateEvents:
+    """Tests for _generate_events method."""
+
+    def test_generates_events(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test generates and adds events via quality service."""
+        # Add some entities first
+        mock_world_db.add_entity("character", "Hero", "The hero")
+        mock_world_db.add_entity("location", "Castle", "Grand castle")
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        mock_services.world_quality.generate_events_with_quality.return_value = [
+            (
+                {
+                    "description": "The Great Battle shook the realm",
+                    "year": 1200,
+                    "era_name": "Dark Age",
+                    "participants": [
+                        {"entity_name": "Hero", "role": "actor"},
+                        {"entity_name": "Castle", "role": "location"},
+                    ],
+                    "consequences": ["Peace was restored"],
+                },
+                mock_quality_scores,
+            ),
+        ]
+
+        count = world_service._generate_events(sample_story_state, mock_world_db, mock_services)
+
+        assert count == 1
+        events = mock_world_db.list_events()
+        assert len(events) == 1
+        assert "Great Battle" in events[0].description
+        mock_services.world_quality.generate_events_with_quality.assert_called_once()
+
+    def test_skips_empty_description(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test skips events with empty description."""
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 5.0
+
+        mock_services.world_quality.generate_events_with_quality.return_value = [
+            (
+                {"description": "", "year": None, "participants": []},
+                mock_quality_scores,
+            ),
+        ]
+
+        count = world_service._generate_events(sample_story_state, mock_world_db, mock_services)
+
+        assert count == 0
+
+    def test_resolves_participant_names(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test participant entity names are resolved to entity IDs."""
+        mock_world_db.add_entity("character", "Hero", "The hero")
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        mock_services.world_quality.generate_events_with_quality.return_value = [
+            (
+                {
+                    "description": "Hero's triumph",
+                    "year": 1200,
+                    "participants": [{"entity_name": "Hero", "role": "actor"}],
+                    "consequences": [],
+                },
+                mock_quality_scores,
+            ),
+        ]
+
+        count = world_service._generate_events(sample_story_state, mock_world_db, mock_services)
+
+        assert count == 1
+        events = mock_world_db.list_events()
+        assert len(events) == 1
+
+        # Verify participant linkage was persisted
+        event_participants = mock_world_db.get_event_participants(events[0].id)
+        assert len(event_participants) == 1
+        hero_entity = mock_world_db.search_entities("Hero")[0]
+        assert event_participants[0].entity_id == hero_entity.id
+        assert event_participants[0].role == "actor"
+
+    def test_builds_timestamp_from_temporal_fields(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test timestamp_in_story is built from year, month, and era_name."""
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        mock_services.world_quality.generate_events_with_quality.return_value = [
+            (
+                {
+                    "description": "A pivotal event",
+                    "year": 1847,
+                    "month": 10,
+                    "era_name": "Victorian Era",
+                    "participants": [],
+                    "consequences": [],
+                },
+                mock_quality_scores,
+            ),
+        ]
+
+        count = world_service._generate_events(sample_story_state, mock_world_db, mock_services)
+
+        assert count == 1
+        events = mock_world_db.list_events()
+        assert len(events) == 1
+        # Timestamp should contain year, month, and era
+        assert "1847" in events[0].timestamp_in_story
+        assert "10" in events[0].timestamp_in_story
+        assert "Victorian Era" in events[0].timestamp_in_story
+
+    def test_passes_cancel_check(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test cancel_check is passed to generate_events_with_quality."""
+        mock_services.world_quality.generate_events_with_quality.return_value = []
+
+        def my_cancel():
+            """Stub cancel check."""
+            return False
+
+        world_service._generate_events(
+            sample_story_state, mock_world_db, mock_services, cancel_check=my_cancel
+        )
+
+        call_kwargs = mock_services.world_quality.generate_events_with_quality.call_args
+        assert call_kwargs.kwargs["cancel_check"] is my_cancel
+
+    def test_includes_temporal_attributes_in_context(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test entity temporal attributes (birth_year, death_year etc) appear in context."""
+        eid = mock_world_db.add_entity(
+            "character",
+            "Hero",
+            "The hero",
+            attributes={"lifecycle": {"birth": {"year": 1200}, "death": {"year": 1260}}},
+        )
+        assert eid  # entity added
+
+        mock_services.world_quality.generate_events_with_quality.return_value = []
+
+        world_service._generate_events(sample_story_state, mock_world_db, mock_services)
+
+        call_args = mock_services.world_quality.generate_events_with_quality.call_args
+        entity_context = (
+            call_args.args[2]
+            if len(call_args.args) > 2
+            else call_args.kwargs.get("entity_context", "")
+        )
+        assert "birth_year=1200" in entity_context
+        assert "death_year=1260" in entity_context
+
+    def test_cancel_check_mid_processing(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test cancel check stops event processing mid-iteration."""
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        mock_services.world_quality.generate_events_with_quality.return_value = [
+            (
+                {"description": "Event 1", "year": 100, "participants": [], "consequences": []},
+                mock_quality_scores,
+            ),
+            (
+                {"description": "Event 2", "year": 200, "participants": [], "consequences": []},
+                mock_quality_scores,
+            ),
+        ]
+
+        cancel_called = [False]
+
+        def cancel_after_first():
+            """Cancel after first event is processed."""
+            if cancel_called[0]:
+                return True
+            cancel_called[0] = True
+            return False
+
+        count = world_service._generate_events(
+            sample_story_state, mock_world_db, mock_services, cancel_check=cancel_after_first
+        )
+
+        assert count == 1
+        assert len(mock_world_db.list_events()) == 1
+
+    def test_handles_non_dict_participants(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test non-dict participant entries are handled as plain strings."""
+        mock_world_db.add_entity("character", "Hero", "The hero")
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        mock_services.world_quality.generate_events_with_quality.return_value = [
+            (
+                {
+                    "description": "A battle",
+                    "year": 1200,
+                    "participants": ["Hero"],  # plain string, not dict
+                    "consequences": [],
+                },
+                mock_quality_scores,
+            ),
+        ]
+
+        count = world_service._generate_events(sample_story_state, mock_world_db, mock_services)
+
+        assert count == 1
+        events = mock_world_db.list_events()
+        assert len(events) == 1
+
+    def test_logs_unresolved_participant_names(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test unresolved participant names are logged at debug level."""
+        import logging
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        mock_services.world_quality.generate_events_with_quality.return_value = [
+            (
+                {
+                    "description": "Mystery event",
+                    "year": 1200,
+                    "participants": [{"entity_name": "NonExistentEntity", "role": "actor"}],
+                    "consequences": [],
+                },
+                mock_quality_scores,
+            ),
+        ]
+
+        with caplog.at_level(logging.DEBUG):
+            count = world_service._generate_events(sample_story_state, mock_world_db, mock_services)
+
+        assert count == 1
+        assert "Could not resolve event participant" in caplog.text
+        assert "NonExistentEntity" in caplog.text
+
+    def test_event_min_max_swap(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test that _generate_events swaps min/max when min > max."""
+        sample_story_state.target_events_min = 10
+        sample_story_state.target_events_max = 3
+
+        mock_services.world_quality.generate_events_with_quality.return_value = []
+
+        with caplog.at_level(logging.WARNING):
+            world_service._generate_events(sample_story_state, mock_world_db, mock_services)
+
+        assert "Invalid event count range: min=10 > max=3, swapping" in caplog.text
+        # After swap, min=3 max=10, so event_count is in [3, 10]
+        call_args = mock_services.world_quality.generate_events_with_quality.call_args
+        event_count = (
+            call_args.args[3] if len(call_args.args) > 3 else call_args.kwargs.get("event_count")
+        )
+        assert 3 <= event_count <= 10
+
+    def test_event_add_db_error_nonfatal(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test that a database error in add_event is caught and skipped."""
+        import sqlite3
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        mock_services.world_quality.generate_events_with_quality.return_value = [
+            (
+                {"description": "Exploding event", "year": 100, "participants": []},
+                mock_quality_scores,
+            ),
+        ]
+
+        # Patch add_event to raise a database error
+        original_add_event = mock_world_db.add_event
+        mock_world_db.add_event = MagicMock(side_effect=sqlite3.OperationalError("disk I/O error"))
+
+        with caplog.at_level(logging.ERROR):
+            count = world_service._generate_events(sample_story_state, mock_world_db, mock_services)
+
+        assert count == 0
+        assert "Failed to add event to database (non-fatal)" in caplog.text
+
+        # Restore
+        mock_world_db.add_event = original_add_event
+
+
+class TestMinMaxSwapEntityTypes:
+    """Tests for min/max swap validation on locations, factions, items, concepts."""
+
+    def test_location_min_max_swap(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test that _generate_locations swaps min/max when min > max."""
+        sample_story_state.target_locations_min = 8
+        sample_story_state.target_locations_max = 2
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+
+        with caplog.at_level(logging.WARNING):
+            world_service._generate_locations(sample_story_state, mock_world_db, mock_services)
+
+        assert "Invalid location count range: min=8 > max=2, swapping" in caplog.text
+
+    def test_faction_min_max_swap(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test that _generate_factions swaps min/max when min > max."""
+        sample_story_state.target_factions_min = 6
+        sample_story_state.target_factions_max = 1
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+
+        with caplog.at_level(logging.WARNING):
+            world_service._generate_factions(sample_story_state, mock_world_db, mock_services)
+
+        assert "Invalid faction count range: min=6 > max=1, swapping" in caplog.text
+
+    def test_item_min_max_swap(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test that _generate_items swaps min/max when min > max."""
+        sample_story_state.target_items_min = 7
+        sample_story_state.target_items_max = 2
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+
+        with caplog.at_level(logging.WARNING):
+            world_service._generate_items(sample_story_state, mock_world_db, mock_services)
+
+        assert "Invalid item count range: min=7 > max=2, swapping" in caplog.text
+
+    def test_concept_min_max_swap(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test that _generate_concepts swaps min/max when min > max."""
+        sample_story_state.target_concepts_min = 5
+        sample_story_state.target_concepts_max = 1
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+
+        with caplog.at_level(logging.WARNING):
+            world_service._generate_concepts(sample_story_state, mock_world_db, mock_services)
+
+        assert "Invalid concept count range: min=5 > max=1, swapping" in caplog.text
+
+
 def _mock_orphan_recovery_failure(mock_services):
     """Mock the singular generate_relationship_with_quality to fail gracefully.
 
@@ -1204,6 +1586,88 @@ class TestBuildWorld:
         assert calls[0][0][0]["current_era_name"] == "Test Era"
         # Second call: clear context at end of build
         assert calls[1][0][0] is None
+
+    def test_build_world_includes_events_count(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test build_world return dict includes events count."""
+        _mock_orphan_recovery_failure(mock_services)
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        mock_services.world_quality.generate_events_with_quality.return_value = [
+            (
+                {
+                    "description": "A significant event",
+                    "year": 100,
+                    "participants": [],
+                    "consequences": [],
+                },
+                mock_quality_scores,
+            ),
+        ]
+
+        counts = world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            WorldBuildOptions.full(),
+        )
+
+        assert "events" in counts
+        assert counts["events"] >= 1
+
+    def test_build_world_skips_events_when_disabled(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test that event generation is skipped when generate_events=False."""
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
+        _mock_orphan_recovery_failure(mock_services)
+
+        options = WorldBuildOptions(generate_events=False)
+        counts = world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            options,
+        )
+
+        mock_services.world_quality.generate_events_with_quality.assert_not_called()
+        assert counts["events"] == 0
+
+
+class TestBuildWorldEventNonFatal:
+    """Tests for event generation non-fatal behavior during world build."""
+
+    def test_build_world_event_failure_nonfatal(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test that event generation failure does NOT abort the build."""
+        mock_services.world_quality.generate_events_with_quality.side_effect = WorldGenerationError(
+            "Event LLM failed"
+        )
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
+        _mock_orphan_recovery_failure(mock_services)
+
+        # Build should succeed despite event generation failure
+        counts = world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            WorldBuildOptions.full(),
+        )
+
+        # Event count should remain 0 since it failed
+        assert counts["events"] == 0
 
 
 class TestBuildWorldEmbedding:
@@ -2022,7 +2486,7 @@ class TestRecoverOrphans:
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
         """Test returns 0 when there are no orphan entities."""
-        from src.services.world_service._build import _recover_orphans
+        from src.services.world_service._orphan_recovery import _recover_orphans
 
         # Add 2 entities with a relationship between them
         id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
@@ -2037,7 +2501,7 @@ class TestRecoverOrphans:
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
         """Test generates a relationship for an orphan entity with required_entity."""
-        from src.services.world_service._build import _recover_orphans
+        from src.services.world_service._orphan_recovery import _recover_orphans
 
         # Add 3 entities; only first two are connected, third is orphan
         id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
@@ -2079,7 +2543,10 @@ class TestRecoverOrphans:
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
         """Test returns 0 when relationship generation always raises an error."""
-        from src.services.world_service._build import MAX_RETRIES_PER_ORPHAN, _recover_orphans
+        from src.services.world_service._orphan_recovery import (
+            MAX_RETRIES_PER_ORPHAN,
+            _recover_orphans,
+        )
 
         # Add 2 entities with no relationships (both are orphans)
         mock_world_db.add_entity("character", "Alice", "A brave adventurer")
@@ -2106,7 +2573,7 @@ class TestRecoverOrphans:
         """Test cancel_check breaks the recovery loop."""
         import logging
 
-        from src.services.world_service._build import _recover_orphans
+        from src.services.world_service._orphan_recovery import _recover_orphans
 
         # Add 3 orphan entities (no relationships) so we have multiple orphans
         mock_world_db.add_entity("character", "Alice", "A brave adventurer")
@@ -2168,7 +2635,10 @@ class TestRecoverOrphans:
         """Test empty relationship triggers retry within per-orphan budget."""
         import logging
 
-        from src.services.world_service._build import MAX_RETRIES_PER_ORPHAN, _recover_orphans
+        from src.services.world_service._orphan_recovery import (
+            MAX_RETRIES_PER_ORPHAN,
+            _recover_orphans,
+        )
 
         # Add 1 orphan entity connected to nobody
         id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
@@ -2203,7 +2673,10 @@ class TestRecoverOrphans:
         """Test unresolvable entity names in generated relationship logs warning and retries."""
         import logging
 
-        from src.services.world_service._build import MAX_RETRIES_PER_ORPHAN, _recover_orphans
+        from src.services.world_service._orphan_recovery import (
+            MAX_RETRIES_PER_ORPHAN,
+            _recover_orphans,
+        )
 
         # Add 2 connected + 1 orphan entity
         id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
@@ -2247,7 +2720,10 @@ class TestRecoverOrphans:
         """Test skips relationships where neither endpoint is an orphan and retries."""
         import logging
 
-        from src.services.world_service._build import MAX_RETRIES_PER_ORPHAN, _recover_orphans
+        from src.services.world_service._orphan_recovery import (
+            MAX_RETRIES_PER_ORPHAN,
+            _recover_orphans,
+        )
 
         # Add 3 entities: Alice and Bob are connected, Charlie is the orphan
         id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
@@ -2291,7 +2767,7 @@ class TestRecoverOrphans:
         """Test missing relation_type defaults to 'related_to' with debug log."""
         import logging
 
-        from src.services.world_service._build import _recover_orphans
+        from src.services.world_service._orphan_recovery import _recover_orphans
 
         # Add 2 orphan entities
         mock_world_db.add_entity("character", "Alice", "A brave adventurer")
@@ -2325,7 +2801,7 @@ class TestRecoverOrphans:
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
         """Verify the constrained entity list puts the target orphan first."""
-        from src.services.world_service._build import _recover_orphans
+        from src.services.world_service._orphan_recovery import _recover_orphans
 
         # Add 3 entities: Alice and Bob are connected, Charlie is the orphan
         id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
@@ -2374,7 +2850,7 @@ class TestRecoverOrphans:
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
         """Each orphan is targeted individually in the per-orphan loop."""
-        from src.services.world_service._build import _recover_orphans
+        from src.services.world_service._orphan_recovery import _recover_orphans
 
         # Add 4 entities: only Alice and Bob are connected; Charlie and Diana are orphans
         id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
@@ -2424,7 +2900,7 @@ class TestRecoverOrphans:
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
         """Orphan recovery exits early when all orphans are connected before attempts run out."""
-        from src.services.world_service._build import _recover_orphans
+        from src.services.world_service._orphan_recovery import _recover_orphans
 
         # Two orphans: Charlie and Diana
         id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
@@ -2466,7 +2942,10 @@ class TestRecoverOrphans:
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
         """Verify each orphan gets its own retry budget."""
-        from src.services.world_service._build import MAX_RETRIES_PER_ORPHAN, _recover_orphans
+        from src.services.world_service._orphan_recovery import (
+            MAX_RETRIES_PER_ORPHAN,
+            _recover_orphans,
+        )
 
         # Add 3 entities: Alice and Bob connected, Charlie is orphan
         id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
@@ -2509,7 +2988,7 @@ class TestRecoverOrphans:
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
         """If orphan B is connected via orphan A's relationship, B is skipped."""
-        from src.services.world_service._build import _recover_orphans
+        from src.services.world_service._orphan_recovery import _recover_orphans
 
         # Alice and Bob are orphans; Charlie and Diana are connected
         mock_world_db.add_entity("character", "Alice", "Orphan A")
@@ -2553,7 +3032,7 @@ class TestRecoverOrphans:
         """Cancel check fires mid-retry for a single orphan."""
         import logging
 
-        from src.services.world_service._build import _recover_orphans
+        from src.services.world_service._orphan_recovery import _recover_orphans
 
         # Add 1 orphan
         id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
@@ -2594,7 +3073,7 @@ class TestRecoverOrphans:
         """Orphan recovery skips when only one entity exists (no partners)."""
         import logging
 
-        from src.services.world_service._build import _recover_orphans
+        from src.services.world_service._orphan_recovery import _recover_orphans
 
         # Add a single entity — it's an orphan but has no partners
         mock_world_db.add_entity("character", "Alice", "The only entity")
@@ -2613,7 +3092,7 @@ class TestRecoverOrphans:
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
         """GenerationCancelledError is not swallowed by the except block."""
-        from src.services.world_service._build import _recover_orphans
+        from src.services.world_service._orphan_recovery import _recover_orphans
         from src.utils.exceptions import GenerationCancelledError
 
         # Add 2 entities with no relationships (both are orphans)
@@ -2632,7 +3111,7 @@ class TestRecoverOrphans:
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
         """existing_rels should contain canonical DB names, not raw LLM names."""
-        from src.services.world_service._build import _recover_orphans
+        from src.services.world_service._orphan_recovery import _recover_orphans
 
         # Add 3 entities: Alice and Bob connected, Charlie and Diana are orphans
         id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")

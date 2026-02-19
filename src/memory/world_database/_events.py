@@ -167,13 +167,69 @@ def list_events(db, limit: int | None = None) -> list[WorldEvent]:
         return [row_to_event(row) for row in cursor.fetchall()]
 
 
+def clear_events(db) -> int:
+    """Delete all events and their participants, triggering embedding cleanup callbacks.
+
+    Args:
+        db: WorldDatabase instance.
+
+    Returns:
+        Number of events deleted.
+    """
+    with db._lock:
+        db._ensure_open()
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT id FROM events")
+        event_ids = [row["id"] for row in cursor.fetchall()]
+
+        if not event_ids:
+            logger.debug("clear_events: no events to delete")
+            return 0
+
+        cursor.execute("DELETE FROM event_participants")
+        cursor.execute("DELETE FROM events")
+        db.conn.commit()
+
+    # Notify embedding service of each deletion (outside lock)
+    if db._on_content_deleted:
+        for event_id in event_ids:
+            try:
+                db._on_content_deleted(event_id)
+            except Exception as e:
+                logger.warning("Embedding delete callback failed for event %s: %s", event_id, e)
+
+    logger.info("Cleared %d events and their participants", len(event_ids))
+    return len(event_ids)
+
+
 def row_to_event(row) -> WorldEvent:
     """Convert a database row to a WorldEvent."""
+    event_id = row["id"]
+    try:
+        consequences = json.loads(row["consequences"])
+    except (json.JSONDecodeError, TypeError) as e:
+        logger.error(
+            "Corrupt consequences JSON for event %s: %s. Defaulting to empty list.",
+            event_id,
+            e,
+        )
+        consequences = []
+
+    try:
+        created_at = datetime.fromisoformat(row["created_at"])
+    except (ValueError, TypeError) as e:
+        logger.error(
+            "Invalid created_at timestamp for event %s: %s. Using datetime.min as sentinel.",
+            event_id,
+            e,
+        )
+        created_at = datetime.min
+
     return WorldEvent(
-        id=row["id"],
+        id=event_id,
         description=row["description"],
         chapter_number=row["chapter_number"],
         timestamp_in_story=row["timestamp_in_story"],
-        consequences=json.loads(row["consequences"]),
-        created_at=datetime.fromisoformat(row["created_at"]),
+        consequences=consequences,
+        created_at=created_at,
     )

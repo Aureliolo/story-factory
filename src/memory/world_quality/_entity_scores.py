@@ -1,12 +1,16 @@
 """Entity-specific quality score models.
 
 These models define the quality scoring dimensions for world-building entities:
-characters, locations, factions, items, and concepts.
+characters, locations, factions, items, concepts, events, and calendars.
 """
+
+import logging
 
 from pydantic import Field
 
 from src.memory.world_quality._models import BaseQualityScores
+
+logger = logging.getLogger(__name__)
 
 
 class CharacterQualityScores(BaseQualityScores):
@@ -400,6 +404,78 @@ class ConceptQualityScores(BaseQualityScores):
             weak.append("resonance")
         if self.temporal_plausibility < threshold:
             weak.append("temporal_plausibility")
+        return weak
+
+
+class EventQualityScores(BaseQualityScores):
+    """Quality scores for a world event (0-10 scale).
+
+    All score fields are required - no defaults.
+    """
+
+    significance: float = Field(ge=0.0, le=10.0, description="How world-shaping is this event")
+    temporal_plausibility: float = Field(ge=0.0, le=10.0, description="Calendar timeline fit")
+    causal_coherence: float = Field(ge=0.0, le=10.0, description="Logical causes and consequences")
+    narrative_potential: float = Field(ge=0.0, le=10.0, description="Story opportunity creation")
+    entity_integration: float = Field(ge=0.0, le=10.0, description="Participant roles make sense")
+
+    @property
+    def average(self) -> float:
+        """Compute the mean of the event's five quality dimensions.
+
+        Returns:
+            average (float): Mean of significance, temporal_plausibility,
+                causal_coherence, narrative_potential, and entity_integration.
+        """
+        avg = (
+            self.significance
+            + self.temporal_plausibility
+            + self.causal_coherence
+            + self.narrative_potential
+            + self.entity_integration
+        ) / 5.0
+        return avg
+
+    def to_dict(self) -> dict[str, float | str]:
+        """Serialize the event quality scores into a dictionary for storage.
+
+        Returns:
+            dict[str, float | str]: Dictionary with keys 'significance',
+                'temporal_plausibility', 'causal_coherence', 'narrative_potential',
+                'entity_integration', 'average', and 'feedback'.
+        """
+        payload: dict[str, float | str] = {
+            "significance": self.significance,
+            "temporal_plausibility": self.temporal_plausibility,
+            "causal_coherence": self.causal_coherence,
+            "narrative_potential": self.narrative_potential,
+            "entity_integration": self.entity_integration,
+            "average": self.average,
+            "feedback": self.feedback,
+        }
+        return payload
+
+    def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
+        """Identify event quality dimensions whose scores are below the given threshold.
+
+        Parameters:
+            threshold (float): Cutoff value; dimensions below this are considered weak.
+                Defaults to 7.0.
+
+        Returns:
+            list[str]: Names of dimensions with scores below `threshold`.
+        """
+        weak = []
+        if self.significance < threshold:
+            weak.append("significance")
+        if self.temporal_plausibility < threshold:
+            weak.append("temporal_plausibility")
+        if self.causal_coherence < threshold:
+            weak.append("causal_coherence")
+        if self.narrative_potential < threshold:
+            weak.append("narrative_potential")
+        if self.entity_integration < threshold:
+            weak.append("entity_integration")
         return weak
 
 

@@ -28,6 +28,7 @@ def settings():
             "faction": 7.0,
             "item": 7.0,
             "concept": 7.0,
+            "event": 7.0,
             "relationship": 7.0,
             "plot": 7.0,
             "chapter": 7.0,
@@ -468,6 +469,7 @@ class TestCacheEfficiency:
             "faction",  # architect
             "faction",  # architect (cached)
             "concept",  # architect (cached)
+            "event",  # architect (cached)
             "relationship",  # editor
         ]
 
@@ -475,7 +477,7 @@ class TestCacheEfficiency:
             service._get_creator_model(entity_type)
 
         # Should resolve: writer, architect, editor (3 unique roles)
-        # Not: 7 calls for 7 entity types
+        # Not: 8 calls for 8 entity types
         assert mock_mode_service.get_model_for_agent.call_count == 3
 
 

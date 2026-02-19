@@ -16,6 +16,7 @@ from pydantic import ValidationError
 from src.memory.world_quality import (
     CharacterQualityScores,
     ConceptQualityScores,
+    EventQualityScores,
     FactionQualityScores,
     ItemQualityScores,
     JudgeConsistencyConfig,
@@ -47,6 +48,7 @@ def settings():
             "faction": 7.0,
             "item": 7.0,
             "concept": 7.0,
+            "event": 7.0,
             "relationship": 7.0,
             "plot": 7.0,
             "chapter": 7.0,
@@ -663,7 +665,7 @@ class TestAggregateScores:
         assert result.feedback == ""
 
     def test_all_score_model_types(self):
-        """Aggregation works for all 6 score model types."""
+        """Aggregation works for all 7 score model types."""
         # Verify it works with each score model type by checking field discovery
         model_classes = [
             (
@@ -719,6 +721,17 @@ class TestAggregateScores:
                     "manifestation": 7.0,
                     "resonance": 7.0,
                     "temporal_plausibility": 7.0,
+                    "feedback": "OK",
+                },
+            ),
+            (
+                EventQualityScores,
+                {
+                    "significance": 7.0,
+                    "temporal_plausibility": 7.0,
+                    "causal_coherence": 7.0,
+                    "narrative_potential": 7.0,
+                    "entity_integration": 7.0,
                     "feedback": "OK",
                 },
             ),
@@ -1141,6 +1154,12 @@ class TestJudgeCallLogLevel:
                 lambda ss: ({"name": "Honor", "description": "A theme"}, ss, 0.1),
             ),
             (
+                "event",
+                "_judge_event_quality",
+                "src.services.world_quality_service._event.generate_structured",
+                lambda ss: ({"description": "A great battle"}, ss, 0.1),
+            ),
+            (
                 "relationship",
                 "_judge_relationship_quality",
                 "src.services.world_quality_service._relationship.generate_structured",
@@ -1156,7 +1175,7 @@ class TestJudgeCallLogLevel:
                 ),
             ),
         ],
-        ids=["location", "faction", "item", "concept", "relationship"],
+        ids=["location", "faction", "item", "concept", "event", "relationship"],
     )
     def test_single_call_exception_logging_all_entities(
         self,

@@ -18,6 +18,7 @@ from src.memory.entities import Entity, EntityVersion, EventParticipant, Relatio
 from src.utils.exceptions import DatabaseClosedError, RelationshipValidationError
 
 from . import (
+    _attributes,
     _cycles,
     _embeddings,
     _entities,
@@ -40,100 +41,12 @@ VALID_ENTITY_TYPES = frozenset({"character", "location", "item", "faction", "con
 # Allowed fields for entity updates (SQL injection prevention)
 ENTITY_UPDATE_FIELDS = frozenset({"name", "description", "attributes", "type", "updated_at"})
 
-# Attributes constraints
-MAX_ATTRIBUTES_DEPTH = 3
-MAX_ATTRIBUTES_SIZE_BYTES = 10 * 1024  # 10KB
-
-
-def flatten_deep_attributes(
-    obj: Any, max_depth: int = MAX_ATTRIBUTES_DEPTH, current_depth: int = 0
-) -> Any:
-    """Flatten attributes that exceed max nesting depth.
-
-    Converts deeply nested structures to JSON string representations at the max depth
-    to preserve data while meeting storage constraints.
-
-    Args:
-        obj: Object to potentially flatten.
-        max_depth: Maximum nesting depth allowed.
-        current_depth: Current depth in the recursion.
-
-    Returns:
-        Flattened object with nested structures converted to strings at max depth.
-    """
-    if current_depth >= max_depth:
-        # At max depth, convert complex types to string representation
-        if isinstance(obj, (str, int, float, bool, type(None))):
-            return obj
-        # Use deterministic JSON representation for nested structures
-        logger.debug(f"Flattening nested {type(obj).__name__} at depth {current_depth}")
-        try:
-            return json.dumps(obj, ensure_ascii=False, sort_keys=True)
-        except (TypeError, ValueError) as exc:
-            logger.warning(
-                "Failed to JSON-serialize %s at max depth; falling back to str(): %s",
-                type(obj).__name__,
-                exc,
-            )
-            return str(obj)
-
-    if isinstance(obj, dict):
-        return {k: flatten_deep_attributes(v, max_depth, current_depth + 1) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [flatten_deep_attributes(item, max_depth, current_depth + 1) for item in obj]
-    return obj
-
-
-def check_nesting_depth(obj: Any, max_depth: int, current_depth: int = 0) -> bool:
-    """Check if object exceeds maximum nesting depth.
-
-    Args:
-        obj: Object to check.
-        max_depth: Maximum allowed nesting depth.
-        current_depth: Current depth in the recursion.
-
-    Returns:
-        True if object exceeds max depth, False otherwise.
-    """
-    if current_depth > max_depth:
-        return True
-    if isinstance(obj, dict):
-        return any(check_nesting_depth(v, max_depth, current_depth + 1) for v in obj.values())
-    elif isinstance(obj, list):
-        return any(check_nesting_depth(item, max_depth, current_depth + 1) for item in obj)
-    return False
-
-
-def validate_and_normalize_attributes(
-    attrs: dict[str, Any], max_depth: int = MAX_ATTRIBUTES_DEPTH
-) -> dict[str, Any]:
-    """Validate and normalize attributes dict.
-
-    Flattens deeply nested structures and validates size constraints.
-
-    Args:
-        attrs: Attributes dictionary to validate.
-        max_depth: Maximum nesting depth allowed.
-
-    Returns:
-        Normalized attributes dict with deep nesting flattened.
-
-    Raises:
-        ValueError: If attributes exceed size limit.
-    """
-    # Check if flattening is needed and flatten
-    if check_nesting_depth(attrs, max_depth, current_depth=1):
-        logger.warning(
-            f"Attributes exceed maximum nesting depth of {max_depth}, flattening deep structures"
-        )
-        attrs = flatten_deep_attributes(attrs, max_depth, current_depth=1)
-
-    # Check size (after flattening)
-    attrs_json = json.dumps(attrs)
-    if len(attrs_json.encode("utf-8")) > MAX_ATTRIBUTES_SIZE_BYTES:
-        raise ValueError(f"Attributes exceed maximum size of {MAX_ATTRIBUTES_SIZE_BYTES // 1024}KB")
-
-    return attrs
+# Re-export attribute utilities from _attributes module
+MAX_ATTRIBUTES_DEPTH = _attributes.MAX_ATTRIBUTES_DEPTH
+MAX_ATTRIBUTES_SIZE_BYTES = _attributes.MAX_ATTRIBUTES_SIZE_BYTES
+flatten_deep_attributes = _attributes.flatten_deep_attributes
+check_nesting_depth = _attributes.check_nesting_depth
+validate_and_normalize_attributes = _attributes.validate_and_normalize_attributes
 
 
 class WorldDatabase:
@@ -559,6 +472,14 @@ class WorldDatabase:
             List of WorldEvent instances.
         """
         return _events.list_events(self, limit)
+
+    def clear_events(self) -> int:
+        """Delete all events and their participants, triggering embedding cleanup.
+
+        Returns:
+            Number of events deleted.
+        """
+        return _events.clear_events(self)
 
     # =========================================================================
     # NetworkX Graph Operations (delegated to _graph)

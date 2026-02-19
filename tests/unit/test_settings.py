@@ -2035,7 +2035,7 @@ class TestMissingValidationCoverage:
         assert settings.world_quality_thresholds["character"] == 7.5
         assert settings.world_quality_thresholds["item"] == 8.0  # Items have higher default
         assert settings.world_quality_thresholds["calendar"] == 7.5
-        assert len(settings.world_quality_thresholds) == 9
+        assert len(settings.world_quality_thresholds) == 10
 
     def test_validate_raises_on_per_entity_threshold_out_of_range(self):
         """Should raise ValueError for per-entity threshold out of 0-10 range."""
@@ -2046,6 +2046,7 @@ class TestMissingValidationCoverage:
             "faction": 7.5,
             "item": 7.5,
             "concept": 7.5,
+            "event": 7.5,
             "calendar": 7.5,
             "relationship": 7.5,
             "plot": 7.5,
@@ -2065,6 +2066,7 @@ class TestMissingValidationCoverage:
             "faction": 7.5,
             "item": -1.0,
             "concept": 7.5,
+            "event": 7.5,
             "calendar": 7.5,
             "relationship": 7.5,
             "plot": 7.5,
@@ -2083,6 +2085,7 @@ class TestMissingValidationCoverage:
             "faction": 7.5,
             "item": 8.0,
             "concept": 7.5,
+            "event": 7.5,
             "calendar": 7.5,
             "relationship": 7.5,
             "plot": 7.5,
@@ -2129,6 +2132,28 @@ class TestMissingValidationCoverage:
         settings = Settings()
         settings.world_gen_locations_max = 0  # Below 1
         with pytest.raises(ValueError, match="world_gen_locations_max must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_world_gen_events_min(self):
+        """Should raise ValueError for world_gen_events_min out of range."""
+        settings = Settings()
+        settings.world_gen_events_min = 25  # Above 20
+        with pytest.raises(ValueError, match="world_gen_events_min must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_world_gen_events_max(self):
+        """Should raise ValueError for world_gen_events_max out of range."""
+        settings = Settings()
+        settings.world_gen_events_max = 60  # Above 50
+        with pytest.raises(ValueError, match="world_gen_events_max must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_world_gen_events_min_exceeds_max(self):
+        """Should raise ValueError when world_gen_events_min exceeds max."""
+        settings = Settings()
+        settings.world_gen_events_min = 10
+        settings.world_gen_events_max = 5
+        with pytest.raises(ValueError, match=r"world_gen_events_min.*cannot exceed"):
             settings.validate()
 
     # --- Entity extraction limits validation (line 607) ---

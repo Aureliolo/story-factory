@@ -13,7 +13,16 @@ from src.memory.templates import WorldTemplate
 from src.memory.world_database import WorldDatabase
 from src.settings import Settings
 
-from . import _build, _entities, _extraction, _graph, _health
+from . import _build, _entities, _event_helpers, _extraction, _graph, _health
+from ._event_helpers import (
+    build_event_entity_context as build_event_entity_context,
+)
+from ._event_helpers import (
+    build_event_timestamp as build_event_timestamp,
+)
+from ._event_helpers import (
+    resolve_event_participants as resolve_event_participants,
+)
 
 if TYPE_CHECKING:
     from src.memory.world_health import WorldHealthMetrics
@@ -47,6 +56,7 @@ class WorldBuildOptions:
         generate_factions: Whether to generate faction entities.
         generate_items: Whether to generate item entities.
         generate_concepts: Whether to generate concept entities.
+        generate_events: Whether to generate world events.
         generate_relationships: Whether to generate relationships between entities.
         cancellation_event: Optional threading.Event to signal cancellation.
         world_template: Optional world template for genre-specific hints.
@@ -59,6 +69,7 @@ class WorldBuildOptions:
     generate_factions: bool = True
     generate_items: bool = True
     generate_concepts: bool = True
+    generate_events: bool = True
     generate_relationships: bool = True
     cancellation_event: threading.Event | None = field(default=None, repr=False)
     world_template: WorldTemplate | None = field(default=None, repr=False)
@@ -82,6 +93,7 @@ class WorldBuildOptions:
             generate_factions=True,
             generate_items=True,
             generate_concepts=True,
+            generate_events=True,
             generate_relationships=True,
             cancellation_event=cancellation_event,
             world_template=world_template,
@@ -102,6 +114,7 @@ class WorldBuildOptions:
             generate_factions=True,
             generate_items=True,
             generate_concepts=True,
+            generate_events=True,
             generate_relationships=True,
             cancellation_event=cancellation_event,
             world_template=world_template,
@@ -601,6 +614,22 @@ class WorldService:
     ) -> int:
         """Generate and add relationships between entities."""
         return _build._generate_relationships(
+            self,
+            state,
+            world_db,
+            services,
+            cancel_check=cancel_check,
+        )
+
+    def _generate_events(
+        self,
+        state: StoryState,
+        world_db: WorldDatabase,
+        services: ServiceContainer,
+        cancel_check: Callable[[], bool] | None = None,
+    ) -> int:
+        """Generate and add world events to database."""
+        return _event_helpers._generate_events(
             self,
             state,
             world_db,

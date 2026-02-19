@@ -1,7 +1,7 @@
 """Generic quality refinement loop for all entity types.
 
 Extracts the common create-judge-refine loop that was previously copy-pasted
-across 6 entity modules (~60 lines each). Each entity module now provides
+across entity modules (~60 lines each). Each entity module now provides
 entity-specific callables (create, judge, refine, serialize, get_name)
 and this module orchestrates the loop.
 """
@@ -461,7 +461,10 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                 scoring_rounds,
             )
 
-    # Fallback to last iteration
+    # Fallback to last iteration — defensive path: best_entity_data is expected
+    # to be set by the time we reach here (every successful judge call populates
+    # history.iterations). This branch guards against edge cases where
+    # get_best_entity() returns None despite having a valid entity/scores pair.
     if entity is not None and not is_empty(entity) and scores is not None:
         logger.warning(
             "%s '%s' did not meet quality threshold (%.1f < %.1f), returning anyway",

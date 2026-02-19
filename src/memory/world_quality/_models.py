@@ -1,7 +1,7 @@
 """Pydantic models for world quality scoring and refinement configuration.
 
-These models track quality scores from the judge/refinement loop, enabling
-iterative improvement of characters, locations, and relationships.
+These models provide the base classes and configuration structures for the
+quality refinement loop used across all entity types.
 """
 
 import logging
@@ -76,7 +76,7 @@ class RefinementHistory(BaseModel):
                 feedback=feedback,
             )
         )
-        if average_score > self.peak_score:
+        if average_score > self.peak_score or self.best_iteration == 0:
             self.peak_score = average_score
             self.best_iteration = iteration
             self.consecutive_degradations = 0  # Reset on new peak

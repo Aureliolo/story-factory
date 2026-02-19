@@ -195,6 +195,31 @@ class TestCreateCalendar:
         ):
             _create_calendar(mock_svc, story_state, 0.9)
 
+    def test_defaults_missing_month_days_and_era_start_year(self, mock_svc, story_state):
+        """Test fallback defaults for month without days and era without start_year."""
+        data = GeneratedCalendarData(
+            era_name="First Era",
+            era_abbreviation="TE",
+            current_year=100,
+            months=[{"name": "Frostmoon", "description": "Cold"}],  # No "days" key
+            day_names=["Day1"],
+            historical_eras=[
+                {"name": "First Era", "end_year": None, "description": "Ancient"},  # No start_year
+            ],
+        )
+        with patch(
+            "src.services.world_quality_service._calendar.generate_structured",
+            return_value=data,
+        ):
+            result = _create_calendar(mock_svc, story_state, 0.9)
+
+        # Months missing "days" get default 30
+        assert result["months"][0]["days"] == 30
+        assert result["months"][0]["name"] == "Frostmoon"
+        # Eras missing "start_year" get default 1
+        assert result["eras"][0]["start_year"] == 1
+        assert result["eras"][0]["name"] == "First Era"
+
 
 class TestJudgeCalendarQuality:
     """Tests for _judge_calendar_quality function."""
@@ -341,6 +366,34 @@ class TestGeneratedDataToWorldCalendar:
         calendar = _generated_data_to_world_calendar(data)
         assert calendar.months[0].name == "Month 1"
         assert calendar.eras[0].name == "Era 1"
+
+    def test_logs_warning_for_missing_days(self, caplog):
+        """Test warning logged when month is missing 'days' field."""
+        data = GeneratedCalendarData(
+            era_name="Test",
+            era_abbreviation="T",
+            current_year=100,
+            months=[{"name": "Frostmoon"}],  # Missing days
+            day_names=["Day1"],
+            historical_eras=[{"name": "Era", "start_year": 1}],
+        )
+        calendar = _generated_data_to_world_calendar(data)
+        assert calendar.months[0].days == 30  # Default applied
+        assert "missing 'days' field, defaulting to 30" in caplog.text
+
+    def test_logs_warning_for_missing_start_year(self, caplog):
+        """Test warning logged when era is missing 'start_year' field."""
+        data = GeneratedCalendarData(
+            era_name="Lost Age",
+            era_abbreviation="T",
+            current_year=100,
+            months=[{"name": "Frostmoon", "days": 28}],
+            day_names=["Day1"],
+            historical_eras=[{"name": "Lost Age"}],  # Missing start_year
+        )
+        calendar = _generated_data_to_world_calendar(data)
+        assert calendar.eras[0].start_year == 1  # Default applied
+        assert "missing 'start_year' field, defaulting to 1" in caplog.text
 
     def test_empty_eras_uses_fallback_start_year(self):
         """Test that empty eras list results in fallback era_start_year=1."""

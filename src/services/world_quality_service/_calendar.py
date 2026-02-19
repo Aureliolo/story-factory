@@ -173,20 +173,33 @@ def _generated_data_to_world_calendar(result: GeneratedCalendarData) -> WorldCal
     months = []
     for i, m in enumerate(result.months):
         name = m.get("name") or f"Month {i + 1}"
-        days = m.get("days", 30)
+        days = m.get("days")
         description = m.get("description") or ""
         if name != m.get("name"):
             logger.debug("Month %d: using fallback name '%s'", i + 1, name)
+        if days is None:
+            days = 30
+            logger.warning(
+                "Month %d ('%s'): missing 'days' field, defaulting to %d", i + 1, name, days
+            )
         months.append(CalendarMonth(name=name, days=days, description=description))
 
     eras = []
     for i, e in enumerate(result.historical_eras):
         name = e.get("name") or f"Era {i + 1}"
-        start_year = e.get("start_year", 1)
+        start_year = e.get("start_year")
         end_year = e.get("end_year")  # None is valid for ongoing era
         description = e.get("description") or ""
         if name != e.get("name"):
             logger.debug("Era %d: using fallback name '%s'", i + 1, name)
+        if start_year is None:
+            start_year = 1
+            logger.warning(
+                "Era %d ('%s'): missing 'start_year' field, defaulting to %d",
+                i + 1,
+                name,
+                start_year,
+            )
         eras.append(
             HistoricalEra(
                 name=name,

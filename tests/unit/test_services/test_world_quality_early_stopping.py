@@ -10,6 +10,7 @@ from src.memory.story_state import Character, StoryBrief, StoryState
 from src.memory.world_quality import (
     CharacterQualityScores,
     ConceptQualityScores,
+    EventQualityScores,
     FactionQualityScores,
     ItemQualityScores,
     LocationQualityScores,
@@ -23,13 +24,14 @@ from tests.shared.mock_ollama import TEST_MODEL
 
 
 def _all_thresholds(value: float) -> dict[str, float]:
-    """Return a complete per-entity quality_thresholds dict with all 8 types set to *value*."""
+    """Return a complete per-entity quality_thresholds dict with all types set to *value*."""
     return {
         "character": value,
         "location": value,
         "faction": value,
         "item": value,
         "concept": value,
+        "event": value,
         "relationship": value,
         "plot": value,
         "chapter": value,
@@ -1013,6 +1015,163 @@ class TestConceptGenerationEarlyStopping:
         )
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert mock_judge.call_count == 4
+        # Returns total iteration count and best scores (8.0)
+        assert iterations == 4
+        assert final_scores.average == 8.0
+
+
+class TestEventGenerationEarlyStopping:
+    """Tests for event generation with early stopping."""
+
+    @patch.object(WorldQualityService, "_create_event")
+    @patch.object(WorldQualityService, "_judge_event_quality")
+    @patch.object(WorldQualityService, "_refine_event")
+    def test_zero_scores_fallback_path(
+        self, mock_refine, mock_judge, mock_create, service, story_state
+    ):
+        """Test event generation with zero scores falls back to last iteration."""
+        test_event = {"description": "ZeroEvent", "participants": []}
+        mock_create.return_value = test_event
+        mock_refine.side_effect = _make_unique_refine(
+            lambda n: {"description": f"ZeroEvent v{n}", "participants": []}
+        )
+
+        zero_scores = EventQualityScores(
+            significance=0,
+            temporal_plausibility=0,
+            causal_coherence=0,
+            narrative_potential=0,
+            entity_integration=0,
+        )
+        mock_judge.return_value = zero_scores
+
+        event, final_scores, _iterations = service.generate_event_with_quality(
+            story_state, existing_descriptions=[], entity_context=""
+        )
+
+        # Score-plateau early-stop triggers after 2 consecutive identical scores
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert mock_judge.call_count == 3
+        # Returns the best iteration entity since all scores are equal (0.0)
+        assert event["description"] == "ZeroEvent"
+        assert final_scores.average == 0
+
+    @patch.object(WorldQualityService, "_create_event")
+    @patch.object(WorldQualityService, "_judge_event_quality")
+    @patch.object(WorldQualityService, "_refine_event")
+    def test_early_stopping_after_consecutive_degradations(
+        self, mock_refine, mock_judge, mock_create, service, story_state
+    ):
+        """Test that event generation stops early after consecutive degradations."""
+        test_event = {"description": "TestEvent", "participants": []}
+        mock_create.return_value = test_event
+        mock_refine.side_effect = _make_unique_refine(
+            lambda n: {"description": f"TestEvent v{n}", "participants": []}
+        )
+
+        # Score progression: 8.2 -> 7.9 -> 7.6 (should stop here with patience=2)
+        scores = [
+            EventQualityScores(
+                significance=8.2,
+                temporal_plausibility=8.2,
+                causal_coherence=8.2,
+                narrative_potential=8.2,
+                entity_integration=8.2,
+            ),
+            EventQualityScores(
+                significance=7.9,
+                temporal_plausibility=7.9,
+                causal_coherence=7.9,
+                narrative_potential=7.9,
+                entity_integration=7.9,
+            ),
+            EventQualityScores(
+                significance=7.6,
+                temporal_plausibility=7.6,
+                causal_coherence=7.6,
+                narrative_potential=7.6,
+                entity_integration=7.6,
+            ),
+            # Extra score for hail-mary fresh creation judge call
+            EventQualityScores(
+                significance=7.0,
+                temporal_plausibility=7.0,
+                causal_coherence=7.0,
+                narrative_potential=7.0,
+                entity_integration=7.0,
+            ),
+        ]
+        mock_judge.side_effect = scores
+
+        _event, final_scores, iterations = service.generate_event_with_quality(
+            story_state, existing_descriptions=[], entity_context=""
+        )
+
+        # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert mock_judge.call_count == 4
+        # Returns total iteration count and best scores (8.2)
+        assert iterations == 4
+        assert final_scores.average == pytest.approx(8.2)
+
+    @patch.object(WorldQualityService, "_create_event")
+    @patch.object(WorldQualityService, "_judge_event_quality")
+    @patch.object(WorldQualityService, "_refine_event")
+    def test_early_stopping_saves_compute(
+        self, mock_refine, mock_judge, mock_create, service, story_state
+    ):
+        """Test that early stopping prevents running all max_iterations.
+
+        Scores degrade consistently after peak, triggering early stopping
+        after patience (2) consecutive degradations, saving compute.
+        """
+        test_event = {"description": "TestEvent", "participants": []}
+        mock_create.return_value = test_event
+        mock_refine.side_effect = _make_unique_refine(
+            lambda n: {"description": f"TestEvent v{n}", "participants": []}
+        )
+
+        # Scores degrade consistently after peak
+        scores = [
+            EventQualityScores(
+                significance=8.0,
+                temporal_plausibility=8.0,
+                causal_coherence=8.0,
+                narrative_potential=8.0,
+                entity_integration=8.0,
+            ),
+            EventQualityScores(
+                significance=7.5,
+                temporal_plausibility=7.5,
+                causal_coherence=7.5,
+                narrative_potential=7.5,
+                entity_integration=7.5,
+            ),
+            EventQualityScores(
+                significance=7.0,
+                temporal_plausibility=7.0,
+                causal_coherence=7.0,
+                narrative_potential=7.0,
+                entity_integration=7.0,
+            ),
+            # Hail-mary fresh creation judge call (threshold not met after early stop)
+            EventQualityScores(
+                significance=6.5,
+                temporal_plausibility=6.5,
+                causal_coherence=6.5,
+                narrative_potential=6.5,
+                entity_integration=6.5,
+            ),
+        ]
+        mock_judge.side_effect = scores
+
+        _event, final_scores, iterations = service.generate_event_with_quality(
+            story_state, existing_descriptions=[], entity_context=""
+        )
+
+        # Should only run 3 iterations in loop (early stopping saves compute)
         # +1 for hail-mary fresh creation judge call (threshold not met)
         assert mock_judge.call_count == 4
         # Returns total iteration count and best scores (8.0)

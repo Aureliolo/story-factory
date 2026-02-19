@@ -24,6 +24,7 @@ def settings():
             "faction": 7.0,
             "item": 7.0,
             "concept": 7.0,
+            "event": 7.0,
             "relationship": 7.0,
             "plot": 7.0,
             "chapter": 7.0,
@@ -289,7 +290,15 @@ class TestJudgeModelSelection:
 
         service = WorldQualityService(settings, mock_mode_service)
 
-        entity_types = ["character", "faction", "location", "item", "concept", "relationship"]
+        entity_types = [
+            "character",
+            "faction",
+            "location",
+            "item",
+            "concept",
+            "event",
+            "relationship",
+        ]
         for entity_type in entity_types:
             mock_mode_service.reset_mock()
             # Invalidate cache to force re-resolution for each entity type
@@ -336,6 +345,7 @@ class TestClassConstants:
         assert roles["location"] == "writer"
         assert roles["item"] == "writer"
         assert roles["concept"] == "architect"
+        assert roles["event"] == "architect"
         assert roles["relationship"] == "editor"
 
     def test_entity_judge_roles_defined(self, settings):
@@ -343,5 +353,13 @@ class TestClassConstants:
         assert hasattr(WorldQualityService, "ENTITY_JUDGE_ROLES")
         roles = WorldQualityService.ENTITY_JUDGE_ROLES
         # All entity types should use judge for quality evaluation
-        for entity_type in ["character", "faction", "location", "item", "concept", "relationship"]:
+        for entity_type in [
+            "character",
+            "faction",
+            "location",
+            "item",
+            "concept",
+            "event",
+            "relationship",
+        ]:
             assert roles[entity_type] == "judge"
