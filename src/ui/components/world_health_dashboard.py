@@ -314,7 +314,8 @@ class WorldHealthDashboard:
                             ui.label("Temporal validation could not complete").classes(
                                 "text-sm font-medium text-orange-200"
                             )
-                        error_msg = self.metrics.temporal_validation_error or "Unknown error"
+                        raw_error = self.metrics.temporal_validation_error or "Unknown error"
+                        error_msg = raw_error[:200] if len(raw_error) > 200 else raw_error
                         ui.label(f"Error: {error_msg}").classes("text-xs text-orange-300 ml-7")
                         ui.label("Check logs for details and retry the health check.").classes(
                             "text-xs text-orange-300 ml-7"
@@ -326,7 +327,11 @@ class WorldHealthDashboard:
                                 icon="refresh",
                             ).props("flat size=sm").classes("mt-1")
 
-                if not has_issues and not self.metrics.temporal_validation_failed:
+                if self.metrics.temporal_validation_failed:
+                    # Failure banner (rendered above) is the only output —
+                    # don't render a stale issues card.
+                    pass
+                elif not has_issues:
                     with ui.row().classes("items-center gap-2 p-2 bg-green-900 rounded"):
                         ui.icon("schedule", size="sm").classes("text-green-500")
                         ui.label("No temporal issues").classes("text-sm text-green-300")
@@ -337,10 +342,6 @@ class WorldHealthDashboard:
                                 on_click=self.on_validate_timeline,
                                 icon="update",
                             ).props("flat size=sm")
-                elif self.metrics.temporal_validation_failed:
-                    # Failure banner (rendered above) is the only output —
-                    # don't render an empty issues card.
-                    pass
                 elif has_issues:
                     bg_color = "red-900" if error_count > 0 else "yellow-900"
                     with ui.card().classes(f"p-3 bg-{bg_color}"):
@@ -562,6 +563,7 @@ def build_health_summary_compact(metrics: WorldHealthMetrics) -> None:
                     metrics.orphan_count == 0
                     and metrics.circular_count == 0
                     and metrics.temporal_error_count == 0
+                    and metrics.temporal_warning_count == 0
                     and not metrics.temporal_validation_failed
                 ):
                     ui.badge(

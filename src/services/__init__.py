@@ -113,6 +113,8 @@ class ServiceContainer:
         self.content_guidelines = ContentGuidelinesService(self.settings)
         self.calendar = CalendarService(self.settings)
         self.temporal_validation = TemporalValidationService(self.settings)
+        # Wire temporal_validation into WorldService for health metrics DI
+        self.world._temporal_validation = self.temporal_validation
         service_count = len(self.__class__.__annotations__) - 1  # exclude 'settings'
         logger.info(
             "ServiceContainer initialized: %d services in %.2fs",

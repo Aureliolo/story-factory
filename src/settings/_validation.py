@@ -551,6 +551,7 @@ def _validate_content_truncation(settings: Settings) -> None:
         ("full_story_analysis_chars", settings.full_story_analysis_chars),
         ("full_text_preview_chars", settings.full_text_preview_chars),
     ]
+    logger.debug("Validating context char fields: %s", context_char_fields)
     for field_name, value in context_char_fields:
         if not 1 <= value <= 100000:
             raise ValueError(f"{field_name} must be between 1 and 100000, got {value}")

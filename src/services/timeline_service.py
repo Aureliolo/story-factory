@@ -232,9 +232,15 @@ class TimelineService:
         """
         validate_not_none(world_db, "world_db")
 
-        items = self.get_timeline_items(world_db)
+        all_items = self.get_timeline_items(world_db)
+        # Filter to items with meaningful temporal data (has_date excludes
+        # items that only have a created_at fallback with no real timeline info)
+        items = [i for i in all_items if i.start.has_date]
         if not items:
-            logger.debug("No timeline items found, returning empty temporal context")
+            logger.debug(
+                "No timeline items with temporal data found (%d total items skipped)",
+                len(all_items),
+            )
             return ""
 
         # Group items by type
@@ -256,7 +262,7 @@ class TimelineService:
             for item in group_items[:20]:
                 start_year_display = item.start.year if item.start.year is not None else "unknown"
                 start_text = item.start.raw_text or str(start_year_display)
-                if item.end:
+                if item.end is not None:
                     end_year_display = item.end.year if item.end.year is not None else "ongoing"
                     end_text = item.end.raw_text or str(end_year_display)
                     lines.append(f"- {item.label}: {start_text} to {end_text}")

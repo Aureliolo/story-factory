@@ -122,7 +122,9 @@ class WorldHealthMetrics(BaseModel):
     """Comprehensive health metrics for a story world.
 
     Aggregates various quality indicators including entity counts,
-    orphan detection, circular relationships, and quality scores.
+    orphan detection, circular relationships, quality scores, and
+    temporal consistency validation results (including service-level
+    failure flags when the temporal validation step itself fails).
     """
 
     # Entity counts

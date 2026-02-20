@@ -27,6 +27,7 @@ from ._event_helpers import (
 if TYPE_CHECKING:
     from src.memory.world_health import WorldHealthMetrics
     from src.services import ServiceContainer
+    from src.services.temporal_validation_service import TemporalValidationService
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +137,9 @@ class WorldService:
         """
         logger.debug("Initializing WorldService")
         self.settings = settings or Settings.load()
+
+        # Optional temporal validation service (injected by ServiceContainer)
+        self._temporal_validation: TemporalValidationService | None = None
 
         # TTL cache for health metrics (avoids redundant recomputation on page reload)
         self._health_cache: WorldHealthMetrics | None = None
@@ -712,7 +716,9 @@ class WorldService:
                 return self._health_cache
 
             logger.debug("Health metrics cache miss — recomputing")
-            result = _health.get_world_health_metrics(self, world_db, quality_threshold)
+            result = _health.get_world_health_metrics(
+                self, world_db, quality_threshold, temporal_validation=self._temporal_validation
+            )
 
             self._health_cache = result
             self._health_cache_key = cache_key

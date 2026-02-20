@@ -12,6 +12,7 @@ from src.services.orchestrator._writing import (
     _combine_contexts,
     _retrieve_temporal_context,
     _retrieve_world_context,
+    _warn_if_context_missing,
 )
 from src.utils.exceptions import ExportError
 
@@ -201,15 +202,7 @@ def review_full_story(
     world_context = _retrieve_world_context(orc, "Full story review for continuity")
     temporal_context = _retrieve_temporal_context(orc)
     combined_context = _combine_contexts(world_context, temporal_context)
-    rag_enabled = bool(orc.context_retrieval and orc.world_db)
-    temporal_enabled = bool(
-        orc.world_db and orc.settings.validate_temporal_consistency and orc.timeline
-    )
-    if not combined_context and (rag_enabled or temporal_enabled):
-        logger.warning(
-            "Full story review proceeding without any world/temporal context "
-            "despite context sources being configured"
-        )
+    _warn_if_context_missing(orc, combined_context, "Full story review")
     issues = orc.continuity.check_full_story(orc.story_state, world_context=combined_context)
 
     if issues:

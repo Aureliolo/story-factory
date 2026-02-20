@@ -15,11 +15,43 @@ def mock_orc():
     """Create a mock StoryOrchestrator."""
     orc = MagicMock()
     orc.settings = MagicMock()
+    orc.settings.validate_temporal_consistency = True
+    orc.settings.rag_context_enabled = True
     orc.world_db = MagicMock()
     orc.story_state = MagicMock()
     orc.context_retrieval = MagicMock()
     orc.timeline = MagicMock()
     return orc
+
+
+@pytest.fixture
+def mock_orc_with_chapter(mock_orc):
+    """Extend mock_orc with a single chapter and write-chapter stub."""
+    from src.memory.story_state import Chapter
+
+    chapter = MagicMock(spec=Chapter)
+    chapter.number = 1
+    chapter.content = "Story content"
+    mock_orc.story_state.chapters = [chapter]
+    mock_orc.story_state.status = "writing"
+    mock_orc.interaction_mode = "auto"
+    mock_orc.settings.max_revision_iterations = 0
+    mock_orc.settings.chapters_between_checkpoints = 5
+    mock_orc._total_chapters = 0
+    mock_orc._completed_chapters = 0
+    mock_orc.events = []
+    mock_orc._emit = MagicMock()
+    mock_orc._set_phase = MagicMock()
+
+    def mock_write_chapter(num):
+        """Yield a mock event for the chapter."""
+        mock_orc._emit("agent_complete", "System", f"Chapter {num} complete")
+        mock_orc.events.append(MagicMock())
+        yield mock_orc.events[-1]
+
+    mock_orc.write_chapter = mock_write_chapter
+    mock_orc.continuity.check_full_story.return_value = []
+    return mock_orc
 
 
 class TestRetrieveTemporalContext:
@@ -104,37 +136,8 @@ class TestCombineContexts:
 class TestWriteAllChaptersFinalReviewContextWarning:
     """Tests for aggregated context-failure warning in write_all_chapters."""
 
-    def test_warns_when_both_contexts_empty_but_sources_configured(self, mock_orc):
+    def test_warns_when_both_contexts_empty_but_sources_configured(self, mock_orc_with_chapter):
         """Logs warning when both RAG and temporal return empty but sources exist."""
-        from src.memory.story_state import Chapter
-
-        chapter = MagicMock(spec=Chapter)
-        chapter.number = 1
-        chapter.content = "Story content"
-        mock_orc.story_state.chapters = [chapter]
-        mock_orc.story_state.status = "writing"
-        mock_orc.interaction_mode = "auto"
-        mock_orc.settings.max_revision_iterations = 0
-        mock_orc.settings.chapters_between_checkpoints = 5
-        mock_orc.settings.validate_temporal_consistency = True
-        mock_orc._total_chapters = 0
-        mock_orc._completed_chapters = 0
-        mock_orc.events = []
-        mock_orc._emit = MagicMock()
-        mock_orc._set_phase = MagicMock()
-        # context_retrieval and world_db are set (sources configured)
-        mock_orc.context_retrieval = MagicMock()
-        mock_orc.world_db = MagicMock()
-
-        def mock_write_chapter(num):
-            """Yield a mock event for the chapter."""
-            mock_orc._emit("agent_complete", "System", f"Chapter {num} complete")
-            mock_orc.events.append(MagicMock())
-            yield mock_orc.events[-1]
-
-        mock_orc.write_chapter = mock_write_chapter
-        mock_orc.continuity.check_full_story.return_value = []
-
         with (
             patch(
                 "src.services.orchestrator._writing._retrieve_world_context",
@@ -148,11 +151,12 @@ class TestWriteAllChaptersFinalReviewContextWarning:
         ):
             from src.services.orchestrator._writing import write_all_chapters
 
-            list(write_all_chapters(mock_orc))
+            list(write_all_chapters(mock_orc_with_chapter))
 
             mock_logger.warning.assert_any_call(
-                "Final story review proceeding without any world/temporal context "
-                "despite context sources being configured"
+                "%s proceeding without any world/temporal context "
+                "despite context sources being configured",
+                "Final story review",
             )
 
 
@@ -162,9 +166,6 @@ class TestReviewFullStoryContextWarning:
     def test_warns_when_both_contexts_empty_but_sources_configured(self, mock_orc):
         """Logs warning when both RAG and temporal return empty but sources exist."""
         mock_orc.events = []
-        mock_orc.context_retrieval = MagicMock()
-        mock_orc.world_db = MagicMock()
-        mock_orc.settings.validate_temporal_consistency = True
 
         def fake_emit(*args, **kwargs):
             """Append a mock event on each emit call."""
@@ -182,52 +183,24 @@ class TestReviewFullStoryContextWarning:
                 "src.services.orchestrator._editing._retrieve_temporal_context",
                 return_value="",
             ),
-            patch("src.services.orchestrator._editing.logger") as mock_logger,
+            patch("src.services.orchestrator._writing.logger") as mock_logger,
         ):
             from src.services.orchestrator._editing import review_full_story
 
             list(review_full_story(mock_orc))
 
             mock_logger.warning.assert_any_call(
-                "Full story review proceeding without any world/temporal context "
-                "despite context sources being configured"
+                "%s proceeding without any world/temporal context "
+                "despite context sources being configured",
+                "Full story review",
             )
 
 
 class TestWriteAllChaptersFinalReview:
     """Tests for temporal context in write_all_chapters final review."""
 
-    def test_final_review_passes_combined_context(self, mock_orc):
+    def test_final_review_passes_combined_context(self, mock_orc_with_chapter):
         """Final review combines RAG + temporal context for check_full_story."""
-        from src.memory.story_state import Chapter
-
-        # Set up story state with one chapter
-        chapter = MagicMock(spec=Chapter)
-        chapter.number = 1
-        chapter.content = "Story content"
-        mock_orc.story_state.chapters = [chapter]
-        mock_orc.story_state.status = "writing"
-        mock_orc.interaction_mode = "auto"
-        mock_orc.settings.max_revision_iterations = 0
-        mock_orc.settings.chapters_between_checkpoints = 5
-        mock_orc._total_chapters = 0
-        mock_orc._completed_chapters = 0
-        mock_orc.events = []
-        mock_orc._emit = MagicMock()
-        mock_orc._set_phase = MagicMock()
-
-        # Mock write_chapter to yield events
-        def mock_write_chapter(num):
-            """Yield a mock event for the chapter."""
-            mock_orc._emit("agent_complete", "System", f"Chapter {num} complete")
-            mock_orc.events.append(MagicMock())
-            yield mock_orc.events[-1]
-
-        mock_orc.write_chapter = mock_write_chapter
-
-        # Mock continuity check_full_story
-        mock_orc.continuity.check_full_story.return_value = []
-
         with (
             patch(
                 "src.services.orchestrator._writing._retrieve_world_context",
@@ -240,44 +213,17 @@ class TestWriteAllChaptersFinalReview:
         ):
             from src.services.orchestrator._writing import write_all_chapters
 
-            # Consume generator
-            list(write_all_chapters(mock_orc))
+            list(write_all_chapters(mock_orc_with_chapter))
 
-        # check_full_story should have been called with combined context
-        mock_orc.continuity.check_full_story.assert_called_once()
-        call_kwargs = mock_orc.continuity.check_full_story.call_args
+        mock_orc_with_chapter.continuity.check_full_story.assert_called_once()
+        call_kwargs = mock_orc_with_chapter.continuity.check_full_story.call_args
         assert "world_context" in call_kwargs.kwargs, "world_context not passed as keyword arg"
         world_context = call_kwargs.kwargs["world_context"]
         assert "RAG context" in world_context
         assert "TEMPORAL context" in world_context
 
-    def test_final_review_works_without_temporal_context(self, mock_orc):
+    def test_final_review_works_without_temporal_context(self, mock_orc_with_chapter):
         """Final review works when temporal context is empty."""
-        from src.memory.story_state import Chapter
-
-        chapter = MagicMock(spec=Chapter)
-        chapter.number = 1
-        chapter.content = "Story content"
-        mock_orc.story_state.chapters = [chapter]
-        mock_orc.story_state.status = "writing"
-        mock_orc.interaction_mode = "auto"
-        mock_orc.settings.max_revision_iterations = 0
-        mock_orc.settings.chapters_between_checkpoints = 5
-        mock_orc._total_chapters = 0
-        mock_orc._completed_chapters = 0
-        mock_orc.events = []
-        mock_orc._emit = MagicMock()
-        mock_orc._set_phase = MagicMock()
-
-        def mock_write_chapter(num):
-            """Yield a mock event for the chapter."""
-            mock_orc._emit("agent_complete", "System", f"Chapter {num} complete")
-            mock_orc.events.append(MagicMock())
-            yield mock_orc.events[-1]
-
-        mock_orc.write_chapter = mock_write_chapter
-        mock_orc.continuity.check_full_story.return_value = []
-
         with (
             patch(
                 "src.services.orchestrator._writing._retrieve_world_context",
@@ -290,9 +236,9 @@ class TestWriteAllChaptersFinalReview:
         ):
             from src.services.orchestrator._writing import write_all_chapters
 
-            list(write_all_chapters(mock_orc))
+            list(write_all_chapters(mock_orc_with_chapter))
 
-        call_kwargs = mock_orc.continuity.check_full_story.call_args
+        call_kwargs = mock_orc_with_chapter.continuity.check_full_story.call_args
         assert "world_context" in call_kwargs.kwargs, "world_context not passed as keyword arg"
         world_context = call_kwargs.kwargs["world_context"]
         assert "RAG context only" in world_context

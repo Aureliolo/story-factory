@@ -824,16 +824,16 @@ class TestTimelineService:
         assert "AncientOne" in result
         # Year 0 should display as "0", not "unknown"
         assert "unknown" not in result.lower()
-        assert "0 to" in result or "0\n" in result
+        assert "- AncientOne: 0 to 100" in result
 
     def test_build_temporal_context_no_year_no_raw_text(self, timeline_service, mock_world_db):
-        """Entities with neither raw_text nor year show 'unknown'."""
+        """Entities with no temporal data are excluded by has_date filter."""
         item = TimelineItem(
             id="char-1",
             entity_id="e1",
             label="MysteryEntity",
             item_type="character",
-            start=StoryTimestamp(),  # no year, no raw_text
+            start=StoryTimestamp(),  # no year, no raw_text — has_date is False
             color="#000",
             group="character",
         )
@@ -841,8 +841,8 @@ class TestTimelineService:
         with patch.object(timeline_service, "get_timeline_items", return_value=[item]):
             result = timeline_service.build_temporal_context(mock_world_db)
 
-        assert "MysteryEntity" in result
-        assert "unknown" in result
+        # Items without meaningful temporal data are filtered out
+        assert result == ""
 
     def test_build_temporal_context_unknown_type(self, timeline_service, mock_world_db):
         """Unknown entity types are sorted to the end and formatted correctly."""

@@ -144,8 +144,8 @@ def build_context_section(page: SettingsPage) -> None:
                 ui.number(
                     label="Full story analysis (chars)",
                     value=page.settings.full_story_analysis_chars,
-                    min=2000,
-                    max=30000,
+                    min=1,
+                    max=100000,
                 )
                 .classes("w-full")
                 .props("outlined dense")
