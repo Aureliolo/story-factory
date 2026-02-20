@@ -10,6 +10,7 @@ import os
 import shutil
 import tempfile
 from dataclasses import asdict, dataclass, field, fields
+from pathlib import Path
 from typing import Any, ClassVar
 
 from src.memory.mode_models import LearningTrigger
@@ -161,10 +162,8 @@ def _merge_with_defaults(data: dict[str, Any], settings_cls: type[Settings]) -> 
                         inner[inner_key] = inner_val
                         changed = True
 
-    file_keys = sum(1 for k in data if k in known_fields)
     logger.info(
-        "Merge summary: %d keys from file, %d known fields, changed=%s",
-        file_keys,
+        "Merge summary: %d known fields, changed=%s",
         len(known_fields),
         changed,
     )
@@ -172,15 +171,13 @@ def _merge_with_defaults(data: dict[str, Any], settings_cls: type[Settings]) -> 
     return changed
 
 
-def _atomic_write_json(path: Any, data: dict[str, Any]) -> None:
+def _atomic_write_json(path: Path | str, data: dict[str, Any]) -> None:
     """Write JSON to *path* atomically via a temp file + rename.
 
     Prevents partial writes from corrupting the settings file on disk
     failure, power loss, or process kill.
     """
-    from pathlib import Path as _Path
-
-    path = _Path(path)
+    path = Path(path)
     dir_path = str(path.parent)
     fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix=".tmp")
     try:
@@ -554,6 +551,9 @@ class Settings:
                 except OSError as copy_err:
                     logger.warning("Failed to backup corrupted settings: %s", copy_err)
                 data = {}
+            except OSError as e:
+                logger.error("Cannot read settings file (may be locked or inaccessible): %s", e)
+                data = {}
         else:
             data = {}
 
@@ -565,6 +565,11 @@ class Settings:
                 data = recovered
                 loaded_from_file = True
                 recovered_from_backup = True
+            else:
+                logger.warning(
+                    "No settings could be loaded from primary file or backup — "
+                    "falling back to factory defaults"
+                )
 
         logger.info(
             "Settings load: loaded_from_file=%s, keys_read=%d",

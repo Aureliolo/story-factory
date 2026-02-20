@@ -18,7 +18,8 @@ logger = logging.getLogger(__name__)
 def _create_settings_backup(settings_path: Path) -> bool:
     """Copy settings.json to settings.json.bak before writing.
 
-    Skips backup if the source file is missing or empty (nothing to preserve).
+    Skips backup if the source file is missing, empty, or contains invalid JSON
+    (to avoid overwriting a good backup with corrupt data).
     Failures are logged but never raised — backup is best-effort.
 
     Args:
@@ -34,10 +35,23 @@ def _create_settings_backup(settings_path: Path) -> bool:
         if settings_path.stat().st_size == 0:
             logger.debug("Settings file is empty, skipping backup")
             return False
+        # Validate JSON before overwriting the backup — never copy corrupt data
+        # over a known-good .bak file.
+        with open(settings_path) as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            logger.warning(
+                "Settings file is not a JSON dict (got %s), skipping backup",
+                type(data).__name__,
+            )
+            return False
         backup_path = settings_path.with_suffix(".json.bak")
         shutil.copy2(settings_path, backup_path)
         logger.debug("Created settings backup at %s", backup_path)
         return True
+    except json.JSONDecodeError:
+        logger.warning("Settings file contains invalid JSON, skipping backup")
+        return False
     except OSError as e:
         logger.warning("Failed to create settings backup: %s", e)
         return False
@@ -76,8 +90,19 @@ def _recover_from_backup(settings_path: Path) -> dict[str, Any] | None:
             backup_path,
         )
         return data
-    except (json.JSONDecodeError, OSError) as e:
-        logger.warning("Failed to recover from backup: %s", e)
+    except json.JSONDecodeError as e:
+        logger.error(
+            "Backup file at %s is corrupted (invalid JSON): %s — user settings may be lost",
+            backup_path,
+            e,
+        )
+        return None
+    except OSError as e:
+        logger.error(
+            "Cannot read backup file at %s: %s — backup may still be valid, check file permissions",
+            backup_path,
+            e,
+        )
         return None
 
 
@@ -113,19 +138,26 @@ def _log_settings_changes(
             logger.info("[%s] removed %s (was %r)", label, key, old_val)
             changes += 1
         elif isinstance(old_val, dict) and isinstance(new_val, dict):
-            # Compare one level of nested dict keys
+            # Compare one level of nested dict keys — mirror top-level
+            # added/removed/changed distinction for clarity.
             sub_keys = set(old_val) | set(new_val)
             for sub_key in sorted(sub_keys):
-                old_sub = old_val.get(sub_key)
-                new_sub = new_val.get(sub_key)
-                if old_sub != new_sub:
+                if sub_key not in old_val:
+                    logger.info("[%s] added %s.%s = %r", label, key, sub_key, new_val[sub_key])
+                    changes += 1
+                elif sub_key not in new_val:
+                    logger.info(
+                        "[%s] removed %s.%s (was %r)", label, key, sub_key, old_val[sub_key]
+                    )
+                    changes += 1
+                elif old_val[sub_key] != new_val[sub_key]:
                     logger.info(
                         "[%s] changed %s.%s: %r -> %r",
                         label,
                         key,
                         sub_key,
-                        old_sub,
-                        new_sub,
+                        old_val[sub_key],
+                        new_val[sub_key],
                     )
                     changes += 1
         elif old_val != new_val:

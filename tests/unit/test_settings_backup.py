@@ -115,6 +115,16 @@ class TestRecoverFromBackup:
 
         assert result is None
 
+    def test_returns_none_on_os_error(self, tmp_path):
+        """Should return None when backup file cannot be read (OSError)."""
+        settings_file = tmp_path / "settings.json"
+        settings_file.with_suffix(".json.bak").write_text('{"key": "value"}')
+
+        with patch("builtins.open", side_effect=OSError("Permission denied")):
+            result = _recover_from_backup(settings_file)
+
+        assert result is None
+
 
 class TestLogSettingsChanges:
     """Tests for _log_settings_changes()."""
@@ -153,8 +163,26 @@ class TestLogSettingsChanges:
 
         count = _log_settings_changes(original, final, "test")
 
-        # b changed (2->3) + c added (None->4) = 2 changes
+        # b changed (2->3) + c added = 2 changes
         assert count == 2
+
+    def test_detects_nested_dict_key_removal(self):
+        """Should detect when a sub-key is removed from a nested dict."""
+        original = {"nested": {"a": 1, "b": 2}}
+        final = {"nested": {"a": 1}}
+
+        count = _log_settings_changes(original, final, "test")
+
+        assert count == 1
+
+    def test_detects_type_change_dict_to_scalar(self):
+        """Should detect when a value changes from dict to scalar."""
+        original = {"key": {"nested": 1}}
+        final = {"key": "flat_value"}
+
+        count = _log_settings_changes(original, final, "test")
+
+        assert count == 1
 
     def test_returns_zero_for_identical(self):
         """Should return 0 when dicts are identical."""
@@ -215,6 +243,50 @@ class TestSettingsLoadWithBackupRecovery:
 
         assert settings.context_size == 32768  # default
         assert settings.ollama_url == "http://localhost:11434"
+
+    def test_recovers_from_backup_on_empty_file(self, tmp_path, monkeypatch):
+        """Should recover from .bak when primary file is empty (0 bytes)."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+
+        bak_file = settings_file.with_suffix(".json.bak")
+        bak_file.write_text(json.dumps({"context_size": 16384}))
+
+        # Empty file — common during interrupted writes
+        settings_file.write_text("")
+
+        settings = Settings.load()
+
+        assert settings.context_size == 16384
+
+    def test_recovers_from_backup_on_non_dict_json(self, tmp_path, monkeypatch):
+        """Should recover from .bak when primary contains non-dict JSON."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+
+        bak_file = settings_file.with_suffix(".json.bak")
+        bak_file.write_text(json.dumps({"context_size": 16384}))
+        settings_file.write_text("[1, 2, 3]")
+
+        settings = Settings.load()
+
+        assert settings.context_size == 16384
+
+    def test_recovery_restores_primary_file(self, tmp_path, monkeypatch):
+        """After recovery from .bak, the primary file should be restored."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+
+        bak_file = settings_file.with_suffix(".json.bak")
+        bak_file.write_text(json.dumps({"context_size": 16384}))
+        settings_file.write_text("not valid json {{{")
+
+        Settings.load()
+
+        # Primary should now contain valid JSON with the recovered value
+        restored = json.loads(settings_file.read_text())
+        assert restored["context_size"] == 16384
+        assert "ollama_url" in restored  # Merged defaults should be present
 
     def test_does_not_overwrite_bak_with_defaults(self, tmp_path, monkeypatch):
         """When primary is empty and no backup: defaults should be saved but
@@ -306,6 +378,22 @@ class TestLoadLastProjectFix:
             StoryFactoryApp(services)
 
         # last_project_id should NOT have been cleared
+        assert services.settings.last_project_id == "valid-project-id"
+        services.settings.save.assert_not_called()
+
+    def test_permission_error_preserves_project(self):
+        """PermissionError (file locked) should NOT clear last_project_id."""
+        from unittest.mock import MagicMock
+
+        services = MagicMock()
+        services.settings.last_project_id = "valid-project-id"
+        services.project.load_project.side_effect = PermissionError("file locked")
+
+        from src.ui.app import StoryFactoryApp
+
+        with patch.object(StoryFactoryApp, "build"):
+            StoryFactoryApp(services)
+
         assert services.settings.last_project_id == "valid-project-id"
         services.settings.save.assert_not_called()
 

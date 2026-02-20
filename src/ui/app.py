@@ -78,6 +78,7 @@ class StoryFactoryApp:
                 "Failed to auto-load last project %s (keeping setting for next restart): %s",
                 last_id,
                 e,
+                exc_info=True,
             )
 
     def _apply_theme(self) -> None:
