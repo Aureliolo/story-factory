@@ -276,7 +276,7 @@ class Settings:
     last_project_id: str | None = None  # Remember last opened project
 
     # Backup settings
-    backup_folder: str = str(BACKUPS_DIR)  # Folder to store project backups
+    backup_folder: str = field(default_factory=lambda: str(BACKUPS_DIR))
     backup_verify_on_restore: bool = True  # Verify backup integrity before restore
 
     # Data integrity settings

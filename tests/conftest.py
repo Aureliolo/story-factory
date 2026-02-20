@@ -55,7 +55,7 @@ def clear_settings_cache_per_test():
 
 @pytest.fixture(autouse=True)
 def isolate_all_production_paths(tmp_path, monkeypatch):
-    """Redirect ALL writable production paths to temp directory.
+    """Redirect key writable production paths to temp directory.
 
     This is the fundamental safety net for test isolation. Without it,
     any test that triggers Settings.load(), .save(), or any service that
@@ -65,13 +65,18 @@ def isolate_all_production_paths(tmp_path, monkeypatch):
     Covers:
     - SETTINGS_FILE (src/settings.json) — prevents settings loss
     - BACKUPS_DIR (output/backups/) — prevents stale backup writes
+      (uses default_factory in Settings so the patch takes effect at
+      instantiation time, not class definition time)
     - TEMPLATES_DIR (output/templates/) — prevents template file pollution
 
-    Note: STORIES_DIR, WORLDS_DIR, and DEFAULT_DB_PATH are already covered
-    by isolate_project_directories and isolate_mode_database respectively.
+    Not covered here (handled separately):
+    - STORIES_DIR, WORLDS_DIR — isolate_project_directories fixture
+    - DEFAULT_DB_PATH — isolate_mode_database fixture
+    - DEFAULT_LOG_FILE — cleanup_production_log_handlers fixture
 
     Tests that need a specific path can still override with their own
-    monkeypatch.setattr, which takes precedence over this autouse fixture.
+    monkeypatch.setattr, which runs after this autouse fixture and
+    overwrites the value.
     """
     import src.settings._settings as settings_module
 
