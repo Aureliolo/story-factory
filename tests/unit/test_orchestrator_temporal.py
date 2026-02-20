@@ -7,6 +7,7 @@ import pytest
 from src.services.orchestrator._writing import (
     _combine_contexts,
     _retrieve_temporal_context,
+    _retrieve_world_context,
 )
 from src.utils.exceptions import GenerationCancelledError
 
@@ -115,6 +116,27 @@ class TestRetrieveTemporalContext:
             _retrieve_temporal_context(mock_orc)
 
 
+class TestRetrieveWorldContextCancellation:
+    """Tests for GenerationCancelledError handling in _retrieve_world_context."""
+
+    def test_reraises_generation_cancelled_error(self, mock_orc):
+        """GenerationCancelledError propagates instead of being swallowed."""
+        mock_orc.context_retrieval.retrieve_context.side_effect = GenerationCancelledError(
+            "cancelled"
+        )
+
+        with pytest.raises(GenerationCancelledError):
+            _retrieve_world_context(mock_orc, "test task")
+
+    def test_other_exceptions_return_empty(self, mock_orc):
+        """Non-cancellation exceptions return empty string (non-fatal)."""
+        mock_orc.context_retrieval.retrieve_context.side_effect = RuntimeError("Boom")
+
+        result = _retrieve_world_context(mock_orc, "test task")
+
+        assert result == ""
+
+
 class TestCombineContexts:
     """Tests for _combine_contexts helper."""
 
@@ -168,21 +190,28 @@ class TestWriteAllChaptersFinalReviewContextWarning:
             )
 
 
+@pytest.fixture
+def mock_orc_for_review(mock_orc):
+    """Extend mock_orc with event tracking for review_full_story tests."""
+    mock_orc.events = []
+
+    def fake_emit(*args, **kwargs):
+        """Append a mock event on each emit call."""
+        mock_orc.events.append(MagicMock())
+
+    mock_orc._emit = fake_emit
+    mock_orc.continuity.check_full_story.return_value = []
+    return mock_orc
+
+
 class TestReviewFullStoryContextWarning:
     """Tests for aggregated context-failure warning in review_full_story."""
 
-    def test_warns_when_both_contexts_empty_but_sources_configured(self, mock_orc):
+    def test_warns_when_both_contexts_empty_but_sources_configured(self, mock_orc_for_review):
         """Logs warning when both RAG and temporal return empty but sources exist."""
-        mock_orc.events = []
-
-        def fake_emit(*args, **kwargs):
-            """Append a mock event on each emit call."""
-            mock_orc.events.append(MagicMock())
-
-        mock_orc._emit = fake_emit
-        mock_orc.continuity.check_full_story.return_value = []
-
         with (
+            # _editing.py imports these from _writing.py; patching on _editing's
+            # namespace intercepts calls made inside review_full_story correctly.
             patch(
                 "src.services.orchestrator._editing._retrieve_world_context",
                 return_value="",
@@ -197,7 +226,7 @@ class TestReviewFullStoryContextWarning:
         ):
             from src.services.orchestrator._editing import review_full_story
 
-            list(review_full_story(mock_orc))
+            list(review_full_story(mock_orc_for_review))
 
             mock_logger.warning.assert_any_call(
                 "%s proceeding without any world/temporal context "
@@ -259,18 +288,11 @@ class TestWriteAllChaptersFinalReview:
 class TestReviewFullStoryTemporal:
     """Tests for temporal context in review_full_story."""
 
-    def test_review_full_story_passes_combined_context(self, mock_orc):
+    def test_review_full_story_passes_combined_context(self, mock_orc_for_review):
         """review_full_story combines RAG + temporal context."""
-        mock_orc.events = []
-
-        def fake_emit(*args, **kwargs):
-            """Append a mock event on each emit call."""
-            mock_orc.events.append(MagicMock())
-
-        mock_orc._emit = fake_emit
-        mock_orc.continuity.check_full_story.return_value = []
-
         with (
+            # _editing.py re-exports these from _writing.py; patching on _editing's
+            # namespace is correct because review_full_story resolves them there.
             patch(
                 "src.services.orchestrator._editing._retrieve_world_context",
                 return_value="RAG data",
@@ -282,10 +304,27 @@ class TestReviewFullStoryTemporal:
         ):
             from src.services.orchestrator._editing import review_full_story
 
-            list(review_full_story(mock_orc))
+            list(review_full_story(mock_orc_for_review))
 
-        call_kwargs = mock_orc.continuity.check_full_story.call_args
+        call_kwargs = mock_orc_for_review.continuity.check_full_story.call_args
         assert "world_context" in call_kwargs.kwargs, "world_context not passed as keyword arg"
         world_context = call_kwargs.kwargs["world_context"]
         assert "RAG data" in world_context
         assert "Timeline data" in world_context
+
+    def test_review_full_story_propagates_generation_cancelled(self, mock_orc_for_review):
+        """GenerationCancelledError from temporal context propagates through review_full_story."""
+        with (
+            patch(
+                "src.services.orchestrator._editing._retrieve_world_context",
+                return_value="RAG data",
+            ),
+            patch(
+                "src.services.orchestrator._editing._retrieve_temporal_context",
+                side_effect=GenerationCancelledError("cancelled"),
+            ),
+        ):
+            from src.services.orchestrator._editing import review_full_story
+
+            with pytest.raises(GenerationCancelledError):
+                list(review_full_story(mock_orc_for_review))

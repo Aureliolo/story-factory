@@ -69,6 +69,7 @@ def disabled_options():
     options = MagicMock(spec=WorldBuildOptions)
     options.is_cancelled.return_value = False
     options.clear_existing = False
+    options.generate_calendar = False
     options.generate_structure = False
     options.generate_locations = False
     options.generate_factions = False

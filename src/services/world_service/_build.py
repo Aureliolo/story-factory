@@ -390,12 +390,6 @@ def _build_world_entities(
                 result.error_count,
                 result.warning_count,
             )
-            if result.error_count > 0 or result.warning_count > 0:
-                logger.info(
-                    "Temporal validation: %d errors, %d warnings",
-                    result.error_count,
-                    result.warning_count,
-                )
         except GenerationCancelledError:
             raise
         except Exception as e:

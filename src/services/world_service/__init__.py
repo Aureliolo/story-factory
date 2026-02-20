@@ -143,7 +143,9 @@ class WorldService:
 
         # TTL cache for health metrics (avoids redundant recomputation on page reload)
         self._health_cache: WorldHealthMetrics | None = None
-        self._health_cache_key: tuple[str, float] | None = None  # (db_path, threshold)
+        self._health_cache_key: tuple[str, float, bool] | None = (
+            None  # (db_path, threshold, temporal)
+        )
         self._health_cache_time: float = 0.0
         self._health_cache_lock = threading.RLock()
 
@@ -704,7 +706,11 @@ class WorldService:
         Returns:
             WorldHealthMetrics object with all computed metrics.
         """
-        cache_key = (str(world_db.db_path), quality_threshold)
+        cache_key = (
+            str(world_db.db_path),
+            quality_threshold,
+            self.settings.validate_temporal_consistency,
+        )
         with self._health_cache_lock:
             now = time.monotonic()
             if (

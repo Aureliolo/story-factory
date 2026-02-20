@@ -233,9 +233,13 @@ class TimelineService:
         validate_not_none(world_db, "world_db")
 
         all_items = self.get_timeline_items(world_db)
-        # Filter to items with meaningful temporal data (has_date excludes
-        # items that only have a created_at fallback with no real timeline info)
-        items = [i for i in all_items if i.start.has_date]
+        # Filter to items with explicit narrative timeline data — exclude items
+        # whose only temporal info is a created_at fallback (raw_text "Added: ...")
+        items = [
+            i
+            for i in all_items
+            if i.start.has_date and not (i.start.raw_text or "").startswith("Added:")
+        ]
         if not items:
             logger.debug(
                 "No timeline items with temporal data found (%d total items skipped)",

@@ -46,6 +46,8 @@ def _retrieve_world_context(orc: StoryOrchestrator, task_description: str) -> st
                 retrieved.total_tokens,
             )
         return formatted
+    except GenerationCancelledError:
+        raise
     except Exception as e:
         logger.warning("RAG context retrieval failed (non-fatal): %s", e, exc_info=True)
         return ""
@@ -65,7 +67,8 @@ def _retrieve_temporal_context(orc: StoryOrchestrator) -> str:
     Returns:
         Formatted temporal context string, or empty string if unavailable.
     """
-    if not orc.world_db:
+    world_db = orc.world_db
+    if not world_db:
         logger.debug("No world_db configured, skipping temporal context")
         return ""
 
@@ -78,7 +81,7 @@ def _retrieve_temporal_context(orc: StoryOrchestrator) -> str:
         return ""
 
     try:
-        context = orc.timeline.build_temporal_context(orc.world_db)
+        context = orc.timeline.build_temporal_context(world_db)
         if context:
             logger.debug("Retrieved temporal context: %d chars", len(context))
         return context

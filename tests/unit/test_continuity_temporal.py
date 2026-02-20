@@ -30,21 +30,31 @@ def mock_story_state():
     return state
 
 
+def _stub_continuity_agent():
+    """Create a ContinuityAgent with generate_structured returning empty issues.
+
+    Returns a tuple of (agent, captured_prompts) where captured_prompts is a
+    list that accumulates the prompt argument from each generate_structured call.
+    """
+    agent = ContinuityAgent(model="test-model:8b")
+    captured_prompts: list[str] = []
+
+    def mock_generate_structured(prompt, model_class, **kwargs):
+        """Capture prompts and return empty issue list."""
+        captured_prompts.append(prompt)
+        return ContinuityIssueList(issues=[])
+
+    return agent, captured_prompts, mock_generate_structured
+
+
 class TestCheckFullStoryWorldContext:
     """Tests for world_context parameter in check_full_story."""
 
     def test_world_context_included_in_prompt(self, mock_story_state):
         """check_full_story includes world_context in the LLM prompt."""
-        agent = ContinuityAgent(model="test-model:8b")
+        agent, captured_prompts, mock_gen = _stub_continuity_agent()
 
-        captured_prompts = []
-
-        def mock_generate_structured(prompt, model_class, **kwargs):
-            """Capture prompts and return empty issue list."""
-            captured_prompts.append(prompt)
-            return ContinuityIssueList(issues=[])
-
-        with patch.object(agent, "generate_structured", side_effect=mock_generate_structured):
+        with patch.object(agent, "generate_structured", side_effect=mock_gen):
             with patch.object(agent, "extract_dialogue_patterns", return_value={}):
                 with patch.object(agent, "check_character_voice", return_value=[]):
                     agent.check_full_story(
@@ -62,16 +72,9 @@ class TestCheckFullStoryWorldContext:
 
     def test_no_world_context_omits_block(self, mock_story_state):
         """check_full_story without world_context does not include context block."""
-        agent = ContinuityAgent(model="test-model:8b")
+        agent, captured_prompts, mock_gen = _stub_continuity_agent()
 
-        captured_prompts = []
-
-        def mock_generate_structured(prompt, model_class, **kwargs):
-            """Capture prompts and return empty issue list."""
-            captured_prompts.append(prompt)
-            return ContinuityIssueList(issues=[])
-
-        with patch.object(agent, "generate_structured", side_effect=mock_generate_structured):
+        with patch.object(agent, "generate_structured", side_effect=mock_gen):
             with patch.object(agent, "extract_dialogue_patterns", return_value={}):
                 with patch.object(agent, "check_character_voice", return_value=[]):
                     agent.check_full_story(mock_story_state)
@@ -82,16 +85,9 @@ class TestCheckFullStoryWorldContext:
 
     def test_empty_world_context_omits_block(self, mock_story_state):
         """check_full_story with empty world_context does not include context block."""
-        agent = ContinuityAgent(model="test-model:8b")
+        agent, captured_prompts, mock_gen = _stub_continuity_agent()
 
-        captured_prompts = []
-
-        def mock_generate_structured(prompt, model_class, **kwargs):
-            """Capture prompts and return empty issue list."""
-            captured_prompts.append(prompt)
-            return ContinuityIssueList(issues=[])
-
-        with patch.object(agent, "generate_structured", side_effect=mock_generate_structured):
+        with patch.object(agent, "generate_structured", side_effect=mock_gen):
             with patch.object(agent, "extract_dialogue_patterns", return_value={}):
                 with patch.object(agent, "check_character_voice", return_value=[]):
                     agent.check_full_story(mock_story_state, world_context="")
@@ -102,16 +98,12 @@ class TestCheckFullStoryWorldContext:
 
     def test_backward_compatibility_no_kwarg(self, mock_story_state):
         """check_full_story works without world_context kwarg (backward compat)."""
-        agent = ContinuityAgent(model="test-model:8b")
+        agent, _, mock_gen = _stub_continuity_agent()
 
-        def mock_generate_structured(prompt, model_class, **kwargs):
-            """Return empty issue list."""
-            return ContinuityIssueList(issues=[])
-
-        with patch.object(agent, "generate_structured", side_effect=mock_generate_structured):
+        with patch.object(agent, "generate_structured", side_effect=mock_gen):
             with patch.object(agent, "extract_dialogue_patterns", return_value={}):
                 with patch.object(agent, "check_character_voice", return_value=[]):
                     # Call without world_context
                     issues = agent.check_full_story(mock_story_state)
 
-        assert isinstance(issues, list)
+        assert issues == []

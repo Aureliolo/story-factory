@@ -827,7 +827,7 @@ class TestTimelineService:
         assert "- AncientOne: 0 to 100" in result
 
     def test_build_temporal_context_no_year_no_raw_text(self, timeline_service, mock_world_db):
-        """Entities with no temporal data are excluded by has_date filter."""
+        """Items with no temporal data at all (has_date=False) are excluded."""
         item = TimelineItem(
             id="char-1",
             entity_id="e1",
@@ -841,7 +841,32 @@ class TestTimelineService:
         with patch.object(timeline_service, "get_timeline_items", return_value=[item]):
             result = timeline_service.build_temporal_context(mock_world_db)
 
-        # Items without meaningful temporal data are filtered out
+        # Items without any temporal data are filtered out
+        assert result == ""
+
+    def test_build_temporal_context_excludes_created_at_fallback(
+        self, timeline_service, mock_world_db
+    ):
+        """Entities with only a created_at fallback (no real lifecycle) are excluded."""
+        # This mimics the fallback path in _entity_to_timeline_item where an
+        # entity has no lifecycle data and gets raw_text="Added: YYYY-MM-DD"
+        item = TimelineItem(
+            id="entity-1",
+            entity_id="e1",
+            label="NoLifecycleEntity",
+            item_type="character",
+            start=StoryTimestamp(
+                raw_text="Added: 2024-03-15",
+                relative_order=1710504000,
+            ),
+            color="#000",
+            group="character",
+        )
+
+        with patch.object(timeline_service, "get_timeline_items", return_value=[item]):
+            result = timeline_service.build_temporal_context(mock_world_db)
+
+        # Fallback "Added:" items are filtered out of temporal context
         assert result == ""
 
     def test_build_temporal_context_unknown_type(self, timeline_service, mock_world_db):
