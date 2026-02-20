@@ -2245,6 +2245,38 @@ class TestMissingValidationCoverage:
         with pytest.raises(ValueError, match="content_truncation_for_judgment must be between"):
             settings.validate()
 
+    @pytest.mark.parametrize(
+        "field_name",
+        [
+            "previous_chapter_context_chars",
+            "chapter_analysis_chars",
+            "full_story_analysis_chars",
+            "full_text_preview_chars",
+        ],
+    )
+    def test_validate_raises_on_invalid_context_char_fields_below(self, field_name):
+        """Should raise ValueError for context char fields below lower bound."""
+        settings = Settings()
+        setattr(settings, field_name, 0)  # Below 1
+        with pytest.raises(ValueError, match=f"{field_name} must be between 1 and 100000"):
+            settings.validate()
+
+    @pytest.mark.parametrize(
+        "field_name",
+        [
+            "previous_chapter_context_chars",
+            "chapter_analysis_chars",
+            "full_story_analysis_chars",
+            "full_text_preview_chars",
+        ],
+    )
+    def test_validate_raises_on_invalid_context_char_fields_above(self, field_name):
+        """Should raise ValueError for context char fields above upper bound."""
+        settings = Settings()
+        setattr(settings, field_name, 100001)  # Above 100000
+        with pytest.raises(ValueError, match=f"{field_name} must be between 1 and 100000"):
+            settings.validate()
+
     # --- Judge consistency settings validation (lines 611, 617, 623, 630) ---
 
     def test_validate_raises_on_invalid_judge_multi_call_count_low(self):

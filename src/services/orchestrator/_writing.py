@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from src.agents import ResponseValidationError
 from src.memory.story_state import Chapter
-from src.utils.exceptions import ExportError
+from src.utils.exceptions import ExportError, GenerationCancelledError
 
 if TYPE_CHECKING:
     from . import StoryOrchestrator, WorkflowEvent
@@ -46,9 +46,109 @@ def _retrieve_world_context(orc: StoryOrchestrator, task_description: str) -> st
                 retrieved.total_tokens,
             )
         return formatted
+    except GenerationCancelledError:
+        raise
     except Exception as e:
-        logger.error("RAG context retrieval failed (non-fatal): %s", e, exc_info=True)
+        logger.warning("RAG context retrieval failed (non-fatal): %s", e, exc_info=True)
         return ""
+
+
+def _retrieve_temporal_context(orc: StoryOrchestrator) -> str:
+    """Retrieve temporal context from timeline data for prompt enrichment.
+
+    Uses the orchestrator's timeline service and world_db to build a readable
+    temporal context string. Returns empty string if world_db is not set,
+    temporal validation is disabled, timeline service is not configured,
+    or retrieval fails.
+
+    Args:
+        orc: StoryOrchestrator instance with optional world_db and timeline.
+
+    Returns:
+        Formatted temporal context string, or empty string if unavailable.
+    """
+    world_db = orc.world_db
+    if not world_db:
+        logger.debug("No world_db configured, skipping temporal context")
+        return ""
+
+    if not orc.settings.validate_temporal_consistency:
+        logger.debug("Temporal validation disabled, skipping temporal context")
+        return ""
+
+    if not orc.timeline:
+        logger.debug("No timeline service configured, skipping temporal context")
+        return ""
+
+    try:
+        context = orc.timeline.build_temporal_context(world_db)
+        if context:
+            logger.debug("Retrieved temporal context: %d chars", len(context))
+        return context
+    except GenerationCancelledError:
+        raise
+    except Exception as e:
+        logger.warning("Temporal context retrieval failed (non-fatal): %s", e, exc_info=True)
+        return ""
+
+
+def _combine_contexts(world_context: str, temporal_context: str) -> str:
+    """Merge RAG world context and temporal context into a single string.
+
+    Order matters: world_context (RAG) must be first, temporal_context second.
+    The combined string is injected into agent prompts with RAG data preceding
+    temporal timeline data.
+
+    Args:
+        world_context: RAG-retrieved world context string (may be empty).
+        temporal_context: Temporal timeline context string (may be empty).
+
+    Returns:
+        Combined context string, or empty string if both inputs are empty.
+    """
+    if not world_context and not temporal_context:
+        return ""
+    logger.debug(
+        "Combining contexts: world=%d chars, temporal=%d chars",
+        len(world_context),
+        len(temporal_context),
+    )
+    if not temporal_context:
+        return world_context
+    result = f"{world_context}\n\n{temporal_context}" if world_context else temporal_context
+    logger.debug("Combined context: %d chars", len(result))
+    return result
+
+
+def _warn_if_context_missing(orc: StoryOrchestrator, combined_context: str, task: str) -> None:
+    """Log a warning if context sources are enabled but returned no data.
+
+    Checks both RAG and temporal context source configuration against the
+    actual combined context result. Only warns when sources are configured
+    but produced empty output, indicating a retrieval failure.
+
+    Args:
+        orc: StoryOrchestrator instance.
+        combined_context: The combined context string (may be empty).
+        task: Human-readable label for the warning message (e.g. "Final story review").
+    """
+    if combined_context:
+        return
+    rag_enabled = bool(
+        orc.context_retrieval
+        and orc.world_db
+        and orc.story_state
+        and orc.settings.rag_context_enabled
+    )
+    temporal_enabled = bool(
+        orc.world_db and orc.settings.validate_temporal_consistency and orc.timeline
+    )
+    if rag_enabled or temporal_enabled:
+        logger.warning(
+            "%s proceeding without any world/temporal context "
+            "despite context sources being configured",
+            task,
+        )
 
 
 def write_short_story(orc: StoryOrchestrator) -> Generator[WorkflowEvent, None, str]:
@@ -75,7 +175,9 @@ def write_short_story(orc: StoryOrchestrator) -> Generator[WorkflowEvent, None, 
     )
     orc.story_state.chapters = [short_story_chapter]
 
-    # Retrieve RAG context for writer
+    # Retrieve RAG context for writer.
+    # Temporal context is intentionally omitted for short stories — they don't
+    # go through the full continuity review that chapter-based stories use.
     world_context = _retrieve_world_context(orc, "Write a complete short story")
 
     # Write initial draft
@@ -482,7 +584,11 @@ def write_all_chapters(
     orc._emit("agent_start", "Continuity", "Performing final story review...")
     yield orc.events[-1]
 
-    final_issues = orc.continuity.check_full_story(orc.story_state)
+    world_context = _retrieve_world_context(orc, "Final story review for continuity")
+    temporal_context = _retrieve_temporal_context(orc)
+    combined_context = _combine_contexts(world_context, temporal_context)
+    _warn_if_context_missing(orc, combined_context, "Final story review")
+    final_issues = orc.continuity.check_full_story(orc.story_state, world_context=combined_context)
     if final_issues:
         # Report any remaining issues but don't block completion
         issue_summary = orc.continuity.format_revision_feedback(final_issues)

@@ -250,6 +250,7 @@ class Settings:
     # These control how much context is sent to the LLM to stay within limits
     previous_chapter_context_chars: int = 2000  # End of previous chapter for continuity
     chapter_analysis_chars: int = 4000  # Chapter content for analysis
+    full_story_analysis_chars: int = 8000  # Full story content for continuity checks
     full_text_preview_chars: int = 3000  # Text preview for editing suggestions
 
     # Interaction settings

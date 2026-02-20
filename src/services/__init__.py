@@ -79,7 +79,7 @@ class ServiceContainer:
             settings (Settings | None): Application settings to share across services. If omitted, settings are loaded via Settings.load().
 
         Notes:
-            Some services are initialized with other service instances as dependencies (for example, `mode` is provided to `scoring`, `story`, `world_quality`, and `import_svc`).
+            Some services are initialized with other service instances as dependencies (for example, `mode` is provided to `scoring`, `story`, `world_quality`, and `import_svc`; `timeline` is provided to `story`).
         """
         t0 = time.perf_counter()
         logger.info("Initializing ServiceContainer...")
@@ -92,10 +92,15 @@ class ServiceContainer:
         self.mode = ModelModeService(self.settings)
         self.scoring = ScoringService(self.mode)
         self.context_retrieval = ContextRetrievalService(self.settings, self.embedding)
-        # StoryService needs mode_service for adaptive learning hooks
-        # and context_retrieval for RAG-based prompt enrichment
+        self.timeline = TimelineService(self.settings)
+        # StoryService needs mode_service for adaptive learning hooks,
+        # context_retrieval for RAG-based prompt enrichment,
+        # and timeline for temporal context in agent prompts
         self.story = StoryService(
-            self.settings, mode_service=self.mode, context_retrieval=self.context_retrieval
+            self.settings,
+            mode_service=self.mode,
+            context_retrieval=self.context_retrieval,
+            timeline=self.timeline,
         )
         self.world_quality = WorldQualityService(self.settings, self.mode)
         self.suggestion = SuggestionService(self.settings)
@@ -103,12 +108,13 @@ class ServiceContainer:
         self.backup = BackupService(self.settings)
         self.import_svc = ImportService(self.settings, self.mode)
         self.comparison = ComparisonService(self.settings)
-        self.timeline = TimelineService(self.settings)
         self.conflict_analysis = ConflictAnalysisService(self.settings)
         self.world_template = WorldTemplateService(self.settings)
         self.content_guidelines = ContentGuidelinesService(self.settings)
         self.calendar = CalendarService(self.settings)
         self.temporal_validation = TemporalValidationService(self.settings)
+        # Wire temporal_validation into WorldService for health metrics DI
+        self.world._temporal_validation = self.temporal_validation
         service_count = len(self.__class__.__annotations__) - 1  # exclude 'settings'
         logger.info(
             "ServiceContainer initialized: %d services in %.2fs",

@@ -27,6 +27,7 @@ from ._event_helpers import (
 if TYPE_CHECKING:
     from src.memory.world_health import WorldHealthMetrics
     from src.services import ServiceContainer
+    from src.services.temporal_validation_service import TemporalValidationService
 
 logger = logging.getLogger(__name__)
 
@@ -137,9 +138,14 @@ class WorldService:
         logger.debug("Initializing WorldService")
         self.settings = settings or Settings.load()
 
+        # Optional temporal validation service (injected by ServiceContainer)
+        self._temporal_validation: TemporalValidationService | None = None
+
         # TTL cache for health metrics (avoids redundant recomputation on page reload)
         self._health_cache: WorldHealthMetrics | None = None
-        self._health_cache_key: tuple[str, float] | None = None  # (db_path, threshold)
+        self._health_cache_key: tuple[str, float, bool] | None = (
+            None  # (db_path, threshold, temporal)
+        )
         self._health_cache_time: float = 0.0
         self._health_cache_lock = threading.RLock()
 
@@ -522,10 +528,17 @@ class WorldService:
 
     @staticmethod
     def _calculate_total_steps(
-        options: WorldBuildOptions, *, generate_calendar: bool = False
+        options: WorldBuildOptions,
+        *,
+        generate_calendar: bool = False,
+        validate_temporal: bool = False,
     ) -> int:
         """Calculate total number of steps for progress reporting."""
-        return _build._calculate_total_steps(options, generate_calendar=generate_calendar)
+        return _build._calculate_total_steps(
+            options,
+            generate_calendar=generate_calendar,
+            validate_temporal=validate_temporal,
+        )
 
     @staticmethod
     def _clear_world_db(world_db: WorldDatabase) -> None:
@@ -693,7 +706,11 @@ class WorldService:
         Returns:
             WorldHealthMetrics object with all computed metrics.
         """
-        cache_key = (str(world_db.db_path), quality_threshold)
+        cache_key = (
+            str(world_db.db_path),
+            quality_threshold,
+            self.settings.validate_temporal_consistency,
+        )
         with self._health_cache_lock:
             now = time.monotonic()
             if (
@@ -705,7 +722,9 @@ class WorldService:
                 return self._health_cache
 
             logger.debug("Health metrics cache miss — recomputing")
-            result = _health.get_world_health_metrics(self, world_db, quality_threshold)
+            result = _health.get_world_health_metrics(
+                self, world_db, quality_threshold, temporal_validation=self._temporal_validation
+            )
 
             self._health_cache = result
             self._health_cache_key = cache_key

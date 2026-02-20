@@ -7,6 +7,7 @@ This service handles:
 """
 
 import logging
+from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 from src.memory.entities import Entity, WorldEvent
@@ -25,6 +26,17 @@ if TYPE_CHECKING:
     from src.memory.world_database import WorldDatabase
 
 logger = logging.getLogger(__name__)
+
+# Canonical ordering and display names for temporal context sections
+_TEMPORAL_TYPE_ORDER = ["character", "faction", "location", "item", "concept", "event"]
+_TEMPORAL_PLURAL_MAP = {
+    "character": "CHARACTERS",
+    "faction": "FACTIONS",
+    "location": "LOCATIONS",
+    "item": "ITEMS",
+    "concept": "CONCEPTS",
+    "event": "EVENTS",
+}
 
 
 class TimelineService:
@@ -82,16 +94,14 @@ class TimelineService:
                 continue
 
             item = self._entity_to_timeline_item(entity)
-            if item:
-                items.append(item)
+            items.append(item)
 
         # Get events if requested
         if include_events:
             events = world_db.list_events()
             for event in events:
                 item = self._event_to_timeline_item(event)
-                if item:
-                    items.append(item)
+                items.append(item)
 
         # Sort by start timestamp
         items.sort(key=lambda x: x.start.sort_key)
@@ -99,7 +109,7 @@ class TimelineService:
         logger.info(f"Generated {len(items)} timeline items")
         return items
 
-    def _entity_to_timeline_item(self, entity: Entity) -> TimelineItem | None:
+    def _entity_to_timeline_item(self, entity: Entity) -> TimelineItem:
         """
         Convert an Entity into a TimelineItem for timeline visualization.
 
@@ -158,11 +168,15 @@ class TimelineService:
         logger.debug(f"Created timeline item for entity {entity.name}: {item.id}")
         return item
 
-    def _event_to_timeline_item(self, event: WorldEvent) -> TimelineItem | None:
+    def _event_to_timeline_item(self, event: WorldEvent) -> TimelineItem:
         """
         Create a TimelineItem representing a world event for timeline display.
 
-        The start timestamp is taken from `event.timestamp_in_story` when present, otherwise from `event.chapter_number`, and falls back to `event.created_at` if neither is available.
+        The start timestamp is taken from `event.timestamp_in_story` when present, otherwise
+        from `event.chapter_number`, and falls back to `event.created_at` if neither is available.
+
+        Parameters:
+            event (WorldEvent): The world event to convert into a timeline item.
 
         Returns:
             TimelineItem representing the event for the timeline.
@@ -192,7 +206,7 @@ class TimelineService:
             label=event.description[:50] + ("..." if len(event.description) > 50 else ""),
             item_type="event",
             start=start,
-            end=None,  # Events are points, not ranges
+            end=None,
             color="#FF5722",  # Orange for events
             description=event.description,
             group="event",
@@ -200,6 +214,76 @@ class TimelineService:
 
         logger.debug(f"Created timeline item for event {event.id}")
         return item
+
+    def build_temporal_context(self, world_db: WorldDatabase) -> str:
+        """Build a readable temporal context string for agent prompts.
+
+        Retrieves all timeline items, groups them by type, and formats
+        them as a readable text block suitable for injection into agent prompts.
+        Groups are sorted in display order: character, faction, location, item,
+        concept, event. Unknown types are appended at the end.
+        Caps at 20 items per type to avoid prompt bloat.
+
+        Args:
+            world_db: WorldDatabase to extract timeline data from.
+
+        Returns:
+            Formatted temporal context string, or empty string if no timeline data.
+        """
+        validate_not_none(world_db, "world_db")
+
+        all_items = self.get_timeline_items(world_db)
+        # Filter to items with explicit narrative timeline data — exclude items
+        # whose only temporal info is a created_at fallback (raw_text "Added: ...")
+        items = [
+            i
+            for i in all_items
+            if i.start.has_date and not (i.start.raw_text or "").startswith("Added:")
+        ]
+        if not items:
+            logger.debug(
+                "No timeline items with temporal data found (%d total items skipped)",
+                len(all_items),
+            )
+            return ""
+
+        # Group items by type
+        groups: dict[str, list[TimelineItem]] = defaultdict(list)
+        for item in items:
+            groups[item.item_type].append(item)
+
+        # Build formatted output
+        sections: list[str] = []
+        sorted_keys = sorted(
+            groups.keys(),
+            key=lambda k: _TEMPORAL_TYPE_ORDER.index(k) if k in _TEMPORAL_TYPE_ORDER else 999,
+        )
+
+        for group_key in sorted_keys:
+            group_items = groups[group_key]
+            header = _TEMPORAL_PLURAL_MAP.get(group_key, group_key.upper() + "S")
+            lines: list[str] = [header + ":"]
+            for item in group_items[:20]:
+                start_year_display = item.start.year if item.start.year is not None else "unknown"
+                start_text = item.start.raw_text or str(start_year_display)
+                if item.end is not None:
+                    end_year_display = item.end.year if item.end.year is not None else "ongoing"
+                    end_text = item.end.raw_text or str(end_year_display)
+                    lines.append(f"- {item.label}: {start_text} to {end_text}")
+                else:
+                    lines.append(f"- {item.label}: {start_text}")
+            if len(group_items) > 20:
+                lines.append(f"  ... and {len(group_items) - 20} more")
+            sections.append("\n".join(lines))
+
+        result = "\n\n".join(sections)
+        logger.debug(
+            "Built temporal context: %d sections, %d total items, %d chars",
+            len(sections),
+            len(items),
+            len(result),
+        )
+        return result
 
     def get_entity_lifecycle(self, entity: Entity) -> EntityLifecycle | None:
         """
@@ -290,8 +374,11 @@ class TimelineService:
                 )
 
         # Sort groups by predefined order
-        group_order = ["character", "faction", "location", "item", "concept", "event"]
-        groups.sort(key=lambda g: group_order.index(g["id"]) if g["id"] in group_order else 999)
+        groups.sort(
+            key=lambda g: (
+                _TEMPORAL_TYPE_ORDER.index(g["id"]) if g["id"] in _TEMPORAL_TYPE_ORDER else 999
+            )
+        )
 
         logger.debug(f"Generated {len(groups)} timeline groups")
         return groups
@@ -308,6 +395,7 @@ class TimelineService:
         Parameters:
             world_db (WorldDatabase): Database providing entities and events to include in the timeline.
             entity_types (list[str] | None): Optional list of entity type names to include; include all types if None.
+            include_events (bool): If True, include world events in the timeline data. Defaults to True.
 
         Returns:
             dict: A mapping with keys "items" (list of vis.js item dicts) and "groups" (list of vis.js group dicts). Items without temporal information are omitted.

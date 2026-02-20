@@ -38,6 +38,7 @@ class WorldHealthDashboard:
     - Entity count summary
     - Orphan entity warnings
     - Circular relationship warnings with view/accept
+    - Temporal consistency issue display with validate/re-validate
     - Quality distribution chart with per-entity improve buttons
     - Actionable recommendations (shown directly, not in expansion panel)
     """
@@ -50,6 +51,7 @@ class WorldHealthDashboard:
         on_accept_circular: Callable[[CycleInfo], Any] | None = None,
         on_improve_quality: Callable[[str], Any] | None = None,
         on_refresh: Callable[[], Any] | None = None,
+        on_validate_timeline: Callable[[], Any] | None = None,
     ):
         """Initialize world health dashboard.
 
@@ -60,6 +62,7 @@ class WorldHealthDashboard:
             on_accept_circular: Callback to accept a circular chain as intentional.
             on_improve_quality: Callback to improve a low-quality entity.
             on_refresh: Callback to refresh metrics after changes.
+            on_validate_timeline: Callback to trigger temporal validation.
         """
         self.metrics = metrics
         self.on_fix_orphan = on_fix_orphan
@@ -67,6 +70,7 @@ class WorldHealthDashboard:
         self.on_accept_circular = on_accept_circular
         self.on_improve_quality = on_improve_quality
         self.on_refresh = on_refresh
+        self.on_validate_timeline = on_validate_timeline
 
     def build(self) -> None:
         """Build the dashboard UI.
@@ -75,6 +79,7 @@ class WorldHealthDashboard:
         - Header row: health score + refresh button
         - Stats row: entity counts + relationship stats side by side
         - Warnings row: orphans + circular chains in a grid
+        - Temporal row: temporal consistency issues (conditional)
         - Bottom row: quality distribution + recommendations (shown directly)
         """
         logger.debug(
@@ -105,6 +110,17 @@ class WorldHealthDashboard:
                     self._build_orphan_section()
                 with ui.element("div").classes("flex-1 min-w-[220px]"):
                     self._build_circular_section()
+
+            # Temporal issues section (between warnings and bottom row)
+            has_temporal_issues = (
+                self.metrics.temporal_error_count > 0 or self.metrics.temporal_warning_count > 0
+            )
+            if (
+                has_temporal_issues
+                or self.on_validate_timeline
+                or self.metrics.temporal_validation_failed
+            ):
+                self._build_temporal_section()
 
             # Bottom row: quality distribution + recommendations
             with ui.row().classes("w-full gap-4"):
@@ -275,6 +291,142 @@ class WorldHealthDashboard:
                 if circular_count > 3:
                     ui.label(f"+{circular_count - 3} more...").classes("text-xs text-gray-400")
 
+    def _build_temporal_section(self) -> None:
+        """Build temporal consistency issues section."""
+        logger.debug(
+            "Building temporal section: errors=%d, warnings=%d, issues=%d, failed=%s",
+            self.metrics.temporal_error_count,
+            self.metrics.temporal_warning_count,
+            len(self.metrics.temporal_issues),
+            self.metrics.temporal_validation_failed,
+        )
+        error_count = self.metrics.temporal_error_count
+        warning_count = self.metrics.temporal_warning_count
+        has_issues = error_count > 0 or warning_count > 0
+
+        with ui.row().classes("w-full gap-4 mb-4"):
+            with ui.element("div").classes("flex-1"):
+                # Show validation service failure as a distinct warning banner
+                if self.metrics.temporal_validation_failed:
+                    with ui.card().classes("p-3 bg-orange-900 mb-2"):
+                        with ui.row().classes("items-center gap-2"):
+                            ui.icon("report_problem", size="sm").classes("text-orange-400")
+                            ui.label("Temporal validation could not complete").classes(
+                                "text-sm font-medium text-orange-200"
+                            )
+                        raw_error = self.metrics.temporal_validation_error or "Unknown error"
+                        error_msg = raw_error[:200] if len(raw_error) > 200 else raw_error
+                        ui.label(f"Error: {error_msg}").classes("text-xs text-orange-300 ml-7")
+                        ui.label("Check logs for details and retry the health check.").classes(
+                            "text-xs text-orange-300 ml-7"
+                        )
+                        if self.on_validate_timeline:
+                            ui.button(
+                                "Retry Validation",
+                                on_click=self.on_validate_timeline,
+                                icon="refresh",
+                            ).props("flat size=sm").classes("mt-1")
+
+                if not self.metrics.temporal_validation_failed and not has_issues:
+                    with ui.row().classes("items-center gap-2 p-2 bg-green-900 rounded"):
+                        ui.icon("schedule", size="sm").classes("text-green-500")
+                        ui.label("No temporal issues").classes("text-sm text-green-300")
+                        if self.on_validate_timeline:
+                            ui.space()
+                            ui.button(
+                                "Validate Timeline",
+                                on_click=self.on_validate_timeline,
+                                icon="update",
+                            ).props("flat size=sm")
+                elif not self.metrics.temporal_validation_failed and has_issues:
+                    bg_color = "red-900" if error_count > 0 else "yellow-900"
+                    with ui.card().classes(f"p-3 bg-{bg_color}"):
+                        with ui.row().classes("items-center gap-2 mb-2"):
+                            ui.icon("schedule", size="sm").classes(
+                                "text-red-600" if error_count > 0 else "text-yellow-600"
+                            )
+                            label_parts = []
+                            if error_count > 0:
+                                label_parts.append(
+                                    f"{error_count} error{'s' if error_count != 1 else ''}"
+                                )
+                            if warning_count > 0:
+                                label_parts.append(
+                                    f"{warning_count} warning{'s' if warning_count != 1 else ''}"
+                                )
+                            ui.label(f"Temporal: {', '.join(label_parts)}").classes(
+                                "text-sm font-medium text-red-200"
+                                if error_count > 0
+                                else "text-sm font-medium text-yellow-200"
+                            )
+
+                            # Consistency score badge
+                            score = self.metrics.average_temporal_consistency
+                            score_color = (
+                                "green" if score >= 7 else "orange" if score >= 4 else "red"
+                            )
+                            ui.badge(
+                                f"{score:.1f}/10",
+                                color=score_color,
+                            ).props("outline").classes("text-xs ml-auto")
+
+                        # List issues (max 5)
+                        with ui.column().classes("gap-1"):
+                            for issue in self.metrics.temporal_issues[:5]:
+                                message = issue.get("message") or "<missing message>"
+                                severity = issue.get("severity")
+                                if severity not in ("error", "warning"):
+                                    logger.debug("Temporal issue has invalid severity: %s", issue)
+                                    severity = "warning"
+                                if not issue.get("message"):
+                                    logger.debug("Temporal issue missing message field: %s", issue)
+                                icon_name = "error" if severity == "error" else "warning"
+                                icon_color = (
+                                    "text-red-500" if severity == "error" else "text-yellow-500"
+                                )
+                                entity_name = issue.get("entity_name", "")
+                                entity_type = issue.get("entity_type", "")
+                                error_type = issue.get("error_type", "")
+                                suggestion = issue.get("suggestion", "")
+
+                                with ui.column().classes("gap-0 mb-1"):
+                                    with ui.row().classes("items-start gap-2"):
+                                        ui.icon(icon_name, size="xs").classes(icon_color)
+                                        with ui.column().classes("gap-0"):
+                                            # Entity name and type
+                                            if entity_name:
+                                                entity_label = entity_name
+                                                if entity_type:
+                                                    entity_label += f" ({entity_type})"
+                                                ui.label(entity_label).classes(
+                                                    "text-sm font-medium"
+                                                )
+                                            ui.label(message).classes("text-sm")
+                                            # Error type badge
+                                            if error_type:
+                                                ui.badge(
+                                                    error_type.replace("_", " "),
+                                                    color="grey",
+                                                ).props("outline").classes("text-xs")
+                                            # Suggestion
+                                            if suggestion:
+                                                ui.label(suggestion).classes(
+                                                    "text-xs text-gray-400 italic"
+                                                )
+                            total_issues = error_count + warning_count
+                            if total_issues > 5:
+                                ui.label(f"+{total_issues - 5} more...").classes(
+                                    "text-xs text-gray-400"
+                                )
+
+                        if self.on_validate_timeline:
+                            with ui.row().classes("mt-2"):
+                                ui.button(
+                                    "Re-validate Timeline",
+                                    on_click=self.on_validate_timeline,
+                                    icon="update",
+                                ).props("flat size=sm")
+
     def _build_quality_section(self) -> None:
         """Build quality distribution section with per-entity improve buttons."""
         with ui.card().classes("p-3 bg-gray-800 h-full"):
@@ -398,7 +550,23 @@ def build_health_summary_compact(metrics: WorldHealthMetrics) -> None:
                         f"{metrics.circular_count} cycles",
                         color="orange",
                     ).props("outline").classes("text-xs")
-                if metrics.orphan_count == 0 and metrics.circular_count == 0:
+                if metrics.temporal_error_count > 0:
+                    ui.badge(
+                        f"{metrics.temporal_error_count} temporal",
+                        color="red",
+                    ).props("outline").classes("text-xs")
+                elif metrics.temporal_warning_count > 0:
+                    ui.badge(
+                        f"{metrics.temporal_warning_count} temporal warn",
+                        color="orange",
+                    ).props("outline").classes("text-xs")
+                if (
+                    metrics.orphan_count == 0
+                    and metrics.circular_count == 0
+                    and metrics.temporal_error_count == 0
+                    and metrics.temporal_warning_count == 0
+                    and not metrics.temporal_validation_failed
+                ):
                     ui.badge(
                         "Healthy",
                         color="green",

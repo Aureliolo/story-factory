@@ -545,6 +545,17 @@ def _validate_content_truncation(settings: Settings) -> None:
             f"got {settings.content_truncation_for_judgment}"
         )
 
+    context_char_fields = [
+        ("previous_chapter_context_chars", settings.previous_chapter_context_chars),
+        ("chapter_analysis_chars", settings.chapter_analysis_chars),
+        ("full_story_analysis_chars", settings.full_story_analysis_chars),
+        ("full_text_preview_chars", settings.full_text_preview_chars),
+    ]
+    logger.debug("Validating context char fields: %s", [n for n, _ in context_char_fields])
+    for field_name, value in context_char_fields:
+        if not 1 <= value <= 100000:
+            raise ValueError(f"{field_name} must be between 1 and 100000, got {value}")
+
 
 def _validate_ollama_client_timeouts(settings: Settings) -> None:
     """Validate Ollama client timeout settings."""

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from src.memory.world_database import WorldDatabase
     from src.services.context_retrieval_service import ContextRetrievalService
     from src.services.model_mode_service import ModelModeService
+    from src.services.timeline_service import TimelineService
 
 from src.agents import (
     ArchitectAgent,
@@ -59,6 +60,7 @@ class StoryOrchestrator:
         model_override: str | None = None,  # Force specific model for all agents
         mode_service: ModelModeService | None = None,  # ModelModeService for learning hooks
         context_retrieval: ContextRetrievalService | None = None,
+        timeline: TimelineService | None = None,
     ):
         """Create a StoryOrchestrator and initialize agents, persistent state, and progress tracking.
 
@@ -67,11 +69,13 @@ class StoryOrchestrator:
             model_override (str | None): Model identifier to force for all agents; when None agents use their configured models.
             mode_service (ModelModeService | None): Optional ModelModeService instance for adaptive learning hooks.
             context_retrieval (ContextRetrievalService | None): Optional context retrieval service for RAG-based prompt enrichment.
+            timeline (TimelineService | None): Optional timeline service for temporal context in prompts.
         """
         self.settings = settings or Settings.load()
         self.model_override = model_override
         self.mode_service = mode_service  # For learning hooks
         self.context_retrieval = context_retrieval  # For RAG context injection
+        self.timeline = timeline  # For temporal context in agent prompts
         self.world_db: WorldDatabase | None = None  # Set per-project by StoryService
 
         # Initialize agents with settings

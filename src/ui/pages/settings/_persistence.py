@@ -108,6 +108,7 @@ def capture_settings_snapshot(page: SettingsPage) -> dict[str, Any]:
         "max_tokens": settings.max_tokens,
         "previous_chapter_context_chars": settings.previous_chapter_context_chars,
         "chapter_analysis_chars": settings.chapter_analysis_chars,
+        "full_story_analysis_chars": settings.full_story_analysis_chars,
         "full_text_preview_chars": settings.full_text_preview_chars,
         # Mode
         "use_mode_system": settings.use_mode_system,
@@ -216,6 +217,8 @@ def restore_settings_snapshot(page: SettingsPage, snapshot: dict[str, Any]) -> N
     settings.max_tokens = snapshot["max_tokens"]
     settings.previous_chapter_context_chars = snapshot["previous_chapter_context_chars"]
     settings.chapter_analysis_chars = snapshot["chapter_analysis_chars"]
+    if "full_story_analysis_chars" in snapshot:
+        settings.full_story_analysis_chars = snapshot["full_story_analysis_chars"]
     if "full_text_preview_chars" in snapshot:
         settings.full_text_preview_chars = snapshot["full_text_preview_chars"]
 

@@ -84,7 +84,11 @@ def build_world(
     # Reconcile calendar option with settings gate before computing steps
     effective_calendar = options.generate_calendar and svc.settings.generate_calendar_on_world_build
     # Calculate total steps for progress reporting
-    total_steps = _calculate_total_steps(options, generate_calendar=effective_calendar)
+    total_steps = _calculate_total_steps(
+        options,
+        generate_calendar=effective_calendar,
+        validate_temporal=svc.settings.validate_temporal_consistency,
+    )
     current_step = 0
 
     def report_progress(message: str, entity_type: str | None = None, count: int = 0) -> None:
@@ -153,7 +157,7 @@ def build_world(
             except Exception as e:
                 logger.warning("Calendar generation failed (non-fatal), continuing without: %s", e)
 
-        # Steps 2-9: entity generation (inside try/finally for calendar context cleanup)
+        # Steps 2-10: entity generation (inside try/finally for calendar context cleanup)
         _build_world_entities(
             svc,
             state,
@@ -190,11 +194,11 @@ def _build_world_entities(
     check_cancelled: Callable[[], None],
     report_progress: Callable[..., None],
 ) -> None:
-    """Execute entity generation steps 2-9 of the world build.
+    """Execute all world-building steps after initial setup.
 
     Steps: structure generation, character extraction, quality review (characters,
     plot, chapters), locations, factions, items, concepts, relationships, orphan
-    recovery, events, and embeddings.
+    recovery, events, temporal validation, and embeddings.
     """
     # Step 2: Generate story structure (characters, chapters) if requested
     if options.generate_structure:
@@ -371,17 +375,44 @@ def _build_world_entities(
         except (WorldGenerationError, ValueError) as e:
             logger.warning("Event generation failed (non-fatal), continuing without events: %s", e)
 
-    # Step 9: Batch-embed all world content for RAG context retrieval
+    # Step 9: Validate temporal consistency (non-fatal, before embedding)
+    if svc.settings.validate_temporal_consistency:
+        check_cancelled()
+        report_progress("Validating temporal consistency...")
+        try:
+            result = services.temporal_validation.validate_world(world_db)
+            for issue in result.errors:
+                logger.warning("Temporal error: %s", issue.message)
+            for issue in result.warnings:
+                logger.debug("Temporal warning: %s", issue.message)
+            logger.info(
+                "Temporal validation complete: %d errors, %d warnings",
+                result.error_count,
+                result.warning_count,
+            )
+        except GenerationCancelledError:
+            raise
+        except Exception as e:
+            logger.warning("Temporal validation failed (non-fatal): %s", e, exc_info=True)
+
+    # Step 10: Batch-embed all world content for RAG context retrieval
     check_cancelled()
     report_progress("Embedding world content for RAG...")
     try:
         embed_counts = services.embedding.embed_all_world_data(world_db, state)
         logger.info("World embedding complete: %s", embed_counts)
     except Exception as e:
-        logger.warning("World embedding failed (non-fatal), RAG context unavailable: %s", e)
+        logger.warning(
+            "World embedding failed (non-fatal), RAG context unavailable: %s", e, exc_info=True
+        )
 
 
-def _calculate_total_steps(options: WorldBuildOptions, *, generate_calendar: bool = False) -> int:
+def _calculate_total_steps(
+    options: WorldBuildOptions,
+    *,
+    generate_calendar: bool = False,
+    validate_temporal: bool = False,
+) -> int:
     """Calculate total number of steps for progress reporting."""
     steps = 3  # Character extraction + embedding + completion
     if options.clear_existing:
@@ -406,6 +437,14 @@ def _calculate_total_steps(options: WorldBuildOptions, *, generate_calendar: boo
         steps += 1
     if options.generate_events:
         steps += 1
+    if validate_temporal:
+        steps += 1
+    logger.debug(
+        "_calculate_total_steps: %d steps (calendar=%s, temporal=%s)",
+        steps,
+        generate_calendar,
+        validate_temporal,
+    )
     return steps
 
 

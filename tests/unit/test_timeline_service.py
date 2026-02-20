@@ -1,7 +1,7 @@
 """Tests for the timeline service."""
 
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -699,8 +699,6 @@ class TestTimelineService:
 
     def test_get_timeline_data_for_visjs_skips_no_temporal(self, timeline_service, mock_world_db):
         """Test vis.js data skips items with no temporal data."""
-        from unittest.mock import patch
-
         # Create items - one with temporal data, one without
         item_with_data = TimelineItem(
             id="item-1",
@@ -730,3 +728,196 @@ class TestTimelineService:
         # Should only have one item (the one with temporal data)
         assert len(data["items"]) == 1
         assert data["items"][0]["id"] == "item-1"
+
+    def test_build_temporal_context_empty_world(self, timeline_service, mock_world_db):
+        """Return empty string when no timeline items exist."""
+        result = timeline_service.build_temporal_context(mock_world_db)
+        assert result == ""
+
+    def test_build_temporal_context_with_entities(self, timeline_service, mock_world_db):
+        """Return formatted sections grouped by entity type."""
+        entity = Entity(
+            id="char-1",
+            type="character",
+            name="Hero",
+            description="The protagonist",
+            created_at=datetime.now(),
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 100, "raw_text": "Year 100"},
+                    "death": {"year": 180, "raw_text": "Year 180"},
+                }
+            },
+        )
+        mock_world_db.list_entities.return_value = [entity]
+
+        result = timeline_service.build_temporal_context(mock_world_db)
+
+        assert "CHARACTERS:" in result
+        assert "Hero" in result
+        assert "Year 100" in result
+        assert "Year 180" in result
+
+    def test_build_temporal_context_multiple_types(self, timeline_service, mock_world_db):
+        """Return sections for each entity type present."""
+        char = Entity(
+            id="char-1",
+            type="character",
+            name="Hero",
+            description="Protagonist",
+            created_at=datetime.now(),
+            attributes={"lifecycle": {"birth": {"year": 100}}},
+        )
+        faction = Entity(
+            id="fac-1",
+            type="faction",
+            name="Knights",
+            description="A faction",
+            created_at=datetime.now(),
+            attributes={"lifecycle": {"first_appearance": {"year": 50}}},
+        )
+        mock_world_db.list_entities.return_value = [char, faction]
+
+        result = timeline_service.build_temporal_context(mock_world_db)
+
+        assert "CHARACTERS:" in result
+        assert "FACTIONS:" in result
+        # Characters should come before factions (type_order)
+        assert result.index("CHARACTERS:") < result.index("FACTIONS:")
+
+    def test_build_temporal_context_point_event(self, timeline_service, mock_world_db):
+        """Format items without end date as point events (no 'to')."""
+        entity = Entity(
+            id="char-1",
+            type="character",
+            name="Wanderer",
+            description="A traveler",
+            created_at=datetime.now(),
+            attributes={"lifecycle": {"first_appearance": {"year": 200}}},
+        )
+        mock_world_db.list_entities.return_value = [entity]
+
+        result = timeline_service.build_temporal_context(mock_world_db)
+
+        assert "Wanderer: " in result
+        assert " to " not in result
+
+    def test_build_temporal_context_year_zero_preserved(self, timeline_service, mock_world_db):
+        """Year 0 is preserved (not treated as falsy 'unknown')."""
+        entity = Entity(
+            id="char-1",
+            type="character",
+            name="AncientOne",
+            description="Born at year zero",
+            created_at=datetime.now(),
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 0},
+                    "death": {"year": 100},
+                }
+            },
+        )
+        mock_world_db.list_entities.return_value = [entity]
+
+        result = timeline_service.build_temporal_context(mock_world_db)
+
+        assert "AncientOne" in result
+        # Year 0 should display as "0", not "unknown"
+        assert "unknown" not in result.lower()
+        assert "- AncientOne: 0 to 100" in result
+
+    def test_build_temporal_context_no_year_no_raw_text(self, timeline_service, mock_world_db):
+        """Items with no temporal data at all (has_date=False) are excluded."""
+        item = TimelineItem(
+            id="char-1",
+            entity_id="e1",
+            label="MysteryEntity",
+            item_type="character",
+            start=StoryTimestamp(),  # no year, no raw_text — has_date is False
+            color="#000",
+            group="character",
+        )
+
+        with patch.object(timeline_service, "get_timeline_items", return_value=[item]):
+            result = timeline_service.build_temporal_context(mock_world_db)
+
+        # Items without any temporal data are filtered out
+        assert result == ""
+
+    def test_build_temporal_context_excludes_created_at_fallback(
+        self, timeline_service, mock_world_db
+    ):
+        """Entities with only a created_at fallback (no real lifecycle) are excluded."""
+        # This mimics the fallback path in _entity_to_timeline_item where an
+        # entity has no lifecycle data and gets raw_text="Added: YYYY-MM-DD"
+        item = TimelineItem(
+            id="entity-1",
+            entity_id="e1",
+            label="NoLifecycleEntity",
+            item_type="character",
+            start=StoryTimestamp(
+                raw_text="Added: 2024-03-15",
+                relative_order=1710504000,
+            ),
+            color="#000",
+            group="character",
+        )
+
+        with patch.object(timeline_service, "get_timeline_items", return_value=[item]):
+            result = timeline_service.build_temporal_context(mock_world_db)
+
+        # Fallback "Added:" items are filtered out of temporal context
+        assert result == ""
+
+    def test_build_temporal_context_unknown_type(self, timeline_service, mock_world_db):
+        """Unknown entity types are sorted to the end and formatted correctly."""
+        char_item = TimelineItem(
+            id="char-1",
+            entity_id="e1",
+            label="Hero",
+            item_type="character",
+            start=StoryTimestamp(year=100),
+            color="#000",
+            group="character",
+        )
+        custom_item = TimelineItem(
+            id="custom-1",
+            entity_id="e2",
+            label="Artifact",
+            item_type="mystical_artifact",
+            start=StoryTimestamp(year=200),
+            color="#000",
+            group="mystical_artifact",
+        )
+
+        with patch.object(
+            timeline_service, "get_timeline_items", return_value=[custom_item, char_item]
+        ):
+            result = timeline_service.build_temporal_context(mock_world_db)
+
+        # Characters should come before unknown type
+        assert result.index("CHARACTERS:") < result.index("MYSTICAL_ARTIFACTS:")
+        assert "Hero" in result
+        assert "Artifact" in result
+
+    def test_build_temporal_context_caps_at_twenty(self, timeline_service, mock_world_db):
+        """Cap each type section at 20 items."""
+        entities = [
+            Entity(
+                id=f"char-{i}",
+                type="character",
+                name=f"Char{i}",
+                description=f"Character {i}",
+                created_at=datetime.now(),
+                attributes={"lifecycle": {"birth": {"year": 1000 + i}}},
+            )
+            for i in range(25)
+        ]
+        mock_world_db.list_entities.return_value = entities
+
+        result = timeline_service.build_temporal_context(mock_world_db)
+
+        assert "... and 5 more" in result
+        # Should have exactly 20 "- Char" lines
+        char_lines = [line for line in result.split("\n") if line.startswith("- Char")]
+        assert len(char_lines) == 20

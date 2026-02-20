@@ -8,10 +8,11 @@ from typing import TYPE_CHECKING
 from src.memory.entities import Entity
 from src.memory.world_database import WorldDatabase
 from src.memory.world_health import CycleEdge, CycleInfo
-from src.utils.exceptions import DatabaseClosedError
+from src.utils.exceptions import DatabaseClosedError, GenerationCancelledError
 
 if TYPE_CHECKING:
     from src.memory.world_health import WorldHealthMetrics
+    from src.services.temporal_validation_service import TemporalValidationService
     from src.services.world_service import WorldService
 
 logger = logging.getLogger(__name__)
@@ -72,6 +73,7 @@ def get_world_health_metrics(
     svc: WorldService,
     world_db: WorldDatabase,
     quality_threshold: float = 6.0,
+    temporal_validation: TemporalValidationService | None = None,
 ) -> WorldHealthMetrics:
     """Get comprehensive health metrics for a story world.
 
@@ -84,6 +86,9 @@ def get_world_health_metrics(
         svc: WorldService instance.
         world_db: WorldDatabase instance.
         quality_threshold: Minimum quality score for "healthy" entities.
+        temporal_validation: Optional TemporalValidationService instance for
+            temporal consistency checks. When None and temporal validation is
+            enabled, the service is constructed from settings.
 
     Returns:
         WorldHealthMetrics object with all computed metrics.
@@ -236,6 +241,60 @@ def get_world_health_metrics(
     # Relationship density
     relationship_density = total_relationships / total_entities if total_entities > 0 else 0.0
 
+    # Temporal validation (if enabled)
+    temporal_error_count = 0
+    temporal_warning_count = 0
+    temporal_issues: list[dict] = []
+    average_temporal_consistency = 10.0  # Matches model default: "no issues / not measured"
+    temporal_validation_failed = False
+    temporal_validation_error: str | None = None
+
+    if svc.settings.validate_temporal_consistency:
+        try:
+            # Use injected service if available, otherwise construct one
+            if temporal_validation is None:
+                from src.services.temporal_validation_service import (
+                    TemporalValidationService as TVS,
+                )
+
+                temporal_validation = TVS(svc.settings)
+                logger.warning("Constructed TemporalValidationService (no DI instance provided)")
+
+            temporal_result = temporal_validation.validate_world(world_db)
+            temporal_error_count = temporal_result.error_count
+            temporal_warning_count = temporal_result.warning_count
+            temporal_issues = [
+                {
+                    "entity_id": issue.entity_id,
+                    "entity_name": issue.entity_name,
+                    "entity_type": issue.entity_type,
+                    "message": issue.message,
+                    "severity": str(issue.severity),
+                    "error_type": str(issue.error_type),
+                    "suggestion": issue.suggestion,
+                    "related_entity_id": issue.related_entity_id,
+                    "related_entity_name": issue.related_entity_name,
+                }
+                for issue in temporal_result.errors + temporal_result.warnings
+            ]
+            average_temporal_consistency = temporal_validation.calculate_temporal_consistency_score(
+                temporal_result
+            )
+            logger.debug(
+                "Temporal validation: %d errors, %d warnings, consistency=%.1f",
+                temporal_error_count,
+                temporal_warning_count,
+                average_temporal_consistency,
+            )
+        except GenerationCancelledError:
+            raise
+        except Exception as e:
+            logger.warning("Temporal validation failed (non-fatal): %s", e, exc_info=True)
+            temporal_validation_failed = True
+            temporal_validation_error = str(e)[:500]
+    else:
+        logger.debug("Temporal validation disabled by settings")
+
     # Build metrics object
     metrics = WorldHealthMetrics(
         total_entities=total_entities,
@@ -251,6 +310,12 @@ def get_world_health_metrics(
         quality_distribution=quality_distribution,
         low_quality_entities=low_quality_entities,
         relationship_density=relationship_density,
+        temporal_error_count=temporal_error_count,
+        temporal_warning_count=temporal_warning_count,
+        temporal_issues=temporal_issues,
+        average_temporal_consistency=average_temporal_consistency,
+        temporal_validation_failed=temporal_validation_failed,
+        temporal_validation_error=temporal_validation_error,
     )
 
     # Calculate health score and generate recommendations

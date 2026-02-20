@@ -1,13 +1,17 @@
 """Editing and review functions for StoryOrchestrator."""
 
-from __future__ import annotations
-
 import logging
 from collections.abc import Generator
 from typing import TYPE_CHECKING
 
 from src.agents import ResponseValidationError
 from src.agents.continuity import ContinuityIssue
+from src.services.orchestrator._writing import (
+    _combine_contexts,
+    _retrieve_temporal_context,
+    _retrieve_world_context,
+    _warn_if_context_missing,
+)
 from src.utils.exceptions import ExportError
 
 if TYPE_CHECKING:
@@ -193,7 +197,11 @@ def review_full_story(
     orc._emit("agent_start", "Continuity", "Reviewing complete story...")
     yield orc.events[-1]
 
-    issues = orc.continuity.check_full_story(orc.story_state)
+    world_context = _retrieve_world_context(orc, "Full story review for continuity")
+    temporal_context = _retrieve_temporal_context(orc)
+    combined_context = _combine_contexts(world_context, temporal_context)
+    _warn_if_context_missing(orc, combined_context, "Full story review")
+    issues = orc.continuity.check_full_story(orc.story_state, world_context=combined_context)
 
     if issues:
         feedback = orc.continuity.format_revision_feedback(issues)

@@ -122,7 +122,9 @@ class WorldHealthMetrics(BaseModel):
     """Comprehensive health metrics for a story world.
 
     Aggregates various quality indicators including entity counts,
-    orphan detection, circular relationships, and quality scores.
+    orphan detection, circular relationships, quality scores, and
+    temporal consistency validation results (including service-level
+    failure flags when the temporal validation step itself fails).
     """
 
     # Entity counts
@@ -187,6 +189,14 @@ class WorldHealthMetrics(BaseModel):
     temporal_issues: list[dict] = Field(
         default_factory=list,
         description="List of temporal consistency issues with entity_id, message, severity",
+    )
+    temporal_validation_failed: bool = Field(
+        default=False,
+        description="Whether the temporal validation service itself failed to run",
+    )
+    temporal_validation_error: str | None = Field(
+        default=None,
+        description="Error message if temporal validation service failed",
     )
 
     # Computed metrics
