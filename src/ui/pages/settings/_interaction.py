@@ -120,8 +120,8 @@ def build_context_section(page: SettingsPage) -> None:
                 ui.number(
                     label="Chapter memory (chars)",
                     value=page.settings.previous_chapter_context_chars,
-                    min=500,
-                    max=10000,
+                    min=1,
+                    max=100000,
                 )
                 .classes("w-full")
                 .props("outlined dense")
@@ -132,8 +132,8 @@ def build_context_section(page: SettingsPage) -> None:
                 ui.number(
                     label="Analysis context (chars)",
                     value=page.settings.chapter_analysis_chars,
-                    min=1000,
-                    max=20000,
+                    min=1,
+                    max=100000,
                 )
                 .classes("w-full")
                 .props("outlined dense")
@@ -156,8 +156,8 @@ def build_context_section(page: SettingsPage) -> None:
                 ui.number(
                     label="Editor preview (chars)",
                     value=page.settings.full_text_preview_chars,
-                    min=500,
-                    max=10000,
+                    min=1,
+                    max=100000,
                 )
                 .classes("w-full")
                 .props("outlined dense")

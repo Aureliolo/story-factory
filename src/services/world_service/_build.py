@@ -391,9 +391,10 @@ def _build_world_entities(
                 result.warning_count,
             )
             if result.error_count > 0 or result.warning_count > 0:
-                report_progress(
-                    f"Temporal validation: {result.error_count} errors, "
-                    f"{result.warning_count} warnings"
+                logger.info(
+                    "Temporal validation: %d errors, %d warnings",
+                    result.error_count,
+                    result.warning_count,
                 )
         except GenerationCancelledError:
             raise

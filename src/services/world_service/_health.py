@@ -258,7 +258,7 @@ def get_world_health_metrics(
                 )
 
                 temporal_validation = TVS(svc.settings)
-                logger.debug("Constructed TemporalValidationService (no DI instance provided)")
+                logger.warning("Constructed TemporalValidationService (no DI instance provided)")
 
             temporal_result = temporal_validation.validate_world(world_db)
             temporal_error_count = temporal_result.error_count

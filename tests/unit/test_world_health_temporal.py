@@ -87,6 +87,7 @@ class TestHealthMetricsTemporalEnabled:
         assert metrics.temporal_warning_count == 1
         assert len(metrics.temporal_issues) == 2
         assert metrics.average_temporal_consistency == 6.0
+        assert metrics.temporal_validation_failed is False
 
         # Verify issue dict structure
         error_issue = metrics.temporal_issues[0]

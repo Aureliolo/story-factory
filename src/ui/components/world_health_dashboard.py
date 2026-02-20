@@ -327,11 +327,7 @@ class WorldHealthDashboard:
                                 icon="refresh",
                             ).props("flat size=sm").classes("mt-1")
 
-                if self.metrics.temporal_validation_failed:
-                    # Failure banner (rendered above) is the only output —
-                    # don't render a stale issues card.
-                    pass
-                elif not has_issues:
+                if not self.metrics.temporal_validation_failed and not has_issues:
                     with ui.row().classes("items-center gap-2 p-2 bg-green-900 rounded"):
                         ui.icon("schedule", size="sm").classes("text-green-500")
                         ui.label("No temporal issues").classes("text-sm text-green-300")
@@ -342,7 +338,7 @@ class WorldHealthDashboard:
                                 on_click=self.on_validate_timeline,
                                 icon="update",
                             ).props("flat size=sm")
-                elif has_issues:
+                elif not self.metrics.temporal_validation_failed and has_issues:
                     bg_color = "red-900" if error_count > 0 else "yellow-900"
                     with ui.card().classes(f"p-3 bg-{bg_color}"):
                         with ui.row().classes("items-center gap-2 mb-2"):
@@ -558,6 +554,11 @@ def build_health_summary_compact(metrics: WorldHealthMetrics) -> None:
                     ui.badge(
                         f"{metrics.temporal_error_count} temporal",
                         color="red",
+                    ).props("outline").classes("text-xs")
+                elif metrics.temporal_warning_count > 0:
+                    ui.badge(
+                        f"{metrics.temporal_warning_count} temporal warn",
+                        color="orange",
                     ).props("outline").classes("text-xs")
                 if (
                     metrics.orphan_count == 0

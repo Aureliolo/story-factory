@@ -191,6 +191,8 @@ class TestReviewFullStoryContextWarning:
                 "src.services.orchestrator._editing._retrieve_temporal_context",
                 return_value="",
             ),
+            # _warn_if_context_missing lives in _writing.py; review_full_story
+            # imports and calls it, so the logger must be patched on _writing.
             patch("src.services.orchestrator._writing.logger") as mock_logger,
         ):
             from src.services.orchestrator._editing import review_full_story
