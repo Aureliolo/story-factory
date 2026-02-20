@@ -97,117 +97,202 @@ User Action → UI Component → AppState → Service → Agent → Ollama
 
 ```
 story-factory/
-├── agents/                  # AI agents
-│   ├── base.py             # Base agent class
-│   ├── interviewer.py      # Story interview
-│   ├── architect.py        # Story structure
-│   ├── writer.py           # Content generation
-│   ├── editor.py           # Content editing
-│   ├── continuity.py       # Consistency checking
-│   └── validator.py        # Response validation
-│
-├── memory/                  # Data models and persistence
-│   ├── story_state.py      # Story state (Pydantic models)
-│   ├── entities.py         # Entity/Relationship models
-│   ├── world_database.py   # SQLite + NetworkX database
-│   ├── mode_database.py    # Model performance database
-│   ├── mode_models.py      # Performance tracking models
-│   ├── templates.py        # Template data models
-│   ├── builtin_templates.py # Built-in story templates
-│   └── world_quality.py    # World quality tracking
-│
-├── services/                # Business logic layer
-│   ├── __init__.py         # ServiceContainer
-│   ├── orchestrator/       # Multi-agent orchestration
-│   │   ├── __init__.py     # Main StoryOrchestrator
-│   │   ├── _interview.py   # Interview phase logic
-│   │   ├── _structure.py   # Architecture phase logic
-│   │   ├── _writing.py     # Writing phase logic
-│   │   ├── _editing.py     # Editing and continuity logic
-│   │   └── _persistence.py # State persistence helpers
-│   ├── story_service/      # Story generation workflow
-│   ├── world_service/      # Entity/world management
-│   ├── world_quality_service/ # World quality enhancement
-│   ├── project_service.py  # Project CRUD operations
-│   ├── model_service.py    # Ollama model operations
-│   ├── export_service/     # Export to multiple formats
-│   ├── model_mode_service/ # Model performance tracking
-│   ├── scoring_service.py  # Quality scoring logic
-│   ├── template_service.py # Story template management
-│   ├── backup_service.py   # Project backup/restore
-│   ├── import_service.py   # Import entities from text
-│   ├── comparison_service.py # Model comparison testing
-│   ├── suggestion_service.py # AI-powered suggestions
-│   ├── timeline_service.py # Timeline management
-│   ├── calendar_service.py # Calendar view
-│   ├── conflict_analysis_service.py # Story conflict analysis
-│   ├── content_guidelines_service.py # Content guidelines
-│   ├── temporal_validation_service.py # Timeline validation
-│   ├── world_template_service.py # World templates
-│   └── llm_client.py       # Unified LLM client
-│
-├── ui/                      # NiceGUI UI layer
-│   ├── __init__.py
-│   ├── app.py              # Main app setup
-│   ├── state.py            # Centralized UI state (AppState)
-│   ├── theme.py            # Colors, styles, helpers
-│   ├── styles.css          # Custom CSS styles
-│   ├── graph_renderer.py   # vis.js graph rendering
-│   ├── keyboard_shortcuts.py # Keyboard shortcut handling
-│   ├── shortcuts.py        # Shortcut registry
-│   ├── components/         # Reusable components
-│   │   ├── __init__.py
-│   │   ├── header.py       # Project selector + navigation
-│   │   ├── chat.py         # Chat interface
-│   │   ├── entity_card.py  # Entity display card
-│   │   ├── graph.py        # Graph visualization wrapper
-│   │   └── common.py       # Shared components (loading, dialogs, etc.)
-│   └── pages/              # Full pages
-│       ├── __init__.py
-│       ├── write.py        # Fundamentals + Live Writing
-│       ├── world.py        # World Builder
-│       ├── projects.py     # Project management
-│       ├── templates.py    # Story templates
-│       ├── timeline.py     # Event timeline
-│       ├── comparison.py   # Model comparison
-│       ├── settings.py     # Settings configuration
-│       ├── models.py       # Model management
-│       └── analytics.py    # Model performance analytics
-│
-├── prompts/                 # Prompt templates
-│   ├── __init__.py
-│   └── templates/          # Prompt template files
-│
-├── utils/                   # Utilities
-│   ├── logging_config.py   # Logging setup and context
-│   ├── json_parser.py      # LLM JSON extraction
-│   ├── error_handling.py   # Decorators and helpers
-│   ├── exceptions.py       # Custom exception hierarchy
-│   ├── constants.py        # Shared constants
-│   ├── environment.py      # Environment validation
-│   ├── message_analyzer.py # Conversation analysis
-│   ├── model_utils.py      # Model name utilities
-│   ├── prompt_builder.py   # Prompt construction
-│   ├── prompt_registry.py  # Prompt management
-│   ├── prompt_template.py  # Template system for prompts
-│   ├── text_analytics.py   # Text analysis utilities
-│   └── validation.py       # Data validation helpers
+├── src/                     # All application source code
+│   ├── agents/              # AI agents
+│   │   ├── base.py         # Base agent class with retry + rate limiting
+│   │   ├── architect/      # Story structure and world design (package)
+│   │   │   ├── __init__.py # ArchitectAgent class
+│   │   │   ├── _structure.py # Story structure generation
+│   │   │   └── _world.py   # World generation logic
+│   │   ├── interviewer.py  # Story interview
+│   │   ├── writer.py       # Content generation
+│   │   ├── editor.py       # Content editing
+│   │   ├── continuity.py   # Consistency checking
+│   │   └── validator.py    # Response validation
+│   │
+│   ├── memory/              # Data models and persistence
+│   │   ├── story_state.py  # Story state (Pydantic models)
+│   │   ├── entities.py     # Entity/Relationship models
+│   │   ├── world_database/  # SQLite + NetworkX + sqlite-vec database
+│   │   │   ├── __init__.py # Main WorldDatabase class
+│   │   │   ├── _attributes.py # Entity attribute operations
+│   │   │   ├── _cycles.py  # Cycle detection
+│   │   │   ├── _embeddings.py # Vector embedding storage
+│   │   │   ├── _entities.py # Entity CRUD
+│   │   │   ├── _events.py  # Event storage
+│   │   │   ├── _graph.py   # NetworkX graph operations
+│   │   │   ├── _io.py      # Import/export
+│   │   │   ├── _relationships.py # Relationship CRUD
+│   │   │   ├── _schema.py  # SQLite schema
+│   │   │   └── _versions.py # Version tracking
+│   │   ├── mode_database/   # Model performance database
+│   │   │   ├── __init__.py # Main ModeDatabase class
+│   │   │   ├── _cost_tracking.py # LLM cost tracking
+│   │   │   ├── _custom_modes.py # Custom mode definitions
+│   │   │   ├── _performance.py # Performance metrics
+│   │   │   ├── _prompt_metrics.py # Prompt-level metrics
+│   │   │   ├── _recommendations.py # Model recommendations
+│   │   │   ├── _refinement.py # Quality refinement data
+│   │   │   ├── _schema.py  # SQLite schema
+│   │   │   ├── _scoring.py # Scoring data
+│   │   │   └── _world_entity.py # World entity metrics
+│   │   ├── mode_models.py  # Performance tracking models
+│   │   ├── templates.py    # Template data models
+│   │   ├── arc_templates.py # Story arc templates
+│   │   ├── builtin_world_templates.py # Built-in world templates
+│   │   ├── conflict_types.py # Conflict type definitions
+│   │   ├── content_guidelines.py # Content guideline models
+│   │   ├── cost_models.py  # LLM cost models
+│   │   ├── timeline_types.py # Timeline data types
+│   │   ├── world_calendar.py # Calendar models
+│   │   ├── world_health.py # World health metrics
+│   │   ├── world_settings.py # World-specific settings
+│   │   ├── _chapter_versions.py # Chapter version tracking
+│   │   ├── world_quality/  # Quality scoring models
+│   │   │   ├── __init__.py
+│   │   │   ├── _entity_scores.py # Entity quality scores
+│   │   │   ├── _models.py  # Quality data models
+│   │   │   ├── _scoring.py # Scoring logic
+│   │   │   └── _story_scores.py # Story-level scores
+│   │   └── builtin_templates/ # Built-in template registry
+│   │       ├── __init__.py
+│   │       └── _registry.py # Template definitions
+│   │
+│   ├── services/            # Business logic layer
+│   │   ├── __init__.py     # ServiceContainer (DI)
+│   │   ├── orchestrator/   # Multi-agent orchestration
+│   │   │   ├── __init__.py # Main StoryOrchestrator
+│   │   │   ├── _interview.py # Interview phase logic
+│   │   │   ├── _structure.py # Architecture phase logic
+│   │   │   ├── _writing.py # Writing phase logic
+│   │   │   ├── _editing.py # Editing and continuity logic
+│   │   │   └── _persistence.py # State persistence helpers
+│   │   ├── story_service/  # Story generation workflow
+│   │   ├── world_service/  # Entity/world management
+│   │   ├── world_quality_service/ # World quality enhancement (quality loop)
+│   │   ├── export_service/ # Export to multiple formats
+│   │   ├── model_mode_service/ # Model performance tracking
+│   │   ├── project_service.py # Project CRUD operations
+│   │   ├── model_service.py # Ollama model operations
+│   │   ├── scoring_service.py # Quality scoring logic
+│   │   ├── template_service.py # Story template management
+│   │   ├── backup_service.py # Project backup/restore
+│   │   ├── import_service.py # Import entities from text
+│   │   ├── comparison_service.py # Model comparison testing
+│   │   ├── suggestion_service.py # AI-powered suggestions
+│   │   ├── timeline_service.py # Timeline aggregation + temporal context
+│   │   ├── calendar_service.py # Calendar generation + management
+│   │   ├── conflict_analysis_service.py # Story conflict detection
+│   │   ├── content_guidelines_service.py # Content guidelines enforcement
+│   │   ├── temporal_validation_service.py # Temporal consistency validation
+│   │   ├── world_template_service.py # World generation templates
+│   │   ├── embedding_service.py # Vector embeddings via Ollama
+│   │   ├── context_retrieval_service.py # RAG context retrieval
+│   │   └── llm_client.py   # Unified LLM client
+│   │
+│   ├── ui/                  # NiceGUI UI layer
+│   │   ├── app.py          # Main app setup
+│   │   ├── state.py        # Centralized UI state (AppState)
+│   │   ├── theme.py        # Colors, styles, dark mode
+│   │   ├── styles.css      # Custom CSS styles
+│   │   ├── graph_renderer.py # vis.js graph rendering
+│   │   ├── keyboard_shortcuts.py # Keyboard shortcut handling
+│   │   ├── shortcuts.py    # Shortcut registry
+│   │   ├── components/     # Reusable UI components
+│   │   │   ├── header.py   # Project selector + navigation
+│   │   │   ├── chat.py     # Chat interface
+│   │   │   ├── entity_card.py # Entity display card
+│   │   │   ├── graph.py    # Graph visualization wrapper
+│   │   │   ├── common.py   # Shared components (loading, dialogs)
+│   │   │   ├── build_dialog.py # World build dialog
+│   │   │   ├── conflict_graph.py # Conflict visualization
+│   │   │   ├── generation_status.py # Generation progress
+│   │   │   ├── recommendation_dialog.py # Model recommendations
+│   │   │   ├── scene_editor.py # Scene editing
+│   │   │   ├── timeline.py # Timeline component
+│   │   │   ├── world_health_dashboard.py # World health metrics
+│   │   │   └── world_timeline.py # World timeline view
+│   │   └── pages/          # Full pages (many are packages)
+│   │       ├── write/      # Fundamentals + Live Writing
+│   │       ├── world/      # World Builder + Graph + Calendar
+│   │       ├── projects.py # Project management
+│   │       ├── templates.py # Story templates
+│   │       ├── timeline.py # Event timeline
+│   │       ├── comparison.py # Model comparison
+│   │       ├── settings/   # Settings configuration
+│   │       ├── world_timeline.py # World timeline view
+│   │       ├── models/     # Model management
+│   │       └── analytics/  # Model performance analytics
+│   │
+│   ├── prompts/             # Prompt templates
+│   │   └── templates/      # YAML templates by agent role
+│   │       ├── architect/  # Architect prompts
+│   │       ├── continuity/ # Continuity checker prompts
+│   │       ├── editor/     # Editor prompts
+│   │       ├── interviewer/ # Interviewer prompts
+│   │       ├── suggestion/ # Suggestion prompts
+│   │       ├── validator/  # Validator prompts
+│   │       └── writer/     # Writer prompts
+│   │
+│   ├── utils/               # Utilities
+│   │   ├── logging_config.py # Logging setup and context
+│   │   ├── json_parser.py  # LLM JSON extraction
+│   │   ├── error_handling.py # Decorators and helpers
+│   │   ├── exceptions.py   # Custom exception hierarchy
+│   │   ├── constants.py    # Shared constants (language codes, etc.)
+│   │   ├── environment.py  # Environment validation
+│   │   ├── message_analyzer.py # Conversation analysis
+│   │   ├── model_utils.py  # Model name utilities
+│   │   ├── prompt_builder.py # Prompt construction
+│   │   ├── prompt_registry.py # Prompt management
+│   │   ├── prompt_template.py # Template system for prompts
+│   │   ├── text_analytics.py # Text analysis utilities
+│   │   ├── validation.py   # Data validation helpers
+│   │   ├── circuit_breaker.py # Circuit breaker pattern
+│   │   ├── retry_strategies.py # Retry logic strategies
+│   │   ├── similarity.py   # Text similarity helpers
+│   │   ├── sqlite_vec_loader.py # sqlite-vec extension loader
+│   │   └── streaming.py    # Streaming utilities
+│   │
+│   └── settings/            # Settings management & model registry
+│       ├── __init__.py      # Public API re-exports
+│       ├── _settings.py     # Main Settings dataclass
+│       ├── _model_registry.py # Recommended models
+│       ├── _paths.py        # File/directory path constants
+│       ├── _types.py        # Type definitions
+│       ├── _utils.py        # Settings utilities
+│       └── _validation.py   # Settings validation
 │
 ├── tests/                   # Tests
 │   ├── unit/               # Unit tests (fast, isolated)
 │   ├── component/          # NiceGUI component tests (User fixture)
 │   ├── integration/        # Integration tests
-│   ├── e2e/                # End-to-end tests
+│   ├── smoke/              # Quick startup validation tests
+│   ├── e2e/                # End-to-end browser tests
 │   └── conftest.py         # Shared pytest fixtures
 │
 ├── docs/                    # Documentation
 │   ├── ARCHITECTURE.md     # This file
 │   ├── MODELS.md           # Model recommendations
+│   ├── CONTRIBUTING.md     # Contribution guidelines
+│   ├── TROUBLESHOOTING.md  # Common problems and solutions
 │   ├── CODE_QUALITY.md     # Code quality issues tracker
 │   ├── TEST_QUALITY.md     # Testing standards
-│   └── UX_UI_IMPROVEMENTS.md # UI/UX improvements
+│   ├── TEMPLATES.md        # Template documentation
+│   ├── UNDO_REDO.md        # Undo/redo system
+│   ├── UX_UI_IMPROVEMENTS.md # UI/UX improvements
+│   ├── COPILOT_INSTRUCTIONS.md # GitHub Copilot config
+│   ├── README.md           # Docs index / redirect
+│   ├── codemaps/           # Architecture maps
+│   └── plans/              # Design documents
 │
-├── settings.py              # Configuration
+├── output/                  # Runtime data
+│   ├── logs/               # Application logs
+│   ├── stories/            # Saved story files (JSON)
+│   ├── worlds/             # World databases (SQLite)
+│   └── backups/            # Project backups
+│
+├── scripts/                 # Developer utilities
 └── main.py                  # Entry point
 ```
 
@@ -237,14 +322,32 @@ story-factory/
 # ui/state.py
 class AppState:
     """Centralized UI state."""
+    # Current project
     project_id: str | None = None
     project: StoryState | None = None
     world_db: WorldDatabase | None = None
 
-    # UI-only state
-    selected_entity_id: str | None = None
+    # Interview state
+    interview_history: list[dict] = field(default_factory=list)
+    interview_complete: bool = False
+
+    # Writing / generation control
+    current_chapter: int = 0
+    is_writing: bool = False
+    generation_cancel_requested: bool = False
+    generation_pause_requested: bool = False
+
+    # UI navigation
     active_tab: str = "write"
+    selected_entity_id: str | None = None
     feedback_mode: str = "per-chapter"
+
+    # Undo/redo history
+    _undo_stack: list[UndoAction] = field(default_factory=list)
+    _redo_stack: list[UndoAction] = field(default_factory=list)
+
+    # Background task tracking + project list cache
+    # ... (30+ fields total — see src/ui/state.py for full definition)
 ```
 
 ### 2. Service Container Pattern
@@ -259,21 +362,33 @@ class ServiceContainer:
     - Easy dependency management
     - Consistent settings across services
     """
-    def __init__(self, settings: Settings):
-        self.settings = settings
-        self.project = ProjectService(settings)
-        self.story = StoryService(settings)
-        self.world = WorldService(settings)
-        self.model = ModelService(settings)
-        self.export = ExportService(settings)
-        self.mode = ModelModeService(settings)
+    def __init__(self, settings: Settings | None = None):
+        self.settings = settings or Settings.load()
+        self.embedding = EmbeddingService(self.settings)
+        self.project = ProjectService(self.settings, self.embedding)
+        self.temporal_validation = TemporalValidationService(self.settings)
+        self.world = WorldService(self.settings, temporal_validation=self.temporal_validation)
+        self.model = ModelService(self.settings)
+        self.export = ExportService(self.settings)
+        self.mode = ModelModeService(self.settings)
         self.scoring = ScoringService(self.mode)
-        self.world_quality = WorldQualityService(settings, self.mode)
-        self.suggestion = SuggestionService(settings)
-        self.template = TemplateService(settings)
-        self.backup = BackupService(settings)
-        self.import_svc = ImportService(settings, self.mode)
-        self.comparison = ComparisonService(settings)
+        self.context_retrieval = ContextRetrievalService(self.settings, self.embedding)
+        self.timeline = TimelineService(self.settings)
+        self.story = StoryService(
+            self.settings, mode_service=self.mode,
+            context_retrieval=self.context_retrieval,
+            timeline=self.timeline,
+        )
+        self.world_quality = WorldQualityService(self.settings, self.mode)
+        self.suggestion = SuggestionService(self.settings)
+        self.template = TemplateService(self.settings)
+        self.backup = BackupService(self.settings)
+        self.import_svc = ImportService(self.settings, self.mode)
+        self.comparison = ComparisonService(self.settings)
+        self.conflict_analysis = ConflictAnalysisService(self.settings)
+        self.world_template = WorldTemplateService(self.settings)
+        self.content_guidelines = ContentGuidelinesService(self.settings)
+        self.calendar = CalendarService(self.settings)
 
 # main.py - Services created once and passed to UI
 settings = Settings.load()
@@ -298,6 +413,17 @@ User Click → UI Handler → Service Method → Return Result → UI Update
 6. If issues → Back to Writer (max 3 iterations)
 7. Final Chapter → StoryState → Save to JSON
 ```
+
+**RAG Context Pipeline**:
+
+```text
+WorldDatabase (sqlite-vec) → EmbeddingService → ContextRetrievalService → StoryOrchestrator → Agent prompts
+```
+
+Writing agents receive semantically relevant world context via vector similarity search.
+`EmbeddingService` generates embeddings via Ollama; `ContextRetrievalService` performs
+KNN search to retrieve relevant entities/relationships for the current writing task.
+RAG retrieval failures are non-fatal — agents proceed with empty context if retrieval fails.
 
 **World Building Flow**:
 ```
@@ -330,9 +456,9 @@ User Click → UI Handler → Service Method → Return Result → UI Update
 Services use explicit error handling with custom exceptions:
 ```python
 # Ollama connection errors
-from utils.error_handling import handle_ollama_errors
+from src.utils.error_handling import handle_ollama_errors
 
-@handle_ollama_errors(default_value=None)
+@handle_ollama_errors(default_return=None)
 def get_models() -> list[str]:
     return ollama.list()
 ```
@@ -357,15 +483,16 @@ Agents use retry logic and validation:
 ### 4. Logging
 - Module-level loggers: `logger = logging.getLogger(__name__)`
 - Centralized configuration in utils/logging_config.py
-- Default: INFO level, file: logs/story_factory.log
+- Default: INFO level, file: output/logs/story_factory.log
 - Configurable via CLI args: --log-level, --log-file
 
 ## API Patterns
 
 ### Services
+
 ```python
 class ProjectService:
-    def __init__(self, settings: Settings): ...
+    def __init__(self, settings: Settings, embedding_service: EmbeddingService): ...
     def create_project(self, name: str) -> StoryState: ...
     def load_project(self, project_id: str) -> StoryState: ...
     def list_projects(self) -> list[ProjectSummary]: ...
@@ -435,10 +562,12 @@ class WritePage:
 ```python
 # services/__init__.py
 class ServiceContainer:
-    def __init__(self, settings: Settings):
-        self.project = ProjectService(settings)
-        self.story = StoryService(settings)
-        # ... all services
+    def __init__(self, settings: Settings | None = None):
+        self.settings = settings or Settings.load()
+        self.embedding = EmbeddingService(self.settings)
+        self.project = ProjectService(self.settings, self.embedding)
+        self.story = StoryService(self.settings, mode_service=..., ...)
+        # ... all 21 services (see full example in Section 2 above)
 
 # main.py
 services = ServiceContainer(settings)
@@ -538,9 +667,9 @@ communities = world_db.get_communities()
 
 **Example**:
 ```python
-from utils.error_handling import handle_ollama_errors, retry_with_fallback
+from src.utils.error_handling import handle_ollama_errors, retry_with_fallback
 
-@handle_ollama_errors(default_value=None)
+@handle_ollama_errors(default_return=None)
 @retry_with_fallback(max_retries=3)
 async def generate_content(prompt: str) -> str:
     # Automatically retries on connection errors
@@ -738,5 +867,5 @@ Potential plugin architecture:
 
 - **[README.md](../README.md)**: Getting started, features, usage
 - **[MODELS.md](MODELS.md)**: Model selection and recommendations
-- **[TROUBLESHOOTING.md](../TROUBLESHOOTING.md)**: Common issues and solutions
-- **[CONTRIBUTING.md](../CONTRIBUTING.md)**: Development guidelines
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)**: Common issues and solutions
+- **[CONTRIBUTING.md](CONTRIBUTING.md)**: Development guidelines

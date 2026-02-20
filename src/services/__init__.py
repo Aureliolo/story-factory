@@ -86,7 +86,8 @@ class ServiceContainer:
         self.settings = settings or Settings.load()
         self.embedding = EmbeddingService(self.settings)
         self.project = ProjectService(self.settings, self.embedding)
-        self.world = WorldService(self.settings)
+        self.temporal_validation = TemporalValidationService(self.settings)
+        self.world = WorldService(self.settings, temporal_validation=self.temporal_validation)
         self.model = ModelService(self.settings)
         self.export = ExportService(self.settings)
         self.mode = ModelModeService(self.settings)
@@ -112,9 +113,6 @@ class ServiceContainer:
         self.world_template = WorldTemplateService(self.settings)
         self.content_guidelines = ContentGuidelinesService(self.settings)
         self.calendar = CalendarService(self.settings)
-        self.temporal_validation = TemporalValidationService(self.settings)
-        # Wire temporal_validation into WorldService for health metrics DI
-        self.world._temporal_validation = self.temporal_validation
         service_count = len(self.__class__.__annotations__) - 1  # exclude 'settings'
         logger.info(
             "ServiceContainer initialized: %d services in %.2fs",

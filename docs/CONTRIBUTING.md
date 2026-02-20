@@ -20,7 +20,7 @@ Be respectful, constructive, and kind. This is a learning project - mistakes are
 ## Getting Started
 
 1. **Check existing issues**: Look for issues labeled `good first issue` or `help wanted`
-2. **Read the documentation**: Familiarize yourself with [README.md](README.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+2. **Read the documentation**: Familiarize yourself with [README.md](../README.md) and [ARCHITECTURE.md](ARCHITECTURE.md)
 3. **Set up development environment**: Follow the [Development Setup](#development-setup) section
 
 ## How to Contribute
@@ -42,7 +42,7 @@ Create an issue with:
   - Python version (`python --version`)
   - Ollama version (`ollama --version`)
   - GPU info (`nvidia-smi`)
-- **Error logs**: From `logs/story_factory.log`
+- **Error logs**: From `output/logs/story_factory.log`
 - **Screenshots**: If UI-related
 
 ### Suggesting Features
@@ -96,7 +96,7 @@ Areas that need help:
 
 5. **Copy settings**:
    ```bash
-   cp settings.example.json settings.json
+   cp src/settings.example.json src/settings.json
    ```
 
 6. **Run tests** to verify setup:
@@ -124,12 +124,12 @@ Areas that need help:
 ### Code Organization
 
 Follow the existing architecture:
-- **Services layer**: Business logic, no UI imports
-- **UI layer**: NiceGUI components, calls services only
-- **Agents**: AI interactions, extend BaseAgent
-- **Utils**: Helper functions, pure Python
+- **Services layer** (`src/services/`): Business logic, no UI imports
+- **UI layer** (`src/ui/`): NiceGUI components, calls services only
+- **Agents** (`src/agents/`): AI interactions, extend BaseAgent
+- **Utils** (`src/utils/`): Helper functions, pure Python
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
 
 ### Naming Conventions
 
@@ -181,8 +181,8 @@ from pathlib import Path
 from pydantic import BaseModel
 from nicegui import ui
 
-from services.story_service import StoryService
-from utils.logging_config import setup_logging
+from src.services.story_service import StoryService
+from src.utils.logging_config import setup_logging
 ```
 
 ### Docstrings
@@ -211,11 +211,11 @@ def process_story(story_state: StoryState, options: dict) -> str:
 - Use specific exceptions, not bare `except:`
 - Log errors with appropriate level
 - Provide helpful error messages
-- Use custom exceptions from `utils/exceptions.py`
+- Use custom exceptions from `src/utils/exceptions.py`
 
 ```python
 import logging
-from utils.exceptions import LLMError
+from src.utils.exceptions import LLMError
 
 logger = logging.getLogger(__name__)
 
@@ -245,13 +245,13 @@ logger.error("Error messages for failures")
 
 ### Test Coverage
 
-- **Core modules** require **100% coverage**: `agents/`, `services/` (including `orchestrator/`), `memory/`, `utils/`, `settings.py`
+- **Core modules** require **100% coverage**: `src/agents/`, `src/services/` (including `orchestrator/`), `src/memory/`, `src/utils/`, `src/settings/`
 - **UI modules** excluded from coverage requirements (until NiceGUI component tests are added)
 
 ### Writing Tests
 
 1. **Test file location**: Mirror source structure in `tests/`
-   - `agents/writer.py` → `tests/unit/test_writer.py`
+   - `src/agents/writer.py` → `tests/unit/test_agents/test_writer.py`
 
 2. **Test naming**: `test_<what_is_being_tested>`
    ```python
@@ -268,7 +268,7 @@ logger.error("Error messages for failures")
    ```python
    from unittest.mock import patch, MagicMock
 
-   @patch("agents.base.ollama.Client")
+   @patch("src.agents.base.ollama.Client")
    def test_agent_generation(mock_ollama):
        mock_ollama.return_value.generate.return_value = {"response": "test"}
        # ... test code
@@ -294,10 +294,10 @@ logger.error("Error messages for failures")
 pytest
 
 # Specific file
-pytest tests/unit/test_story_service.py
+pytest tests/unit/test_services/test_story_service.py
 
 # Specific test
-pytest tests/unit/test_story_service.py::test_create_story
+pytest tests/unit/test_services/test_story_service.py::test_create_story
 
 # With coverage
 pytest --cov=. --cov-report=term
@@ -442,8 +442,8 @@ Format:
 - **README.md**: Overview, quick start, basic usage
 - **docs/ARCHITECTURE.md**: System design, patterns
 - **docs/MODELS.md**: Model recommendations
-- **TROUBLESHOOTING.md**: Common issues and solutions
-- **CONTRIBUTING.md**: This file
+- **docs/TROUBLESHOOTING.md**: Common issues and solutions
+- **docs/CONTRIBUTING.md**: This file
 - **Docstrings**: In-code documentation
 
 ### Documentation Standards
@@ -474,7 +474,7 @@ story_service.create_story(parameters)
 
 ### Adding a New Agent
 
-1. Create agent class in `agents/`
+1. Create agent class in `src/agents/`
 2. Extend `BaseAgent`
 3. Implement required methods
 4. Add tests with mocked Ollama
@@ -483,16 +483,16 @@ story_service.create_story(parameters)
 
 ### Adding a New UI Page
 
-1. Create page class in `ui/pages/`
+1. Create page class in `src/ui/pages/`
 2. Follow NiceGUI patterns
 3. Use `AppState` for state management
 4. Call services, not agents directly
-5. Add navigation link in `ui/app.py`
+5. Add navigation link in `src/ui/app.py`
 6. Update UI documentation
 
 ### Adding a New Service
 
-1. Create service in `services/`
+1. Create service in `src/services/`
 2. Add to `ServiceContainer`
 3. Inject dependencies via constructor
 4. No UI imports in services

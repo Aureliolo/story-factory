@@ -469,12 +469,12 @@ Export from the web UI via the "Export" button or programmatically via the expor
 story-factory/
 ├── main.py                 # Entry point
 ├── src/                    # All application source code
-│   ├── settings.py         # Settings management & model registry
+│   ├── settings/           # Settings package (config & model registry)
 │   ├── settings.example.json # Example configuration
 │   ├── agents/             # AI agent implementations
-│   │   ├── base.py         # Base agent class with retry logic
+│   │   ├── base.py         # Base agent class with retry + rate limiting
+│   │   ├── architect/      # Story structure and world design (package)
 │   │   ├── interviewer.py  # Story requirements gathering
-│   │   ├── architect.py    # Structure and character design
 │   │   ├── writer.py       # Prose generation
 │   │   ├── editor.py       # Refinement and polish
 │   │   ├── continuity.py   # Plot hole detection
@@ -482,12 +482,22 @@ story-factory/
 │   ├── memory/             # Data models and persistence
 │   │   ├── story_state.py  # Story state (Pydantic models)
 │   │   ├── entities.py     # Entity/Relationship models
-│   │   ├── world_database.py # SQLite + NetworkX database
-│   │   ├── mode_database.py # Model performance database
+│   │   ├── world_database/ # SQLite + NetworkX + sqlite-vec database
+│   │   ├── mode_database/  # Model performance database
 │   │   ├── mode_models.py  # Performance tracking models
 │   │   ├── templates.py    # Template data models
-│   │   ├── builtin_templates.py # Built-in story templates
-│   │   └── world_quality.py # World quality tracking
+│   │   ├── arc_templates.py # Story arc templates
+│   │   ├── builtin_world_templates.py # Built-in world templates
+│   │   ├── conflict_types.py # Conflict type definitions
+│   │   ├── content_guidelines.py # Content guideline models
+│   │   ├── cost_models.py  # LLM cost models
+│   │   ├── timeline_types.py # Timeline data types
+│   │   ├── world_calendar.py # Calendar models
+│   │   ├── world_health.py # World health metrics
+│   │   ├── world_settings.py # World-specific settings
+│   │   ├── _chapter_versions.py # Chapter version tracking
+│   │   ├── world_quality/  # Quality scoring models
+│   │   └── builtin_templates/ # Built-in template registry
 │   ├── services/           # Business logic layer
 │   │   ├── orchestrator/   # Multi-agent coordination
 │   │   │   ├── __init__.py # Main StoryOrchestrator
@@ -509,12 +519,14 @@ story-factory/
 │   │   ├── comparison_service.py # Model comparison testing
 │   │   ├── suggestion_service.py # AI-powered suggestions
 │   │   ├── world_quality_service/ # World quality enhancement
-│   │   ├── timeline_service.py # Timeline management
-│   │   ├── calendar_service.py # Calendar view
-│   │   ├── conflict_analysis_service.py # Story conflict analysis
-│   │   ├── content_guidelines_service.py # Content guidelines
-│   │   ├── temporal_validation_service.py # Timeline validation
-│   │   ├── world_template_service.py # World templates
+│   │   ├── timeline_service.py # Timeline aggregation + temporal context
+│   │   ├── calendar_service.py # Calendar generation + management
+│   │   ├── conflict_analysis_service.py # Story conflict detection
+│   │   ├── content_guidelines_service.py # Content guidelines enforcement
+│   │   ├── temporal_validation_service.py # Temporal consistency validation
+│   │   ├── world_template_service.py # World generation templates
+│   │   ├── embedding_service.py # Vector embeddings via Ollama
+│   │   ├── context_retrieval_service.py # RAG context retrieval
 │   │   └── llm_client.py   # Unified LLM client
 │   ├── ui/                 # NiceGUI web interface
 │   │   ├── app.py          # Main application setup
@@ -524,16 +536,21 @@ story-factory/
 │   │   ├── graph_renderer.py # vis.js graph rendering
 │   │   ├── keyboard_shortcuts.py # Keyboard shortcut handling
 │   │   ├── shortcuts.py    # Shortcut registry
-│   │   ├── pages/          # Page components
+│   │   ├── pages/          # Page components (write/, world/, settings/, models/, analytics/ are packages)
 │   │   └── components/     # Reusable UI components
 │   ├── utils/              # Utility modules
 │   │   ├── logging_config.py # Logging configuration
 │   │   ├── json_parser.py  # JSON extraction from LLM responses
 │   │   ├── error_handling.py # Error decorators and handlers
 │   │   ├── exceptions.py   # Custom exception hierarchy
-│   │   └── ...             # Other utilities
+│   │   ├── circuit_breaker.py # Circuit breaker pattern
+│   │   ├── retry_strategies.py # Retry logic strategies
+│   │   ├── similarity.py   # Text similarity helpers
+│   │   ├── sqlite_vec_loader.py # sqlite-vec extension loader
+│   │   ├── streaming.py    # Streaming utilities
+│   │   └── ...             # constants, environment, model_utils, prompt utilities, etc.
 │   └── prompts/            # YAML prompt templates
-│       └── templates/      # Template files by agent
+│       └── templates/      # Template files by agent role
 ├── tests/                  # Test suite (2000+ tests)
 │   ├── unit/               # Unit tests
 │   ├── component/          # NiceGUI component tests
@@ -549,8 +566,8 @@ story-factory/
 │   └── plans/              # Design documents
 ├── output/                 # Runtime data
 │   ├── logs/               # Application logs
-│   ├── stories/            # Saved story files
-│   ├── worlds/             # World databases
+│   ├── stories/            # Saved story files (JSON)
+│   ├── worlds/             # World databases (SQLite)
 │   └── backups/            # Project backups
 └── scripts/                # Developer utilities
 ```
@@ -946,7 +963,7 @@ Copyright (c) 2026 Aurelio Amoroso. All Rights Reserved. See [LICENSE](LICENSE) 
 
 - **GitHub Issues**: [Report bugs or request features](https://github.com/Aureliolo/story-factory/issues)
 - **GitHub Discussions**: [Ask questions and share ideas](https://github.com/Aureliolo/story-factory/discussions)
-- **Logs**: Check `logs/story_factory.log` for detailed error information
+- **Logs**: Check `output/logs/story_factory.log` for detailed error information
 
 ### Community
 
@@ -956,7 +973,7 @@ Copyright (c) 2026 Aurelio Amoroso. All Rights Reserved. See [LICENSE](LICENSE) 
 
 ### Before Asking for Help
 
-1. **Check the logs**: `logs/story_factory.log`
+1. **Check the logs**: `output/logs/story_factory.log`
 2. **Search existing issues**: Someone may have had the same problem
 3. **Read the docs**: Check relevant documentation sections
 4. **Verify your setup**:

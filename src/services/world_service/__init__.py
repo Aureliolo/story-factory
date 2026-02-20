@@ -129,17 +129,21 @@ class WorldService:
     entity CRUD operations, and relationship management.
     """
 
-    def __init__(self, settings: Settings | None = None):
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        temporal_validation: TemporalValidationService | None = None,
+    ):
         """Initialize WorldService.
 
         Args:
             settings: Application settings. If None, loads from src/settings.json.
+            temporal_validation: Optional temporal validation service for health metrics.
         """
         logger.debug("Initializing WorldService")
         self.settings = settings or Settings.load()
 
-        # Optional temporal validation service (injected by ServiceContainer)
-        self._temporal_validation: TemporalValidationService | None = None
+        self._temporal_validation = temporal_validation
 
         # TTL cache for health metrics (avoids redundant recomputation on page reload)
         self._health_cache: WorldHealthMetrics | None = None
