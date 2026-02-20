@@ -54,6 +54,45 @@ def clear_settings_cache_per_test():
 
 
 @pytest.fixture(autouse=True)
+def isolate_all_production_paths(tmp_path, monkeypatch):
+    """Redirect ALL writable production paths to temp directory.
+
+    This is the fundamental safety net for test isolation. Without it,
+    any test that triggers Settings.load(), .save(), or any service that
+    writes to output/ without explicit monkeypatching would silently
+    overwrite real user data.
+
+    Covers:
+    - SETTINGS_FILE (src/settings.json) — prevents settings loss
+    - BACKUPS_DIR (output/backups/) — prevents stale backup writes
+    - TEMPLATES_DIR (output/templates/) — prevents template file pollution
+
+    Note: STORIES_DIR, WORLDS_DIR, and DEFAULT_DB_PATH are already covered
+    by isolate_project_directories and isolate_mode_database respectively.
+
+    Tests that need a specific path can still override with their own
+    monkeypatch.setattr, which takes precedence over this autouse fixture.
+    """
+    import src.settings._settings as settings_module
+
+    # SETTINGS_FILE: prevent Settings.load()/save() from touching real settings
+    test_settings_file = tmp_path / "settings.json"
+    monkeypatch.setattr(settings_module, "SETTINGS_FILE", test_settings_file)
+
+    # BACKUPS_DIR: prevent backup operations from writing to real output/backups/
+    test_backups_dir = tmp_path / "backups"
+    monkeypatch.setattr(settings_module, "BACKUPS_DIR", test_backups_dir)
+
+    # Template service TEMPLATES_DIR: prevent template writes to real output/templates/
+    import src.services.template_service as template_service_module
+
+    test_templates_dir = tmp_path / "templates"
+    monkeypatch.setattr(template_service_module, "TEMPLATES_DIR", test_templates_dir)
+
+    yield
+
+
+@pytest.fixture(autouse=True)
 def clear_prompt_registry_cache_per_test():
     """Clear prompt registry cache before each test to ensure isolation.
 
