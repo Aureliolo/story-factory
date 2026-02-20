@@ -44,6 +44,7 @@ class TestCreateSettingsBackup:
         result = _create_settings_backup(settings_file)
 
         assert result is False
+        assert not settings_file.with_suffix(".json.bak").exists()
 
     def test_handles_os_error_gracefully(self, tmp_path):
         """Should log warning and return False on copy failure."""
