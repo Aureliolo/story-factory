@@ -38,7 +38,8 @@ class StoryState(BaseModel):
 
     # Project-specific overrides (None = use global)
     target_chapters: int | None
-    target_characters_min/max: int | None
+    target_characters_min: int | None
+    target_characters_max: int | None
     # ... more target_* fields
 ```
 

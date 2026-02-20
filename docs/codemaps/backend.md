@@ -4,7 +4,7 @@
 
 ## Services (`services/`)
 
-### ServiceContainer (`services/__init__.py:39-121`)
+### ServiceContainer (`services/__init__.py`)
 
 DI container for all 21 services. Initialized with Settings, wires dependencies.
 
@@ -14,7 +14,7 @@ services.project.list_projects()
 services.story.start_interview(state)
 services.calendar.generate_calendar(brief)
 services.temporal_validation.validate_entity(entity, calendar)
-services.context_retrieval.retrieve_context(query, world_db)
+services.context_retrieval.retrieve_context(query, world_db, state)
 ```
 
 ### Core Services

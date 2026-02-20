@@ -43,7 +43,7 @@ The codemaps have been updated to reflect structural changes made between 2026-0
 - Updated settings file storage with auto-backup info
 - No schema changes
 
-## New Files Since Last Update
+## Notable New Files Since Last Update
 
 ### Services
 - `src/services/world_quality_service/_calendar.py` (462 lines)

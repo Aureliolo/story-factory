@@ -36,6 +36,7 @@ Story Factory is a local AI-powered multi-agent system for generating stories us
 | `settings/` | Configuration package (8 modules, ~2,600 lines) |
 
 ### Services Layer (`services/`)
+
 Business logic, no UI imports. Receives settings via DI. **21 services** in container.
 
 | Service | Package/File | Responsibility |
@@ -122,7 +123,8 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 ```
 
 **RAG Context Pipeline:**
-```
+
+```plaintext
 WorldDatabase (sqlite-vec) → EmbeddingService → ContextRetrievalService → StoryOrchestrator → Agent prompts
 ```
 
@@ -150,11 +152,11 @@ WorldDatabase (sqlite-vec) → EmbeddingService → ContextRetrievalService → 
 13. **Undo/Redo System**: Snapshot-based state management for settings and world entities
 14. **Settings Backup**: Auto-backup before writes, merge-with-defaults on load
 15. **RAG Pipeline**: Vector similarity search for contextual agent prompts
-16. **Lifecycle Data**: Temporal attributes on all entity types
+16. **Lifecycle Data**: Temporal attributes on all entity types.
 
 ## Data Flow
 
-```
+```plaintext
 settings/ → Settings.load() → ServiceContainer
                                       ↓
          ┌────────────────────────────┼────────────────────────────┐
@@ -163,13 +165,13 @@ settings/ → Settings.load() → ServiceContainer
   (stories/*.json)           (orchestrator/)              (worlds/*.sqlite)
          ↓                            ↓                            ↓
    StoryState                    Agents[]                   WorldDatabase
-         ↓                     ↓          ↓                        ↓
-     AppState ←─── UI Pages ←─ Events  RAG context ←── EmbeddingService
+         ↓                     ↓          ↑                        ↓
+     AppState ←─── UI Pages ←─ Events  RAG context ←── ContextRetrieval ←── EmbeddingService
 ```
 
 ## File Organization
 
-```
+```plaintext
 story-factory/
 ├── main.py                  # Entry point with startup timing
 ├── settings/                # Configuration package (8 modules, ~2,600 lines)
@@ -179,6 +181,7 @@ story-factory/
 │   ├── _backup.py           # Settings backup/restore
 │   ├── _paths.py            # Path resolution
 │   ├── _types.py            # TypedDicts (ModelInfo, etc.)
+│   ├── __init__.py          # Package exports
 │   └── _utils.py            # Helper functions
 ├── agents/                  # AI agents (10 files, 1 package)
 │   └── architect/           # Modularized architect agent
