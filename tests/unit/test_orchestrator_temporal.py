@@ -8,6 +8,7 @@ from src.services.orchestrator._writing import (
     _combine_contexts,
     _retrieve_temporal_context,
 )
+from src.utils.exceptions import GenerationCancelledError
 
 
 @pytest.fixture
@@ -105,6 +106,13 @@ class TestRetrieveTemporalContext:
         result = _retrieve_temporal_context(mock_orc)
 
         assert result == ""
+
+    def test_reraises_generation_cancelled_error(self, mock_orc):
+        """GenerationCancelledError propagates instead of being swallowed."""
+        mock_orc.timeline.build_temporal_context.side_effect = GenerationCancelledError("cancelled")
+
+        with pytest.raises(GenerationCancelledError):
+            _retrieve_temporal_context(mock_orc)
 
 
 class TestCombineContexts:

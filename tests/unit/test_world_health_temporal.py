@@ -10,6 +10,7 @@ from src.services.temporal_validation_service import (
     TemporalValidationIssue,
     TemporalValidationResult,
 )
+from src.utils.exceptions import GenerationCancelledError
 
 
 @pytest.fixture
@@ -223,3 +224,16 @@ class TestHealthMetricsTemporalFailure:
         # On failure, consistency stays at init default (10.0)
         assert metrics.average_temporal_consistency == 10.0
         assert metrics.health_score is not None
+
+    def test_temporal_validation_reraises_generation_cancelled(
+        self, mock_svc, mock_world_db, mock_temporal_service
+    ):
+        """GenerationCancelledError propagates instead of being caught."""
+        from src.services.world_service._health import get_world_health_metrics
+
+        mock_temporal_service.validate_world.side_effect = GenerationCancelledError("cancelled")
+
+        with pytest.raises(GenerationCancelledError):
+            get_world_health_metrics(
+                mock_svc, mock_world_db, temporal_validation=mock_temporal_service
+            )
