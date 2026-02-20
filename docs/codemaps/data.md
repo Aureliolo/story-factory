@@ -1,6 +1,6 @@
 # Data Models and Schemas
 
-> Generated: 2026-01-24 | Updated: 2026-01-29 | Freshness: Current
+<!-- Generated: 2026-01-24 | Updated: 2026-02-20 | Files scanned: 222 | Token estimate: ~900 -->
 
 ## Core Story Models (`memory/story_state.py`)
 
@@ -145,7 +145,7 @@ class Entity(BaseModel):
     type: str  # character, location, item, faction, concept
     name: str
     description: str
-    attributes: dict[str, Any]
+    attributes: dict[str, Any]  # includes lifecycle/temporal data
     created_at: datetime
     updated_at: datetime
 ```
@@ -243,12 +243,12 @@ class WorldSettings(BaseModel):
 class WorldHealthMetrics(BaseModel):
     # Entity counts
     total_entities: int
-    entity_counts: dict[str, int]  # Counts by type
+    entity_counts: dict[str, int]
     total_relationships: int
 
     # Orphan detection
     orphan_count: int
-    orphan_entities: list[dict]  # id, name, type
+    orphan_entities: list[dict]
 
     # Circular relationship detection
     circular_count: int
@@ -256,7 +256,7 @@ class WorldHealthMetrics(BaseModel):
 
     # Quality metrics
     average_quality: float  # 0-10
-    quality_distribution: dict[str, int]  # e.g., '0-2': 5
+    quality_distribution: dict[str, int]
     low_quality_entities: list[dict]
 
     # Contradiction detection
@@ -283,9 +283,9 @@ class WorldHealthMetrics(BaseModel):
 
 ```python
 class VramStrategy(str, Enum):
-    SEQUENTIAL = "sequential"  # Unload between agents
-    PARALLEL = "parallel"      # Keep multiple loaded
-    ADAPTIVE = "adaptive"      # Smart loading
+    SEQUENTIAL = "sequential"
+    PARALLEL = "parallel"
+    ADAPTIVE = "adaptive"
 
 class LearningTrigger(str, Enum):
     OFF = "off"
@@ -294,10 +294,10 @@ class LearningTrigger(str, Enum):
     CONTINUOUS = "continuous"
 
 class AutonomyLevel(str, Enum):
-    MANUAL = "manual"          # All changes require approval
-    CAUTIOUS = "cautious"      # Auto temp, prompt for model swaps
-    BALANCED = "balanced"      # Auto when confidence > 80%
-    AGGRESSIVE = "aggressive"  # Auto all, notify only
+    MANUAL = "manual"
+    CAUTIOUS = "cautious"
+    BALANCED = "balanced"
+    AGGRESSIVE = "aggressive"
     EXPERIMENTAL = "experimental"
 
 class ModelSizeTier(str, Enum):
@@ -314,7 +314,7 @@ class GenerationMode(BaseModel):
     id: str
     name: str
     description: str
-    agent_models: dict[str, str]       # role → model_id
+    agent_models: dict[str, str]
     agent_temperatures: dict[str, float]
     vram_strategy: VramStrategy
     is_preset: bool
@@ -325,7 +325,7 @@ class GenerationMode(BaseModel):
 
 ```python
 class QualityScores(BaseModel):
-    prose_quality: float | None        # 0-10
+    prose_quality: float | None
     instruction_following: float | None
     consistency_score: float | None
 
@@ -357,25 +357,7 @@ class GenerationScore(BaseModel):
 | `draft_fast` | Smaller models | PARALLEL |
 | `experimental` | Varies for data | ADAPTIVE |
 
-## World Quality Models (`memory/world_quality/`)
-
-### Refinement Tracking
-
-```python
-class IterationRecord(BaseModel):
-    iteration: int
-    entity_data: dict[str, Any]
-    scores: dict[str, Any]
-    average_score: float
-    feedback: str
-
-class RefinementHistory(BaseModel):
-    entity_type: str
-    entity_name: str
-    iterations: list[IterationRecord]
-    best_iteration: int
-    peak_score: float
-```
+## World Quality Models (`memory/world_quality/`) ~1,544 lines
 
 ### Entity Quality Scores (0-10 scale)
 
@@ -387,6 +369,8 @@ class RefinementHistory(BaseModel):
 | `FactionQualityScores` | coherence, influence, conflict_potential, distinctiveness |
 | `ItemQualityScores` | significance, uniqueness, narrative_potential, integration |
 | `ConceptQualityScores` | relevance, depth, manifestation, resonance |
+| `CalendarQualityScores` | internal_consistency, thematic_fit, completeness, uniqueness |
+| `EventQualityScores` | significance, temporal_plausibility, causal_coherence, narrative_potential, entity_integration |
 
 All quality score classes provide:
 - `average` property → float
@@ -411,21 +395,21 @@ class RefinementConfig(BaseModel):
 class TemporalValidationIssue(BaseModel):
     entity_id: str
     entity_name: str
-    entity_type: str  # e.g., "character", "faction", "location"
+    entity_type: str
     error_type: TemporalErrorType  # predates_dependency, invalid_era, anachronism,
                                    # post_destruction, invalid_date, lifespan_overlap, founding_order
     severity: TemporalErrorSeverity  # warning, error
     message: str
     related_entity_id: str | None
     related_entity_name: str | None
-    suggestion: str  # Suggested fix for the issue
+    suggestion: str
 ```
 
-## Database Schema (`memory/world_database/`)
+## Database Schemas
 
-> **Note**: Schemas shown are simplified representations of key fields. See source files for complete schemas including constraints, defaults, and additional columns.
+> Schemas shown are simplified. See source files for complete schemas.
 
-### SQLite Tables
+### WorldDatabase SQLite Tables
 
 **entities**
 ```sql
@@ -434,7 +418,7 @@ CREATE TABLE entities (
     type TEXT NOT NULL,
     name TEXT NOT NULL,
     description TEXT DEFAULT '',
-    attributes TEXT DEFAULT '{}',  -- JSON
+    attributes TEXT DEFAULT '{}',  -- JSON (includes lifecycle/temporal data)
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 )
@@ -444,16 +428,14 @@ CREATE TABLE entities (
 ```sql
 CREATE TABLE relationships (
     id TEXT PRIMARY KEY,
-    source_id TEXT NOT NULL,
-    target_id TEXT NOT NULL,
+    source_id TEXT NOT NULL REFERENCES entities(id),
+    target_id TEXT NOT NULL REFERENCES entities(id),
     relation_type TEXT NOT NULL,
     description TEXT DEFAULT '',
     strength REAL DEFAULT 1.0,
     bidirectional INTEGER DEFAULT 0,
-    attributes TEXT DEFAULT '{}',  -- JSON
-    created_at TEXT NOT NULL,
-    FOREIGN KEY (source_id) REFERENCES entities(id),
-    FOREIGN KEY (target_id) REFERENCES entities(id)
+    attributes TEXT DEFAULT '{}',
+    created_at TEXT NOT NULL
 )
 ```
 
@@ -464,7 +446,7 @@ CREATE TABLE events (
     description TEXT NOT NULL,
     chapter_number INTEGER,
     timestamp_in_story TEXT DEFAULT '',
-    consequences TEXT DEFAULT '[]',  -- JSON array
+    consequences TEXT DEFAULT '[]',
     created_at TEXT NOT NULL
 )
 ```
@@ -472,42 +454,28 @@ CREATE TABLE events (
 **event_participants**
 ```sql
 CREATE TABLE event_participants (
-    event_id TEXT NOT NULL,
-    entity_id TEXT NOT NULL,
+    event_id TEXT NOT NULL REFERENCES events(id),
+    entity_id TEXT NOT NULL REFERENCES entities(id),
     role TEXT NOT NULL,
-    PRIMARY KEY (event_id, entity_id),
-    FOREIGN KEY (event_id) REFERENCES events(id),
-    FOREIGN KEY (entity_id) REFERENCES entities(id)
+    PRIMARY KEY (event_id, entity_id)
 )
 ```
 
-**entity_versions** (for backup/versioning)
+**entity_versions**
 ```sql
 CREATE TABLE entity_versions (
     id TEXT PRIMARY KEY,
-    entity_id TEXT NOT NULL,
+    entity_id TEXT NOT NULL REFERENCES entities(id),
     version_number INTEGER NOT NULL,
-    data_json TEXT NOT NULL,  -- JSON snapshot
+    data_json TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    change_type TEXT NOT NULL CHECK(change_type IN ('created', 'refined', 'edited', 'regenerated')),
+    change_type TEXT NOT NULL CHECK(change_type IN ('created','refined','edited','regenerated')),
     change_reason TEXT DEFAULT '',
-    quality_score REAL DEFAULT NULL,
-    FOREIGN KEY (entity_id) REFERENCES entities(id)
+    quality_score REAL DEFAULT NULL
 )
 ```
 
-**schema_version**
-```sql
-CREATE TABLE schema_version (
-    version INTEGER PRIMARY KEY
-)
-```
-
-## Mode Database Schema (`memory/mode_database/`)
-
-> **Note**: Schemas shown are simplified representations. See `_schema.py` for complete schemas with all fields, constraints, and migrations.
-
-### Tables
+### ModeDatabase SQLite Tables
 
 **generation_scores**
 ```sql
@@ -537,95 +505,40 @@ CREATE TABLE world_entity_scores (
     entity_id TEXT NOT NULL,
     entity_type TEXT NOT NULL,
     model_id TEXT NOT NULL,
-    quality_scores TEXT,  -- JSON
+    quality_scores TEXT,             -- JSON
     iteration INTEGER,
     timestamp TEXT NOT NULL,
-    temporal_consistency_score REAL,      -- NEW
-    temporal_validation_errors TEXT       -- NEW: JSON array
+    temporal_consistency_score REAL,
+    temporal_validation_errors TEXT  -- JSON array
 )
 ```
 
-**prompt_metrics**
-```sql
-CREATE TABLE prompt_metrics (
-    id TEXT PRIMARY KEY,
-    prompt_hash TEXT NOT NULL,
-    prompt_version TEXT,
-    agent_role TEXT NOT NULL,
-    task TEXT NOT NULL,
-    model_id TEXT NOT NULL,
-    tokens_in INTEGER,
-    tokens_out INTEGER,
-    time_seconds REAL,
-    success INTEGER,
-    timestamp TEXT NOT NULL
-)
-```
+**prompt_metrics** / **custom_modes** (see `mode_database/_schema.py`)
 
-**custom_modes**
-```sql
-CREATE TABLE custom_modes (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE,
-    description TEXT,
-    agent_models TEXT NOT NULL,  -- JSON
-    agent_temperatures TEXT,      -- JSON
-    vram_strategy TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-)
-```
+## Settings Schema (`settings/`)
 
-## Settings Schema (`settings.py`)
-
-### Settings Dataclass
-~100+ fields with validation. Key groups:
+### Settings Dataclass (~100+ fields)
 
 **Connection:**
-- `ollama_url`: str = "http://localhost:11434"
-- `context_size`: int = 32768
-- `max_tokens`: int = 8192
-- `ollama_timeout`: int = 120
+- `ollama_url`, `context_size`, `max_tokens`, `ollama_timeout`
 
 **Model Selection:**
-- `default_model`: str = "auto"
-- `use_per_agent_models`: bool = True
-- `agent_models`: dict[str, str]  # role → model_id
-- `custom_model_tags`: dict[str, list[str]]  # model → roles
+- `default_model`, `use_per_agent_models`, `agent_models`, `custom_model_tags`
 
 **Temperatures:**
-- `agent_temperatures`: dict[str, float]
-- `temp_brief_extraction`, `temp_edit_suggestions`, etc.
+- `agent_temperatures`, `temp_brief_extraction`, `temp_edit_suggestions`, etc.
 
 **World Generation:**
-- `world_gen_characters_min/max`
-- `world_gen_locations_min/max`
-- `world_gen_factions_min/max`
-- `world_gen_items_min/max`
-- `world_gen_concepts_min/max`
-- `world_gen_relationships_min/max`
+- `world_gen_*_min/max` for characters, locations, factions, items, concepts, relationships
 
 **Quality:**
-- `world_quality_enabled`: bool
-- `world_quality_max_iterations`: int = 3
-- `world_quality_threshold`: float = 7.5
+- `world_quality_enabled`, `world_quality_max_iterations`, `world_quality_threshold`
 
-**Temporal Validation:**
-- `validate_temporal_consistency`: bool = True
-- `generate_calendar_on_world_build`: bool = True
+**Temporal:**
+- `validate_temporal_consistency`, `generate_calendar_on_world_build`
 
-### ModelInfo TypedDict
-```python
-class ModelInfo(TypedDict):
-    name: str
-    size_gb: float
-    vram_required: int
-    quality: int | float
-    speed: int
-    uncensored: bool
-    description: str
-    tags: list[str]  # Role suitability
-```
+**RAG:**
+- `embedding_model` (auto-migrated if empty)
 
 ## Workflow Events (`services/orchestrator/`)
 
@@ -638,49 +551,16 @@ class WorkflowEvent:
     data: dict[str, Any] | None
     timestamp: datetime | None
     correlation_id: str | None
-    phase: str | None  # interview, architect, writer, editor, continuity
+    phase: str | None
     progress: float | None  # 0.0-1.0
     chapter_number: int | None
     eta_seconds: float | None
 ```
 
-## UI State (`ui/state.py`)
-
-### ActionType Enum
-```python
-class ActionType(Enum):
-    ADD_ENTITY = "add_entity"
-    DELETE_ENTITY = "delete_entity"
-    UPDATE_ENTITY = "update_entity"
-    ADD_RELATIONSHIP = "add_relationship"
-    DELETE_RELATIONSHIP = "delete_relationship"
-    UPDATE_RELATIONSHIP = "update_relationship"
-    UPDATE_CHAPTER_CONTENT = "update_chapter_content"
-    DELETE_CHAPTER = "delete_chapter"
-    ADD_CHAPTER = "add_chapter"
-    UPDATE_CHAPTER_FEEDBACK = "update_chapter_feedback"
-    UPDATE_SETTINGS = "update_settings"
-```
-
-### UndoAction
-```python
-@dataclass
-class UndoAction:
-    action_type: ActionType
-    data: dict[str, Any]
-    inverse_data: dict[str, Any]
-```
-
 ## File Storage
 
-**Stories:** `output/stories/{uuid}.json`
-- Full StoryState serialized
-
-**Worlds:** `output/worlds/{uuid}.sqlite`
-- WorldDatabase with entities/relationships
-
-**Backups:** `output/backups/{uuid}_{timestamp}.zip`
-- Story JSON + World SQLite bundled
-
-**Logs:** `output/logs/story_factory.log`
-- Rotating file handler
+- **Stories:** `output/stories/{uuid}.json` (full StoryState)
+- **Worlds:** `output/worlds/{uuid}.sqlite` (WorldDatabase)
+- **Backups:** `output/backups/{uuid}_{timestamp}.zip` (story + world bundled)
+- **Logs:** `output/logs/story_factory.log` (rotating file handler)
+- **Settings:** `src/settings.json` (gitignored, auto-backup in `.settings_backup/`)
