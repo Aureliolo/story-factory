@@ -55,6 +55,26 @@ class TestCreateSettingsBackup:
 
         assert result is False
 
+    def test_skips_when_file_has_invalid_json(self, tmp_path):
+        """Should return False when settings file contains invalid JSON."""
+        settings_file = tmp_path / "settings.json"
+        settings_file.write_text("not valid json {{{")
+
+        result = _create_settings_backup(settings_file)
+
+        assert result is False
+        assert not settings_file.with_suffix(".json.bak").exists()
+
+    def test_skips_when_file_has_non_dict_json(self, tmp_path):
+        """Should return False when settings file contains non-dict JSON."""
+        settings_file = tmp_path / "settings.json"
+        settings_file.write_text("[1, 2, 3]")
+
+        result = _create_settings_backup(settings_file)
+
+        assert result is False
+        assert not settings_file.with_suffix(".json.bak").exists()
+
     def test_overwrites_existing_bak(self, tmp_path):
         """Should overwrite an existing .bak file with current content."""
         settings_file = tmp_path / "settings.json"
@@ -243,6 +263,31 @@ class TestSettingsLoadWithBackupRecovery:
 
         assert settings.context_size == 32768  # default
         assert settings.ollama_url == "http://localhost:11434"
+
+    def test_recovers_from_backup_on_locked_file(self, tmp_path, monkeypatch):
+        """Should recover from .bak when primary file raises OSError (locked)."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+
+        # Create a primary file and a backup
+        settings_file.write_text('{"context_size": 32768}')
+        bak_file = settings_file.with_suffix(".json.bak")
+        bak_file.write_text(json.dumps({"context_size": 16384}))
+
+        # Patch open to raise OSError (simulating locked file)
+        original_open = open
+
+        def mock_open(path, *args, **kwargs):
+            """Raise OSError for the primary settings file, pass through others."""
+            if str(path) == str(settings_file):
+                raise OSError("file locked by another process")
+            return original_open(path, *args, **kwargs)
+
+        with patch("builtins.open", side_effect=mock_open):
+            settings = Settings.load()
+
+        # Should have recovered from backup
+        assert settings.context_size == 16384
 
     def test_recovers_from_backup_on_empty_file(self, tmp_path, monkeypatch):
         """Should recover from .bak when primary file is empty (0 bytes)."""
