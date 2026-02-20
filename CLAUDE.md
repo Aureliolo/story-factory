@@ -189,7 +189,7 @@ Note: These patterns also work with experimental free-threaded Python builds (no
 Diagnostic and investigation scripts in `scripts/`:
 - **Shared helpers**: `scripts/_ollama_helpers.py` (constants, model utilities used by all scripts)
 - **Naming conventions**: `investigate_*.py` for research, `evaluate_*.py` for benchmarks, `check_*.py` for CI/pre-commit, `audit_*.py` for codebase analysis
-- **Output**: `output/diagnostics/` (timestamped JSON), `output/investigations/` (findings markdown)
+- **Output**: `output/diagnostics/` (timestamped JSON)
 - Scripts are excluded from test coverage requirements
 - Must respect the 80% GPU residency rule
 
@@ -237,6 +237,6 @@ Invoke via `/analyze-logs`, `/aurelio-review-pr`, etc.
 - Logs: `output/logs/story_factory.log`
 - Log analyses: `output/logs/LOG_ANALYSIS_*.md`
 - Diagnostics: `output/diagnostics/` (timestamped JSON from evaluation scripts)
-- Investigations: `output/investigations/` (findings markdown, numbered by GitHub issue)
+
 - Backups: `output/backups/`
 - Model scores: `output/model_scores.db` (SQLite)

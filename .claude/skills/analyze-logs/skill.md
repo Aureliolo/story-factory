@@ -24,27 +24,32 @@ Resolve the log file path:
 - If `$ARGUMENTS` is provided and non-empty, use it as the log file path
 - Otherwise, use the default: `output/logs/story_factory.log`
 
-Validate and gather baseline metrics using dedicated tools:
+Validate the log file exists, then gather baseline metrics using dedicated tools:
 
-1. Use **Bash** with `wc -l` to get the total line count
-2. Use **Grep** (output_mode: "count") for severity counts:
+1. Use **Bash** with `test -f <path> && echo EXISTS || echo MISSING` to verify the log file exists
+2. Use **Bash** with `realpath <path>` to resolve the absolute path (use this as `<LOG_FILE>` going forward)
+3. Use **Bash** with `wc -l` to get the total line count
+4. Use **Grep** (output_mode: "count") for severity counts:
    - Pattern `\[ERROR\]` for errors
    - Pattern `\[WARNING\]` for warnings
    - Pattern `\[INFO\]` for info
    - Pattern `\[DEBUG\]` for debug
-3. Use **Read** (limit: 1) to get the first line (session start timestamp)
-4. Use **Read** (offset: last line, limit: 1) to get the last line (session end timestamp)
-5. Use **Bash** with `date +%Y-%m-%d` to get today's date
+5. Use **Read** (limit: 1) to get the first line (session start timestamp)
+6. Use **Bash** with `tail -n 1` to get the last line (session end timestamp)
+7. Use **Bash** with `python -c "import datetime; print(datetime.date.today())"` to get today's date
 
 **Early exit conditions:**
+- If the log file **does not exist**: report "Log file not found at `<path>`." and **stop**.
 - If the log file has **0 lines**: report "Log file is empty — nothing to analyze." and **stop**.
 - If the log file has **fewer than 10 lines**: report "Log file too small for multi-agent analysis." Do a single inline analysis instead of launching 10 agents, and **stop**.
 
-After completing Phase 1, substitute these values into all agent prompts in Phase 2:
-- `<LOG_FILE>` — the resolved absolute path to the log file
+After completing Phase 1, compute these values for substitution:
+- `<LOG_FILE>` — the resolved absolute path from `realpath`
 - `<LINE_COUNT>` — the total line count from `wc -l`
-- `<OUTPUT_PATH>` — `output/logs/LOG_ANALYSIS_<YYYY-MM-DD>.md`
+- `<OUTPUT_PATH>` — `output/logs/LOG_ANALYSIS_<YYYY-MM-DD>_<HH-MM-SS>.md` (timestamped to avoid overwriting previous same-day analyses)
 - `<DATE>` — today's date in YYYY-MM-DD format
+
+Substitute `<LOG_FILE>`, `<LINE_COUNT>`, and `<DATE>` into Phase 2 agent prompts. Substitute `<OUTPUT_PATH>` into the Phase 3 coordinator prompt and Phase 4 (specialist agents do not use it).
 
 Print to the user:
 > Analyzing **N** lines (E errors, W warnings, I info, D debug) spanning TIME_RANGE.
@@ -63,7 +68,7 @@ Example: `2026-02-20 21:11:44 [INFO] [-] src.services.llm_client: LLM call compl
 
 **Shared agent rules (apply to ALL 10 agents):**
 
-1. **Grep syntax**: The Grep tool uses **ripgrep**. Use `|` for alternation (NOT `\|` which matches a literal pipe in ripgrep). Example: `failed|Failed|FAILED`.
+1. **Grep syntax**: The Grep tool uses **ripgrep**. Use `|` for alternation (NOT `\|` which matches a literal pipe in ripgrep). For case-insensitive searches, use the `-i` flag (e.g., `pattern: "failed", -i: true`) instead of listing all case variants manually.
 2. **Large result sets**: If a grep pattern returns more than 100 matches, sample the first 20, last 20, and 10 random matches from the middle. Report the total count and note that sampling was used.
 3. **Output constraint**: Keep your report under 3,000 words. Group similar findings rather than listing each individually. The coordinator must fit all 10 reports in its context window.
 4. **Severity vs action**: Severity is `CRITICAL/HIGH/MEDIUM/LOW`. Action type is `BUGFIX/INVESTIGATE/CONFIGURE/REFACTOR`. These are independent — report both per finding.
@@ -85,8 +90,8 @@ You are analyzing the Story Factory application log for errors, warnings, and si
 Log file: `<LOG_FILE>` (<LINE_COUNT> lines)
 
 **Step 1 — Find all errors and warnings:**
-- Grep for `\[ERROR\]` — read each match with 15 lines of surrounding context
-- Grep for `\[WARNING\]` — read each match with 5 lines of surrounding context
+- Grep for `\[ERROR\]` with `-C: 15` (15 lines of surrounding context per match)
+- Grep for `\[WARNING\]` with `-C: 5` (5 lines of surrounding context per match)
 
 **Step 2 — Analyze each finding:**
 For each ERROR:
@@ -104,13 +109,13 @@ For each WARNING:
 **Step 3 — Hunt for silent failures:**
 - Grep for `failed|Failed|FAILED` at INFO/DEBUG level — these are failures not promoted to ERROR
 - Grep for `skip|Skip|SKIP` — things being silently skipped
-- Grep for `None|null|empty` in contexts where a value was expected
+- Grep for `= None|=None|returned None|got None|value.*empty|result.*null` at WARNING/ERROR level — targeted patterns where a missing value indicates a real problem
 - Grep for `retry|Retry|fallback|Fallback` — recovery paths that might mask real issues
 
 **Output format:**
 Return your findings as a markdown report with this structure:
 
-```
+```markdown
 ## Error & Warning Triage Findings
 
 ### Summary
@@ -173,7 +178,7 @@ Log file: `<LOG_FILE>` (<LINE_COUNT> lines)
 **Output format:**
 Return your findings as a markdown report. Include a statistics table:
 
-```
+```markdown
 ## Performance & Timing Findings
 
 ### LLM Call Statistics
@@ -242,7 +247,7 @@ For each entity that went through refinement:
 **Output format:**
 Return your findings as a markdown report. Include a quality loop summary table:
 
-```
+```markdown
 ## Quality Loop Pattern Findings
 
 ### Quality Loop Summary
@@ -302,7 +307,7 @@ Log file: `<LOG_FILE>` (<LINE_COUNT> lines)
 **Output format:**
 Return findings as markdown. Pay special attention to data corruption where the log shows "success" but the data is actually wrong (e.g., year=-10 parsed as year=None looks like a successful parse but is data loss).
 
-```
+```markdown
 ## Data Integrity Findings
 
 ### Summary
@@ -360,7 +365,8 @@ For each repeated operation:
 - Check if DEBUG-level messages are providing value or just noise
 
 **Output format:**
-```
+
+```markdown
 ## Redundancy & Waste Findings
 
 ### Summary
@@ -415,7 +421,8 @@ Log file: `<LOG_FILE>` (<LINE_COUNT> lines)
 - Look for operations on entities that don't exist yet or have been deleted
 
 **Output format:**
-```
+
+```markdown
 ## Sequence & State Findings
 
 ### Session Timeline
@@ -452,7 +459,7 @@ Log file: `<LOG_FILE>` (<LINE_COUNT> lines)
 **Your approach — read broadly, think deeply:**
 
 1. Read the first 100 lines to understand the session context (app startup, configuration)
-2. Read 5-6 random 100-line samples from different parts of the log (use offset/limit)
+2. Read 5-6 evenly spaced 100-line samples from different parts of the log. Calculate offsets by dividing `<LINE_COUNT>` into 6 equal segments and reading 100 lines starting at each segment boundary (e.g., for a 6000-line log: offsets 0, 1000, 2000, 3000, 4000, 5000)
 3. Read the last 100 lines to see the session end state
 
 **For each section you read, ask yourself:**
@@ -479,7 +486,8 @@ Log file: `<LOG_FILE>` (<LINE_COUNT> lines)
 **You have no predetermined grep patterns.** You are the fresh eyes. Read the log and report what jumps out at you.
 
 **Output format:**
-```
+
+```markdown
 ## Anomaly Detector Findings
 
 ### Summary
@@ -545,7 +553,8 @@ Per entity type (schema):
 - Compare structured output calls vs free-text calls in token efficiency
 
 **Output format:**
-```
+
+```markdown
 ## Token Economics Findings
 
 ### Token Usage by Model
@@ -607,7 +616,8 @@ Log file: `<LOG_FILE>` (<LINE_COUNT> lines)
 - Grep for `Timeout for` — are timeouts correctly scaled to model size?
 
 **Output format:**
-```
+
+```markdown
 ## Model Selection Findings
 
 ### Model-Role Map
@@ -673,7 +683,7 @@ Write a short narrative of what happened in this session:
 
 The Session Timeline and Session Narrative sections below are supplementary context. Your primary deliverable is the standard Findings section with severity-tagged findings.
 
-```
+```markdown
 ## Session Reconstruction Findings
 
 ### Session Timeline
@@ -706,9 +716,9 @@ The Session Timeline and Session Narrative sections below are supplementary cont
 
 ## Phase 3: Coordinator Synthesis
 
-After ALL 10 agents have returned their findings, launch a single **Opus** coordinator agent using the Task tool (subagent_type: `general-purpose`, model: `opus`).
+After ALL 10 agents have returned their findings, launch a single **Opus** coordinator agent using the Task tool (subagent_type: `Explore`, model: `opus`). The coordinator only needs read access to synthesize findings — it does not write files.
 
-The coordinator should return the full report as its **output text**. After receiving the coordinator's output, the main agent writes it to `<OUTPUT_PATH>` using the Write tool. Do NOT instruct the coordinator to write files directly.
+The coordinator should return the full report as its **output text**. Do NOT instruct the coordinator to write files — file writing happens in Phase 4.
 
 **Coordinator prompt:**
 
