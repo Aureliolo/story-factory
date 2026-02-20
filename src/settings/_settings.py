@@ -610,11 +610,24 @@ class Settings:
                 if not recovered_from_backup:
                     # Don't back up a corrupt/empty primary over the good .bak
                     _create_settings_backup(SETTINGS_FILE)
-                _atomic_write_json(SETTINGS_FILE, final_data)
+                try:
+                    _atomic_write_json(SETTINGS_FILE, final_data)
+                except OSError as write_err:
+                    logger.warning(
+                        "Could not persist updated settings to disk: %s — "
+                        "settings are loaded in memory but changes will not survive restart",
+                        write_err,
+                    )
             else:
                 # First install or complete data loss — write defaults
                 logger.info("No existing settings found, writing defaults to disk")
-                _atomic_write_json(SETTINGS_FILE, final_data)
+                try:
+                    _atomic_write_json(SETTINGS_FILE, final_data)
+                except OSError as write_err:
+                    logger.warning(
+                        "Could not write default settings to disk: %s",
+                        write_err,
+                    )
 
         cls._cached_instance = settings
         return settings

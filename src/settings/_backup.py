@@ -114,7 +114,7 @@ def _log_settings_changes(
     """Log every key that changed between two settings snapshots.
 
     Compares flat keys and one level of nested dict keys (dot-notation).
-    Only logs at INFO level so it shows up in normal operation.
+    Changes are logged at INFO level; absence of changes is logged at DEBUG.
 
     Args:
         original: Settings dict before the operation.
@@ -132,10 +132,10 @@ def _log_settings_changes(
         new_val = final.get(key)
 
         if key not in original:
-            logger.info("[%s] added %s = %r", label, key, new_val)
+            logger.debug("[%s] added %s = %r", label, key, new_val)
             changes += 1
         elif key not in final:
-            logger.info("[%s] removed %s (was %r)", label, key, old_val)
+            logger.debug("[%s] removed %s (was %r)", label, key, old_val)
             changes += 1
         elif isinstance(old_val, dict) and isinstance(new_val, dict):
             # Compare one level of nested dict keys — mirror top-level
@@ -143,15 +143,15 @@ def _log_settings_changes(
             sub_keys = set(old_val) | set(new_val)
             for sub_key in sorted(sub_keys):
                 if sub_key not in old_val:
-                    logger.info("[%s] added %s.%s = %r", label, key, sub_key, new_val[sub_key])
+                    logger.debug("[%s] added %s.%s = %r", label, key, sub_key, new_val[sub_key])
                     changes += 1
                 elif sub_key not in new_val:
-                    logger.info(
+                    logger.debug(
                         "[%s] removed %s.%s (was %r)", label, key, sub_key, old_val[sub_key]
                     )
                     changes += 1
                 elif old_val[sub_key] != new_val[sub_key]:
-                    logger.info(
+                    logger.debug(
                         "[%s] changed %s.%s: %r -> %r",
                         label,
                         key,
@@ -161,7 +161,7 @@ def _log_settings_changes(
                     )
                     changes += 1
         elif old_val != new_val:
-            logger.info("[%s] changed %s: %r -> %r", label, key, old_val, new_val)
+            logger.debug("[%s] changed %s: %r -> %r", label, key, old_val, new_val)
             changes += 1
 
     if changes:

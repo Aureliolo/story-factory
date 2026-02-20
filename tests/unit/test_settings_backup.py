@@ -1,8 +1,9 @@
 """Tests for settings backup, recovery, and change logging."""
 
+import copy
 import json
 import logging
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from src.settings import Settings
 from src.settings._backup import (
@@ -10,6 +11,7 @@ from src.settings._backup import (
     _log_settings_changes,
     _recover_from_backup,
 )
+from src.ui.app import StoryFactoryApp
 
 
 class TestCreateSettingsBackup:
@@ -209,16 +211,22 @@ class TestLogSettingsChanges:
         """Should return 0 when dicts are identical."""
         data = {"key": "val", "nested": {"a": 1}}
 
-        count = _log_settings_changes(data, data.copy(), "test")
+        count = _log_settings_changes(data, copy.deepcopy(data), "test")
 
         assert count == 0
 
-    def test_logs_at_info_level(self, caplog):
-        """Should log changes at INFO level."""
-        with caplog.at_level(logging.INFO, logger="src.settings._backup"):
+    def test_logs_per_key_at_debug_summary_at_info(self, caplog):
+        """Per-key changes should log at DEBUG; summary should log at INFO."""
+        with caplog.at_level(logging.DEBUG, logger="src.settings._backup"):
             _log_settings_changes({"k": "old"}, {"k": "new"}, "test-label")
 
-        assert any("[test-label] changed k:" in r.message for r in caplog.records)
+        per_key = [r for r in caplog.records if "[test-label] changed k:" in r.message]
+        assert per_key
+        assert per_key[0].levelno == logging.DEBUG
+
+        summary = [r for r in caplog.records if "total changes: 1" in r.message]
+        assert summary
+        assert summary[0].levelno == logging.INFO
 
 
 class TestSettingsLoadWithBackupRecovery:
@@ -334,9 +342,30 @@ class TestSettingsLoadWithBackupRecovery:
         assert restored["context_size"] == 16384
         assert "ollama_url" in restored  # Merged defaults should be present
 
+    def test_load_survives_write_back_failure(self, tmp_path, monkeypatch, caplog):
+        """load() should not crash when write-back to disk fails (file still locked)."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+
+        # Write a partial file so merge adds defaults -> changed = True -> triggers write-back
+        settings_file.write_text(json.dumps({"context_size": 16384}))
+
+        with (
+            patch(
+                "src.settings._settings._atomic_write_json",
+                side_effect=OSError("file locked"),
+            ),
+            caplog.at_level(logging.WARNING, logger="src.settings._settings"),
+        ):
+            settings = Settings.load()
+
+        # Settings should still be loaded in memory despite write failure
+        assert settings.context_size == 16384
+        assert any("Could not persist" in r.message for r in caplog.records)
+
     def test_does_not_overwrite_bak_with_defaults(self, tmp_path, monkeypatch):
-        """When primary is empty and no backup: defaults should be saved but
-        an existing .bak should not be replaced with defaults."""
+        """When primary is corrupt and a .bak exists: recovery writes
+        the recovered settings to primary, but must not overwrite the .bak."""
         settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
 
@@ -396,13 +425,9 @@ class TestLoadLastProjectFix:
 
     def test_file_not_found_clears_project(self):
         """FileNotFoundError should still clear last_project_id."""
-        from unittest.mock import MagicMock
-
         services = MagicMock()
         services.settings.last_project_id = "deleted-project-id"
         services.project.load_project.side_effect = FileNotFoundError("gone")
-
-        from src.ui.app import StoryFactoryApp
 
         with patch.object(StoryFactoryApp, "build"):
             StoryFactoryApp(services)
@@ -412,13 +437,9 @@ class TestLoadLastProjectFix:
 
     def test_transient_error_preserves_project(self):
         """Non-FileNotFoundError should NOT clear last_project_id."""
-        from unittest.mock import MagicMock
-
         services = MagicMock()
         services.settings.last_project_id = "valid-project-id"
         services.project.load_project.side_effect = RuntimeError("db locked")
-
-        from src.ui.app import StoryFactoryApp
 
         with patch.object(StoryFactoryApp, "build"):
             StoryFactoryApp(services)
@@ -429,13 +450,9 @@ class TestLoadLastProjectFix:
 
     def test_permission_error_preserves_project(self):
         """PermissionError (file locked) should NOT clear last_project_id."""
-        from unittest.mock import MagicMock
-
         services = MagicMock()
         services.settings.last_project_id = "valid-project-id"
         services.project.load_project.side_effect = PermissionError("file locked")
-
-        from src.ui.app import StoryFactoryApp
 
         with patch.object(StoryFactoryApp, "build"):
             StoryFactoryApp(services)
@@ -455,10 +472,10 @@ class TestSettingsLoadChangeLogging:
         # Write a file with only one key — all others will be added
         settings_file.write_text(json.dumps({"context_size": 16384}))
 
-        with caplog.at_level(logging.INFO, logger="src.settings._backup"):
+        with caplog.at_level(logging.DEBUG, logger="src.settings._backup"):
             Settings.load()
 
-        # Should have logged added keys
+        # Per-key additions are logged at DEBUG, summary at INFO
         assert any("[load]" in r.message and "added" in r.message for r in caplog.records)
 
     def test_load_logs_no_changes_for_complete_file(self, tmp_path, monkeypatch, caplog):
