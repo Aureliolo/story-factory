@@ -1,4 +1,10 @@
-"""Path constants for Story Factory settings and output directories."""
+"""Path constants for Story Factory settings and output directories.
+
+IMPORTANT: All writable paths defined here are isolated in tests via autouse
+fixtures in tests/conftest.py (isolate_all_production_paths,
+isolate_project_directories). If you add a new writable path constant,
+add it to the appropriate fixture to prevent tests from writing to real files.
+"""
 
 from pathlib import Path
 
