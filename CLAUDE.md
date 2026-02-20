@@ -6,11 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Never defer work.** Do not suggest "this can be done later" or "consider for a future PR". Complete all requested changes fully.
 
-**No placeholder code.** Every piece of code must be fully functional. No `# TODO`, no `pass` as placeholders, no "implement later" comments.
-
-**No partial implementations.** If you start refactoring something, finish it completely. Don't leave work as "pending" or "remaining".
-
-**No boilerplate.** Don't generate generic/template code that needs to be filled in. Write the actual implementation.
+**Write complete, functional code.** No placeholder code (`# TODO`, `pass`), no partial implementations ("remaining work"), no boilerplate that needs filling in. If you start refactoring something, finish it completely. Every piece of code must be fully functional and finished.
 
 **No default fallbacks.** Never use `.get(key, default_value)` patterns for configuration values. All configurable values must be explicitly defined in settings with proper validation. If a value is missing, raise an error rather than silently using a default.
 
@@ -188,6 +184,24 @@ Note: These patterns also work with experimental free-threaded Python builds (no
 - `src/services/context_retrieval_service.py`: RAG context retrieval via vector similarity search
 - `src/services/embedding_service.py`: Vector embedding generation via Ollama
 
+## Scripts
+
+Diagnostic and investigation scripts in `scripts/`:
+- **Shared helpers**: `scripts/_ollama_helpers.py` (constants, model utilities used by all scripts)
+- **Naming conventions**: `investigate_*.py` for research, `evaluate_*.py` for benchmarks, `check_*.py` for CI/pre-commit, `audit_*.py` for codebase analysis
+- **Output**: `output/diagnostics/` (timestamped JSON)
+- Scripts are excluded from test coverage requirements
+- Must respect the 80% GPU residency rule
+
+## Project Skills
+
+Custom Claude Code skills in `.claude/skills/`:
+- `analyze-logs` — Multi-agent log analysis (10 specialists + coordinator)
+- `aurelio-review-pr` — Full PR review pipeline with local + external feedback
+- `story-factory` — Project workflow reference patterns
+
+Invoke via `/analyze-logs`, `/aurelio-review-pr`, etc.
+
 ## Testing
 
 - Unit tests in `tests/unit/` with `test_*.py` naming
@@ -221,4 +235,8 @@ Note: These patterns also work with experimental free-threaded Python builds (no
 - Stories: `output/stories/` (JSON files, UUIDs as IDs)
 - World databases: `output/worlds/` (SQLite)
 - Logs: `output/logs/story_factory.log`
+- Log analyses: `output/logs/LOG_ANALYSIS_*.md`
+- Diagnostics: `output/diagnostics/` (timestamped JSON from evaluation scripts)
+
 - Backups: `output/backups/`
+- Model scores: `output/model_scores.db` (SQLite)
