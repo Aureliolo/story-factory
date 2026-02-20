@@ -2234,3 +2234,43 @@ class TestRefinementEffectivenessTracking:
         record = data[0]
         assert record["entity_name"] == "Hero"
         assert record["score_progression"] == []  # Empty list for empty string JSON
+
+
+class TestSharedModeDatabasePattern:
+    """Tests that ModeDatabase can be shared via dependency injection (L6)."""
+
+    def test_shared_instance_works_for_multiple_consumers(self, tmp_path: Path) -> None:
+        """A single ModeDatabase instance can be used by multiple services."""
+        db_path = tmp_path / "shared_scores.db"
+        shared_db = ModeDatabase(db_path)
+
+        # Simulate two consumers writing to the same instance
+        shared_db.record_score(
+            project_id="p1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+        )
+        shared_db.record_score(
+            project_id="p2",
+            agent_role="editor",
+            model_id="model-b",
+            mode_name="quality",
+        )
+
+        # Both records visible through the same instance
+        p1_scores = shared_db.get_scores_for_project("p1")
+        p2_scores = shared_db.get_scores_for_project("p2")
+        assert len(p1_scores) == 1
+        assert len(p2_scores) == 1
+        assert p1_scores[0]["model_id"] == "model-a"
+        assert p2_scores[0]["model_id"] == "model-b"
+
+    def test_service_container_exposes_mode_db(self) -> None:
+        """ServiceContainer should expose mode_db from ModelModeService._db."""
+        from src.services import ServiceContainer
+
+        container = ServiceContainer()
+        # mode_db should be the same object as mode._db
+        assert container.mode_db is container.mode._db
+        assert isinstance(container.mode_db, ModeDatabase)

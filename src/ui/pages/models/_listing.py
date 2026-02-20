@@ -149,8 +149,8 @@ def get_filtered_downloadable_models(page: Any) -> list[str]:
     Returns:
         List of downloadable model IDs matching filters.
     """
-    vram = page.services.model.get_vram()
-    installed = set(page.services.model.list_installed())
+    vram = page._get_vram()
+    installed = page._get_installed()
     downloadable = []
 
     for model_id, info in RECOMMENDED_MODELS.items():
@@ -204,8 +204,8 @@ def refresh_model_list(page: Any) -> None:
 
     page._model_list.clear()
 
-    vram = page.services.model.get_vram()
-    installed = set(page.services.model.list_installed())
+    vram = page._get_vram()
+    installed = page._get_installed()
 
     with page._model_list:
         shown_count = 0

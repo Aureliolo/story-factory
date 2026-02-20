@@ -861,5 +861,11 @@ class Settings:
         # Scale: base * (1 + size_gb/20)
         scale_factor = 1 + (size_gb / 20)
         scaled = base_timeout * scale_factor
+
+        # Small models (< 5GB) are fast — cap their timeout to avoid
+        # long waits on hung calls.
+        if size_gb < 5.0:
+            scaled = min(scaled, 45.0)
+
         logger.debug(f"Timeout for {model_id}: {scaled:.0f}s (size={size_gb:.1f}GB)")
         return scaled

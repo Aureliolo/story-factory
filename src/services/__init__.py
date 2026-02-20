@@ -8,6 +8,7 @@ import logging
 import time
 from dataclasses import dataclass
 
+from src.memory.mode_database import ModeDatabase
 from src.settings import Settings
 
 from .backup_service import BackupService
@@ -70,6 +71,7 @@ class ServiceContainer:
     temporal_validation: TemporalValidationService
     embedding: EmbeddingService
     context_retrieval: ContextRetrievalService
+    mode_db: ModeDatabase
 
     def __init__(self, settings: Settings | None = None):
         """
@@ -91,6 +93,7 @@ class ServiceContainer:
         self.model = ModelService(self.settings)
         self.export = ExportService(self.settings)
         self.mode = ModelModeService(self.settings)
+        self.mode_db = self.mode._db  # shared ModeDatabase instance
         self.scoring = ScoringService(self.mode)
         self.context_retrieval = ContextRetrievalService(self.settings, self.embedding)
         self.timeline = TimelineService(self.settings)
@@ -102,8 +105,9 @@ class ServiceContainer:
             mode_service=self.mode,
             context_retrieval=self.context_retrieval,
             timeline=self.timeline,
+            mode_db=self.mode_db,
         )
-        self.world_quality = WorldQualityService(self.settings, self.mode)
+        self.world_quality = WorldQualityService(self.settings, self.mode, self.mode_db)
         self.suggestion = SuggestionService(self.settings)
         self.template = TemplateService(self.settings)
         self.backup = BackupService(self.settings)

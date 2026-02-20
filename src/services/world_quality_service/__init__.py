@@ -226,19 +226,26 @@ class WorldQualityService(EntityDelegatesMixin):
     _calculate_eta = staticmethod(_calculate_eta)
     _format_properties = staticmethod(_format_properties)
 
-    def __init__(self, settings: Settings, mode_service: ModelModeService):
+    def __init__(
+        self,
+        settings: Settings,
+        mode_service: ModelModeService,
+        mode_db: ModeDatabase | None = None,
+    ):
         """
         Create a WorldQualityService configured with application settings and a model mode service used for model resolution.
 
         Parameters:
             settings (Settings): Application configuration and feature settings used by the service.
             mode_service (ModelModeService): Service responsible for selecting and managing model modes.
+            mode_db (ModeDatabase | None): Shared ModeDatabase instance for analytics. If None, creates lazily.
         """
         logger.debug("Initializing WorldQualityService")
         self.settings = settings
         self.mode_service = mode_service
         self._client: ollama.Client | None = None
-        self._analytics_db: ModeDatabase | None = None
+        self._analytics_db: ModeDatabase | None = mode_db
+        self._judge_config: JudgeConsistencyConfig | None = None
         self._model_cache = ModelResolutionCache(settings, mode_service)
         self._calendar_context: str | None = None
         self._calendar_context_lock = threading.RLock()
@@ -410,10 +417,14 @@ class WorldQualityService(EntityDelegatesMixin):
         """
         Provide the judge consistency configuration derived from the service settings.
 
+        Returns cached instance on subsequent calls. Cleared by invalidate_model_cache().
+
         Returns:
             JudgeConsistencyConfig: Configuration for judge consistency constructed from the current settings.
         """
-        return JudgeConsistencyConfig.from_settings(self.settings)
+        if self._judge_config is None:
+            self._judge_config = JudgeConsistencyConfig.from_settings(self.settings)
+        return self._judge_config
 
     def _resolve_model_for_role(self, agent_role: str) -> str:
         """
@@ -429,11 +440,13 @@ class WorldQualityService(EntityDelegatesMixin):
 
     def invalidate_model_cache(self) -> None:
         """
-        Clear cached model resolution mappings.
+        Clear cached model resolution mappings and judge config.
 
         Forces subsequent model-resolution calls to recompute models instead of using cached results.
+        Also clears the cached JudgeConsistencyConfig so settings changes take effect.
         """
         self._model_cache.invalidate()
+        self._judge_config = None
 
     def _get_creator_model(self, entity_type: str | None = None) -> str:
         """

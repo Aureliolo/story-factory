@@ -638,6 +638,28 @@ class TestWorldQualityServiceInit:
         assert model == "test-model"
 
 
+class TestJudgeConfigCaching:
+    """Tests for JudgeConsistencyConfig caching in WorldQualityService."""
+
+    def test_judge_config_cached_on_second_call(self, service):
+        """get_judge_config() returns the same cached instance on repeated calls."""
+        config1 = service.get_judge_config()
+        config2 = service.get_judge_config()
+        assert config1 is config2
+
+    def test_judge_config_cleared_on_invalidate(self, service):
+        """invalidate_model_cache() clears the cached JudgeConsistencyConfig."""
+        config1 = service.get_judge_config()
+        assert service._judge_config is not None
+
+        service.invalidate_model_cache()
+        assert service._judge_config is None
+
+        # Next call creates a fresh config
+        config2 = service.get_judge_config()
+        assert config2 is not config1
+
+
 class TestRecordEntityQuality:
     """Tests for record_entity_quality method."""
 

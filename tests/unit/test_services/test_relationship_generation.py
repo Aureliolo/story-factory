@@ -65,6 +65,68 @@ class TestExistingPairsNotCapped:
             assert expected in prompt_arg, f"Pair {expected} missing from prompt"
 
 
+class TestEntityFrequencyHintReturnsTuple:
+    """L1: _compute_entity_frequency_hint returns (hint, counter) tuple."""
+
+    def test_returns_tuple_with_hint_and_counter(self):
+        """_compute_entity_frequency_hint should return (str, Counter) tuple."""
+        from collections import Counter
+
+        from src.services.world_quality_service._relationship import (
+            _compute_entity_frequency_hint,
+        )
+
+        entity_names = ["Alpha", "Beta", "Gamma", "Delta"]
+        existing_rels = [
+            ("Alpha", "Beta", "knows"),
+            ("Alpha", "Gamma", "rivals"),
+            ("Alpha", "Delta", "allies_with"),
+            ("Alpha", "Beta", "mentors"),  # Alpha has 4 rels
+        ]
+
+        hint, freq = _compute_entity_frequency_hint(entity_names, existing_rels)
+
+        # Should return a Counter
+        assert isinstance(freq, Counter)
+        # Alpha appears 4 times (as source in all 4)
+        assert freq["Alpha"] == 4
+        # Beta appears twice
+        assert freq["Beta"] == 2
+        # Hint should mention over-connected Alpha
+        assert "Alpha" in hint
+
+    def test_returns_empty_hint_with_counter_for_few_entities(self):
+        """With fewer than 3 entities, hint is empty but counter is still returned."""
+        from collections import Counter
+
+        from src.services.world_quality_service._relationship import (
+            _compute_entity_frequency_hint,
+        )
+
+        entity_names = ["Alpha", "Beta"]
+        existing_rels = [("Alpha", "Beta", "knows")]
+
+        hint, freq = _compute_entity_frequency_hint(entity_names, existing_rels)
+
+        assert hint == ""
+        assert isinstance(freq, Counter)
+
+    def test_counter_reusable_for_sorting(self, story_state):
+        """Returned counter can be used for sorting unused pairs."""
+        from src.services.world_quality_service._relationship import (
+            _compute_entity_frequency_hint,
+        )
+
+        entity_names = ["A", "B", "C", "D"]
+        existing_rels = [("A", "B", "knows"), ("A", "C", "knows")]
+
+        _hint, freq = _compute_entity_frequency_hint(entity_names, existing_rels)
+
+        # D has 0 connections, should sort first
+        sorted_names = sorted(entity_names, key=lambda n: freq[n])
+        assert sorted_names[0] == "D"
+
+
 class TestConsecutiveFailureEarlyTermination:
     """A2: Batch stops after MAX_CONSECUTIVE_BATCH_FAILURES consecutive failures."""
 

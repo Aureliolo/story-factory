@@ -488,9 +488,8 @@ class ModelService:
             logger.info("Ollama model load state: no models currently loaded in VRAM")
             if target_model:
                 logger.warning(
-                    "Model '%s' is not loaded — first LLM call will incur a cold-start "
-                    "penalty (~30-60s for loading model into VRAM)",
-                    target_model,
+                    "No models loaded in VRAM — first LLM call for any model will "
+                    "incur a cold-start penalty (~30-60s)",
                 )
             return
 

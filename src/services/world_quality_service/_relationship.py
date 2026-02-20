@@ -372,29 +372,33 @@ def _count_entity_frequencies(
 def _compute_entity_frequency_hint(
     entity_names: list[str],
     existing_rels: list[tuple[str, str, str]],
-) -> str:
+) -> tuple[str, Counter[str]]:
     """Compute a prompt hint highlighting under-connected and over-connected entities.
 
     Counts how many relationships each entity already appears in (as source or target)
     and generates guidance for the LLM to prioritize under-connected entities and avoid
     over-connected ones, reducing focal-character bias.
 
+    Also returns the computed frequency counter so callers can reuse it without
+    a redundant ``_count_entity_frequencies`` call.
+
     Args:
         entity_names: All entity names available for relationships.
         existing_rels: Existing (source, target, relation_type) 3-tuples.
 
     Returns:
-        A prompt hint string, or empty string if fewer than 3 entities or no relationships.
+        Tuple of (prompt hint string, entity frequency counter).
+        Hint is empty string if fewer than 3 entities or no relationships.
     """
+    freq = _count_entity_frequencies(entity_names, existing_rels)
+
     if len(entity_names) < 3 or not existing_rels:
         logger.debug(
             "Skipping entity frequency hint: %d entities, %d existing rels",
             len(entity_names),
             len(existing_rels),
         )
-        return ""
-
-    freq = _count_entity_frequencies(entity_names, existing_rels)
+        return "", freq
 
     # Identify under-connected (0-1 rels) and over-connected (4+) entities
     under_connected = sorted(name for name in entity_names if freq[name] <= 1)
@@ -402,7 +406,7 @@ def _compute_entity_frequency_hint(
 
     if not under_connected and not over_connected:
         logger.debug("Entity frequency distribution is balanced, no hint needed")
-        return ""
+        return "", freq
 
     parts: list[str] = ["\nENTITY CONNECTION BALANCE:"]
     if under_connected:
@@ -423,7 +427,7 @@ def _compute_entity_frequency_hint(
             "AVOID — these entities already have many connections: " + ", ".join(over_connected)
         )
 
-    return "\n".join(parts)
+    return "\n".join(parts), freq
 
 
 def _create_relationship(
@@ -477,7 +481,7 @@ def _create_relationship(
     diversity_hint = _compute_diversity_hint(existing_types)
 
     # Compute entity frequency hint to reduce focal-character bias
-    frequency_hint = _compute_entity_frequency_hint(entity_names, existing_rels)
+    frequency_hint, entity_freq = _compute_entity_frequency_hint(entity_names, existing_rels)
 
     # For small entity sets, compute and list valid unused pairs
     unused_pairs_block = ""
@@ -488,9 +492,6 @@ def _create_relationship(
         for s, t, _rt in existing_rels:
             existing_pair_set.add((s, t))
             existing_pair_set.add((t, s))
-
-        # Reuse shared frequency counter for sorting
-        entity_freq = _count_entity_frequencies(entity_names, existing_rels)
 
         # Sort unused pairs so under-connected entities appear first
         raw_unused = [
