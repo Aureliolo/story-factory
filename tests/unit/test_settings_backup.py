@@ -363,6 +363,25 @@ class TestSettingsLoadWithBackupRecovery:
         assert settings.context_size == 16384
         assert any("Could not persist" in r.message for r in caplog.records)
 
+    def test_load_survives_defaults_write_failure(self, tmp_path, monkeypatch, caplog):
+        """load() should not crash when writing defaults fails (no prior file)."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+
+        # No primary file, no backup -> falls back to defaults -> tries to write
+        with (
+            patch(
+                "src.settings._settings._atomic_write_json",
+                side_effect=OSError("permission denied"),
+            ),
+            caplog.at_level(logging.WARNING, logger="src.settings._settings"),
+        ):
+            settings = Settings.load()
+
+        # Should still return valid defaults in memory
+        assert settings.context_size == 32768
+        assert any("Could not write default settings" in r.message for r in caplog.records)
+
     def test_does_not_overwrite_bak_with_defaults(self, tmp_path, monkeypatch):
         """When primary is corrupt and a .bak exists: recovery writes
         the recovered settings to primary, but must not overwrite the .bak."""
