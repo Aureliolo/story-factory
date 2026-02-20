@@ -20,7 +20,7 @@ Be respectful, constructive, and kind. This is a learning project - mistakes are
 ## Getting Started
 
 1. **Check existing issues**: Look for issues labeled `good first issue` or `help wanted`
-2. **Read the documentation**: Familiarize yourself with [README.md](README.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+2. **Read the documentation**: Familiarize yourself with [README.md](../README.md) and [ARCHITECTURE.md](ARCHITECTURE.md)
 3. **Set up development environment**: Follow the [Development Setup](#development-setup) section
 
 ## How to Contribute
@@ -245,7 +245,7 @@ logger.error("Error messages for failures")
 
 ### Test Coverage
 
-- **Core modules** require **100% coverage**: `src/agents/`, `src/services/` (including `orchestrator/`), `src/memory/`, `src/utils/`, `src/settings.py`
+- **Core modules** require **100% coverage**: `src/agents/`, `src/services/` (including `orchestrator/`), `src/memory/`, `src/utils/`, `src/settings/`
 - **UI modules** excluded from coverage requirements (until NiceGUI component tests are added)
 
 ### Writing Tests
@@ -294,10 +294,10 @@ logger.error("Error messages for failures")
 pytest
 
 # Specific file
-pytest tests/unit/test_story_service.py
+pytest tests/unit/test_services/test_story_service.py
 
 # Specific test
-pytest tests/unit/test_story_service.py::test_create_story
+pytest tests/unit/test_services/test_story_service.py::test_create_story
 
 # With coverage
 pytest --cov=. --cov-report=term
