@@ -36,20 +36,21 @@ Validate the log file exists, then gather baseline metrics using dedicated tools
    - Pattern `\[DEBUG\]` for debug
 5. Use **Read** (limit: 1) to get the first line (session start timestamp)
 6. Use **Bash** with `tail -n 1` to get the last line (session end timestamp)
-7. Use **Bash** with `python -c "import datetime; print(datetime.date.today())"` to get today's date
+7. Use **Bash** with `python -c "import datetime; now=datetime.datetime.now(); print(now.strftime('%Y-%m-%d')); print(now.strftime('%H-%M-%S'))"` to get today's date and current time
 
 **Early exit conditions:**
 - If the log file **does not exist**: report "Log file not found at `<path>`." and **stop**.
 - If the log file has **0 lines**: report "Log file is empty — nothing to analyze." and **stop**.
-- If the log file has **fewer than 10 lines**: report "Log file too small for multi-agent analysis." Do a single inline analysis instead of launching 10 agents, and **stop**.
+- If the log file has **fewer than 10 lines**: report "Log file too small for multi-agent analysis — performing inline analysis." Read the entire file, analyze it directly in the main conversation (do not launch agents), present findings inline, and then **stop** (do not proceed to Phase 2).
 
 After completing Phase 1, compute these values for substitution:
 - `<LOG_FILE>` — the resolved absolute path from `realpath`
 - `<LINE_COUNT>` — the total line count from `wc -l`
-- `<OUTPUT_PATH>` — `output/logs/LOG_ANALYSIS_<YYYY-MM-DD>_<HH-MM-SS>.md` (timestamped to avoid overwriting previous same-day analyses)
-- `<DATE>` — today's date in YYYY-MM-DD format
+- `<DATE>` — today's date in YYYY-MM-DD format (first line of step 7 output)
+- `<TIME>` — current time in HH-MM-SS format (second line of step 7 output)
+- `<OUTPUT_PATH>` — `output/logs/LOG_ANALYSIS_<DATE>_<TIME>.md` (timestamped to avoid overwriting previous same-day analyses)
 
-Substitute `<LOG_FILE>`, `<LINE_COUNT>`, and `<DATE>` into Phase 2 agent prompts. Substitute `<OUTPUT_PATH>` into the Phase 3 coordinator prompt and Phase 4 (specialist agents do not use it).
+Substitute `<LOG_FILE>`, `<LINE_COUNT>`, and `<DATE>` into Phase 2 agent prompts **and** the Phase 3 coordinator prompt (which uses them in the report header). Substitute `<OUTPUT_PATH>` into Phase 4 only (the main agent writes the file; neither specialist agents nor the coordinator use it).
 
 Print to the user:
 > Analyzing **N** lines (E errors, W warnings, I info, D debug) spanning TIME_RANGE.
@@ -70,7 +71,7 @@ Example: `2026-02-20 21:11:44 [INFO] [-] src.services.llm_client: LLM call compl
 
 1. **Grep syntax**: The Grep tool uses **ripgrep**. Use `|` for alternation (NOT `\|` which matches a literal pipe in ripgrep). For case-insensitive searches, use the `-i` flag (e.g., `pattern: "failed", -i: true`) instead of listing all case variants manually.
 2. **Large result sets**: If a grep pattern returns more than 100 matches, sample the first 20, last 20, and 10 random matches from the middle. Report the total count and note that sampling was used.
-3. **Output constraint**: Keep your report under 3,000 words. Group similar findings rather than listing each individually. The coordinator must fit all 10 reports in its context window.
+3. **Output constraint**: Keep your report under **2,000 words**. Group similar findings rather than listing each individually. **Do not include raw log snippets** — use line-number references (e.g., "Lines 1042-1058") so the coordinator can request details if needed. The coordinator must fit all 10 reports in its context window.
 4. **Severity vs action**: Severity is `CRITICAL/HIGH/MEDIUM/LOW`. Action type is `BUGFIX/INVESTIGATE/CONFIGURE/REFACTOR`. These are independent — report both per finding.
 
 ---
@@ -128,7 +129,7 @@ Return your findings as a markdown report with this structure:
 ### Findings
 
 #### [SEVERITY] Title
-- **Evidence:** Lines X-Y: `<relevant log content>`
+- **Evidence:** Lines X-Y (description of what those lines show)
 - **Impact:** What this breaks or risks
 - **Root cause:** Module path and likely source file
 - **Action type:** BUGFIX / INVESTIGATE / CONFIGURE / REFACTOR
@@ -499,7 +500,7 @@ Log file: `<LOG_FILE>` (<LINE_COUNT> lines)
 ### Findings
 
 #### [SEVERITY] Title
-- **Evidence:** Lines X-Y: `<relevant log content>`
+- **Evidence:** Lines X-Y (description of what those lines show)
 - **Impact:** What this breaks or risks
 - **Root cause:** Best guess at the source, or "unknown — needs investigation"
 - **Why this is anomalous:** Explain what you expected vs what you found
@@ -705,7 +706,7 @@ The Session Timeline and Session Narrative sections below are supplementary cont
 ### Findings
 
 #### [SEVERITY] Title
-- **Evidence:** Lines X-Y: `<relevant log content>`
+- **Evidence:** Lines X-Y (description of what those lines show)
 - **Impact:** What this breaks or risks for the user
 - **Root cause:** Module path and likely source file
 - **Action type:** BUGFIX / INVESTIGATE / CONFIGURE / REFACTOR
@@ -790,7 +791,7 @@ You are the coordinator for a 10-agent log analysis. You have received reports f
 
 #### C1: [Title] [ACTION_TYPE]
 - **Source agent(s):** [which agents found this]
-- **Evidence:** Lines X-Y: `<relevant log content>`
+- **Evidence:** Lines X-Y (description of what those lines show)
 - **Impact:** [what this breaks or risks]
 - **Root cause:** `<source_file_path>` — [description]
 - **Recommendation:** [specific fix or investigation steps]
@@ -841,7 +842,7 @@ You are the coordinator for a 10-agent log analysis. You have received reports f
 | **Final (after dedup)** | | ... | ... | ... | ... | ... | ... |
 ```
 
-Pass ALL 10 agent reports to the coordinator in its prompt, clearly labeled by agent name. If any agent failed, note the failure in the coordinator prompt so the report reflects incomplete coverage.
+Pass ALL 10 agent reports to the coordinator in its prompt, clearly labeled by agent name. Agent reports use line-number references instead of raw log snippets — the coordinator should preserve these references in its output. If any agent failed, note the failure in the coordinator prompt so the report reflects incomplete coverage.
 
 ---
 
