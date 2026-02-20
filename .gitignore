@@ -81,4 +81,5 @@ htmlcov/
 !.claude/skills/
 *coverage_report.txt
 uv.lock
-.reports/
+.reports/*
+!.reports/codemap-diff.txt

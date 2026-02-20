@@ -1,10 +1,10 @@
 # Frontend Structure
 
-> Generated: 2026-01-24 | Updated: 2026-01-29 | Freshness: Current
+<!-- Generated: 2026-01-24 | Updated: 2026-02-20 | Files scanned: 222 | Token estimate: ~850 -->
 
-## Application Entry (`ui/app.py`)
+## Application Entry (`ui/app.py`, 339 lines)
 
-### StoryFactoryApp (`ui/app.py`)
+### StoryFactoryApp
 
 Main NiceGUI application with path-based routing and startup timing.
 
@@ -42,7 +42,7 @@ def _page_layout(self, current_path, build_content):
         build_content()
 ```
 
-## State Management (`ui/state.py`)
+## State Management (`ui/state.py`, 500 lines)
 
 ### AppState
 
@@ -88,133 +88,106 @@ class Page(Protocol):
 
 All pages receive `AppState` and `ServiceContainer` in constructor.
 
-### settings/ (~284 lines in __init__, 7 modules)
+### settings/ (~2,892 lines, 8 modules)
 
 Configuration UI with modular sections and undo/redo support.
 
 | Module | Lines | Purpose |
 |--------|-------|---------|
-| `__init__.py` | 284 | Main SettingsPage with flexbox layout |
-| `_connection.py` | ~100 | Ollama connection settings |
-| `_models.py` | ~190 | Model selection and temperature |
-| `_interaction.py` | ~200 | Interaction mode and context |
-| `_modes.py` | ~250 | Generation mode and adaptive learning |
-| `_advanced.py` | ~830 | Advanced LLM, world gen, story structure, data integrity |
-| `_persistence.py` | ~320 | Save, snapshot, restore, undo/redo |
+| `_advanced.py` | 931 | Advanced LLM, world gen, story structure, data integrity |
+| `__init__.py` | 512 | Main SettingsPage with flexbox layout |
+| `_persistence.py` | 370 | Save, snapshot, restore, undo/redo |
+| `_world_validation.py` | 301 | Temporal validation settings UI |
+| `_modes.py` | 248 | Generation mode and adaptive learning |
+| `_interaction.py` | 221 | Interaction mode and context |
+| `_models.py` | 198 | Model selection and temperature |
+| `_connection.py` | 111 | Ollama connection settings |
 
-**Features:**
-- 7-section flexbox layout (2 rows of responsive cards)
-- Snapshot-based undo/redo for settings changes
-- Modular section building functions
-- Helper methods: `_section_header()`, `_build_number_input()`
-
-### write/ (~1,896 lines, 6 modules)
+### write/ (~1,925 lines, 6 modules)
 
 Main writing interface with generation controls.
 
 | Module | Lines | Purpose |
 |--------|-------|---------|
-| `__init__.py` | 164 | WritePage controller |
-| `_interview.py` | 248 | Interview phase UI |
-| `_structure.py` | 291 | Structure phase UI |
-| `_writing.py` | 683 | Writing/revision loop UI |
-| `_generation.py` | 457 | Generation progress and UX (pause/resume/cancel) |
+| `_writing.py` | 704 | Writing/revision loop UI |
+| `_generation.py` | 474 | Generation progress (pause/resume/cancel) |
+| `_structure.py` | 277 | Structure phase UI |
+| `_interview.py` | 252 | Interview phase UI |
+| `__init__.py` | 165 | WritePage controller |
 | `_export.py` | 53 | Export dialogs |
 
-**Features:**
-- Interview chat (when status="interview")
-- Chapter outline/navigation
-- Content editor with version history
-- Generation controls (pause/resume/cancel)
-- Feedback submission for regeneration
-
-### world/ (~5,516 lines, 13 modules)
+### world/ (~5,909 lines, 13 modules)
 
 Comprehensive entity/relationship editor.
 
 | Module | Lines | Purpose |
 |--------|-------|---------|
-| `__init__.py` | 342 | WorldPage controller |
-| `_browser.py` | 483 | Entity browser/list view |
-| `_editor.py` | 538 | Entity editor UI |
-| `_editor_ops.py` | 394 | Editor operations (CRUD) |
-| `_analysis.py` | 278 | World analysis dashboard |
-| `_graph.py` | 492 | Relationship graph visualization |
-| `_generation.py` | 366 | Entity generation UI |
-| `_gen_dialogs.py` | 611 | Generation dialog components |
-| `_gen_entity_types.py` | 659 | Entity type-specific generation |
-| `_gen_operations.py` | 449 | Generation backend operations |
-| `_import.py` | 524 | Entity import from text |
-| `_calendar.py` | 217 | World calendar UI |
+| `_gen_entity_types.py` | 786 | Entity type-specific generation |
+| `_gen_dialogs.py` | 631 | Generation dialog components |
+| `_browser.py` | 583 | Entity browser/list view |
+| `_editor.py` | 530 | Entity editor UI |
+| `_import.py` | 527 | Entity import from text |
+| `_graph.py` | 496 | Relationship graph visualization |
+| `_gen_operations.py` | 468 | Generation backend operations |
+| `_editor_ops.py` | 388 | Editor operations (CRUD) |
+| `__init__.py` | 376 | WorldPage controller |
+| `_generation.py` | 370 | Entity generation UI |
+| `_analysis.py` | 362 | World analysis dashboard |
+| `_calendar.py` | 229 | World calendar UI |
 | `_undo.py` | 163 | World entity undo/redo |
 
-**Features:**
-- Entity list with filtering by type
-- Entity detail panel with editing
-- Relationship graph visualization
-- Quality refinement toggle
-- World calendar management
-- Entity undo/redo
-
-### analytics/ (~1,264 lines, 7 modules)
+### analytics/ (~1,320 lines, 7 modules)
 
 Performance metrics dashboard.
 
 | Module | Lines | Purpose |
 |--------|-------|---------|
-| `__init__.py` | 241 | AnalyticsPage controller |
-| `_summary.py` | 108 | Summary statistics |
-| `_costs.py` | 234 | Token/cost tracking |
-| `_model.py` | 159 | Model performance metrics |
-| `_content.py` | 79 | Content statistics |
 | `_trends.py` | 347 | Trend analysis |
+| `__init__.py` | 301 | AnalyticsPage controller |
+| `_costs.py` | 230 | Token/cost tracking |
+| `_model.py` | 159 | Model performance metrics |
+| `_summary.py` | 108 | Summary statistics |
 | `_export.py` | 96 | Export analytics |
+| `_content.py` | 79 | Content statistics |
 
-### models/ (~1,271 lines, 4 modules)
+### models/ (~1,327 lines, 4 modules)
 
 Ollama model management.
 
 | Module | Lines | Purpose |
 |--------|-------|---------|
-| `__init__.py` | 163 | ModelsPage controller |
-| `_listing.py` | 331 | Model list view |
 | `_download.py` | 431 | Model download UI |
-| `_operations.py` | 346 | Model operations (load, pull, etc.) |
-
-**Features:**
-- Installed models list
-- Download new models
-- Delete models
-- Model tagging for roles
-- Health check status
+| `_listing.py` | 391 | Model list view |
+| `_operations.py` | 342 | Model operations (load, pull, etc.) |
+| `__init__.py` | 163 | ModelsPage controller |
 
 ### Standalone Pages
 
 | Page | File | Lines | Purpose |
 |------|------|-------|---------|
-| `ProjectsPage` | `projects.py` | ~400 | Project management, backup/restore |
-| `TemplatesPage` | `templates.py` | ~300 | Template browser and preview |
-| `TimelinePage` | `timeline.py` | ~350 | Story timeline visualization |
-| `WorldTimelinePage` | `world_timeline.py` | ~300 | World event timeline |
-| `ComparisonPage` | `comparison.py` | ~400 | Model A/B testing |
+| `ProjectsPage` | `projects.py` | 720 | Project management, backup/restore |
+| `ComparisonPage` | `comparison.py` | 522 | Model A/B testing |
+| `TemplatesPage` | `templates.py` | 461 | Template browser and preview |
+| `TimelinePage` | `timeline.py` | 249 | Story timeline visualization |
+| `WorldTimelinePage` | `world_timeline.py` | 226 | World event timeline |
 
-## Components (`ui/components/`)
+## Components (`ui/components/`) ~5,241 lines
 
-### Header (`ui/components/header.py` ~196 lines)
+### Header (`header.py`, 193 lines)
 
 Navigation and project selector:
 - Tab navigation
 - Dark mode toggle
 - Current project display
 
-### Chat (`ui/components/chat.py` ~256 lines)
+### Chat (`chat.py`, 254 lines)
 
 Interview chat interface:
 - Message history display
 - Input with send button
 - Processing indicator
 
-### EntityCard (`ui/components/entity_card.py` ~237 lines)
+### EntityCard (`entity_card.py`, 234 lines)
 
 Entity display component:
 - Type icon
@@ -225,80 +198,59 @@ Entity display component:
 
 | Component | File | Lines | Purpose |
 |-----------|------|-------|---------|
-| `Graph` | `graph.py` | 478 | Generic graph visualization |
-| `ConflictGraph` | `conflict_graph.py` | 488 | Conflict/relationship visualization |
-
-**Features:**
-- NetworkX-based layout
-- Entity nodes with colors by type
-- Relationship edges
-- Force-directed and hierarchical layouts
+| `Graph` | `graph.py` | 549 | Generic graph visualization |
+| `ConflictGraph` | `conflict_graph.py` | 521 | Conflict/relationship visualization |
 
 ### Timeline Components
 
 | Component | File | Lines | Purpose |
 |-----------|------|-------|---------|
-| `Timeline` | `timeline.py` | 626 | Story timeline visualization |
-| `WorldTimeline` | `world_timeline.py` | 524 | World event timeline |
-
-**Features:**
-- Horizontal event layout
-- Chapter markers
-- Zoom/pan controls
-- Dark mode support
+| `Timeline` | `timeline.py` | 608 | Story timeline visualization |
+| `WorldTimeline` | `world_timeline.py` | 571 | World event timeline |
 
 ### Generation Components
 
 | Component | File | Lines | Purpose |
 |-----------|------|-------|---------|
 | `GenerationStatus` | `generation_status.py` | 261 | Generation progress display |
-| `BuildDialog` | `build_dialog.py` | 456 | World build confirmation |
-
-**Features:**
-- Phase indicator
-- Progress bar
-- ETA display
-- Pause/cancel controls
+| `BuildDialog` | `build_dialog.py` | 466 | World build confirmation |
+| `WorldHealthDashboard` | `world_health_dashboard.py` | 573 | World health + temporal metrics |
 
 ### Other Components
 
 | Component | File | Lines | Purpose |
 |-----------|------|-------|---------|
 | `Common` | `common.py` | 290 | Shared UI utilities |
-| `SceneEditor` | `scene_editor.py` | 452 | Scene-level editing |
+| `SceneEditor` | `scene_editor.py` | 450 | Scene-level editing |
 | `RecommendationDialog` | `recommendation_dialog.py` | 248 | AI recommendation UI |
-| `WorldHealthDashboard` | `world_health_dashboard.py` | 361 | World health metrics |
 
-## Keyboard Shortcuts (`ui/keyboard_shortcuts.py`)
+## Graph Renderer (`ui/graph_renderer/`) ~914 lines
 
-Global shortcuts:
-- `Ctrl+Z`: Undo
-- `Ctrl+Y`/`Ctrl+Shift+Z`: Redo
-- `Ctrl+S`: Save project
-- `Ctrl+N`: New project
-- Navigation shortcuts
+| Module | Lines | Purpose |
+|--------|-------|---------|
+| `_renderer.py` | 530 | NetworkX to visualization |
+| `_results.py` | 237 | Render result models |
+| `_layout.py` | 116 | Force-directed, hierarchical layouts |
+| `__init__.py` | 31 | Package exports |
 
-## Theming (`ui/theme.py`)
+## Core UI Files
 
-Theme utilities:
-- `get_background_class()` → CSS class
-- Dark/light mode detection
-- Color constants
-
-## Graph Rendering (`ui/graph_renderer.py`)
-
-NetworkX to visualization:
-- Force-directed layout
-- Hierarchical layout
-- Entity type coloring
-- Edge styling
+| File | Lines | Purpose |
+|------|-------|---------|
+| `state.py` | 500 | Centralized state with undo/redo |
+| `app.py` | 339 | App routing, page layout, startup timing |
+| `theme.py` | 274 | Theme utilities, dark/light mode |
+| `shortcuts.py` | 244 | Shortcut definitions |
+| `local_prefs.py` | 176 | Browser-local preferences |
+| `keyboard_shortcuts.py` | 175 | Global keyboard shortcut registration |
 
 ## Code Statistics
 
 | Category | Files | Modules | Lines |
 |----------|-------|---------|-------|
-| Page Packages | 5 | 37 | ~10,231 |
-| Standalone Pages | 5 | 5 | ~1,750 |
-| Components | 13 | 13 | ~4,896 |
-| Core UI | 5 | 5 | ~1,200 |
-| **Total** | **28** | **60** | **~18,077** |
+| Page Packages | 5 | 38 | ~13,373 |
+| Standalone Pages | 5 | 5 | ~2,178 |
+| Components | 14 | 14 | ~5,241 |
+| Graph Renderer | 4 | 4 | ~914 |
+| Core UI | 6 | 6 | ~1,708 |
+| **Total** | **34** | **67** | **~23,414** |
