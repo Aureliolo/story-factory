@@ -1287,7 +1287,7 @@ class TestModelServiceLogModelLoadState:
 
         warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert any("cold-start" in r.message.lower() for r in warn_records)
-        assert any("test-writer:8b" in r.message for r in warn_records)
+        assert any("No models loaded" in r.message for r in warn_records)
 
     def test_warns_cold_start_when_different_model_loaded(self, model_service, caplog):
         """Test warns about cold-start when a different model is loaded."""

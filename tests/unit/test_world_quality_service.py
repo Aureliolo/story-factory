@@ -1568,13 +1568,16 @@ class TestEntityFrequencyHint:
     """Tests for _compute_entity_frequency_hint focal-character bias reduction."""
 
     def test_entity_frequency_hint_empty_for_few_entities(self):
-        """Returns empty string when fewer than 3 entities or no rels."""
+        """Returns empty hint when fewer than 3 entities or no rels."""
         # Fewer than 3 entities
-        assert _compute_entity_frequency_hint(["Alice", "Bob"], [("Alice", "Bob", "knows")]) == ""
+        hint, _freq = _compute_entity_frequency_hint(["Alice", "Bob"], [("Alice", "Bob", "knows")])
+        assert hint == ""
         # 3 entities but no relationships
-        assert _compute_entity_frequency_hint(["Alice", "Bob", "Carol"], []) == ""
+        hint, _freq = _compute_entity_frequency_hint(["Alice", "Bob", "Carol"], [])
+        assert hint == ""
         # Single entity
-        assert _compute_entity_frequency_hint(["Alice"], [("Alice", "Bob", "knows")]) == ""
+        hint, _freq = _compute_entity_frequency_hint(["Alice"], [("Alice", "Bob", "knows")])
+        assert hint == ""
 
     def test_entity_frequency_hint_highlights_under_connected(self):
         """Entities with 0-1 connections are listed as PRIORITY."""
@@ -1584,7 +1587,7 @@ class TestEntityFrequencyHint:
             ("Alice", "Bob", "knows"),
             ("Alice", "Carol", "rivals"),
         ]
-        hint = _compute_entity_frequency_hint(entities, existing_rels)
+        hint, _freq = _compute_entity_frequency_hint(entities, existing_rels)
         assert "PRIORITY" in hint
         # Bob has 1, Carol has 1, Dave has 0 — all under-connected
         assert "Bob" in hint
@@ -1601,12 +1604,12 @@ class TestEntityFrequencyHint:
             ("Alice", "Dave", "mentors"),
             ("Alice", "Eve", "betrays"),
         ]
-        hint = _compute_entity_frequency_hint(entities, existing_rels)
+        hint, _freq = _compute_entity_frequency_hint(entities, existing_rels)
         assert "AVOID" in hint
         assert "Alice" in hint
 
     def test_entity_frequency_hint_balanced_returns_empty(self):
-        """Returns empty string when all entities have 2-3 connections (balanced)."""
+        """Returns empty hint when all entities have 2-3 connections (balanced)."""
         entities = ["Alice", "Bob", "Carol"]
         # Each entity has exactly 2 connections
         existing_rels = [
@@ -1614,7 +1617,7 @@ class TestEntityFrequencyHint:
             ("Bob", "Carol", "rivals"),
             ("Carol", "Alice", "mentors"),
         ]
-        hint = _compute_entity_frequency_hint(entities, existing_rels)
+        hint, _freq = _compute_entity_frequency_hint(entities, existing_rels)
         assert hint == ""
 
     def test_entity_frequency_hint_ignores_unknown_entities(self):
@@ -1625,7 +1628,7 @@ class TestEntityFrequencyHint:
             ("Alice", "Zoe", "knows"),
             ("Zoe", "Bob", "rivals"),
         ]
-        hint = _compute_entity_frequency_hint(entities, existing_rels)
+        hint, _freq = _compute_entity_frequency_hint(entities, existing_rels)
         # Alice and Bob have 1 connection each, Carol has 0 — all under-connected
         assert "PRIORITY" in hint
         assert "Carol" in hint
