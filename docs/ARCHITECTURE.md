@@ -100,6 +100,10 @@ story-factory/
 ├── src/                     # All application source code
 │   ├── agents/              # AI agents
 │   │   ├── base.py         # Base agent class with retry + rate limiting
+│   │   ├── architect/      # Story structure and world design (package)
+│   │   │   ├── __init__.py # ArchitectAgent class
+│   │   │   ├── _structure.py # Story structure generation
+│   │   │   └── _world.py   # World generation logic
 │   │   ├── interviewer.py  # Story interview
 │   │   ├── writer.py       # Content generation
 │   │   ├── editor.py       # Content editing
@@ -142,7 +146,17 @@ story-factory/
 │   │   ├── timeline_types.py # Timeline data types
 │   │   ├── world_calendar.py # Calendar models
 │   │   ├── world_health.py # World health metrics
-│   │   └── world_settings.py # World-specific settings
+│   │   ├── world_settings.py # World-specific settings
+│   │   ├── _chapter_versions.py # Chapter version tracking
+│   │   ├── world_quality/  # Quality scoring models
+│   │   │   ├── __init__.py
+│   │   │   ├── _entity_scores.py # Entity quality scores
+│   │   │   ├── _models.py  # Quality data models
+│   │   │   ├── _scoring.py # Scoring logic
+│   │   │   └── _story_scores.py # Story-level scores
+│   │   └── builtin_templates/ # Built-in template registry
+│   │       ├── __init__.py
+│   │       └── _registry.py # Template definitions
 │   │
 │   ├── services/            # Business logic layer
 │   │   ├── __init__.py     # ServiceContainer (DI)
@@ -206,6 +220,7 @@ story-factory/
 │   │       ├── timeline.py # Event timeline
 │   │       ├── comparison.py # Model comparison
 │   │       ├── settings/   # Settings configuration
+│   │       ├── world_timeline.py # World timeline view
 │   │       ├── models/     # Model management
 │   │       └── analytics/  # Model performance analytics
 │   │
@@ -239,7 +254,14 @@ story-factory/
 │   │   ├── sqlite_vec_loader.py # sqlite-vec extension loader
 │   │   └── streaming.py    # Streaming utilities
 │   │
-│   └── settings.py          # Settings management & model registry
+│   └── settings/            # Settings management & model registry
+│       ├── __init__.py      # Public API re-exports
+│       ├── _settings.py     # Main Settings dataclass
+│       ├── _model_registry.py # Recommended models
+│       ├── _paths.py        # File/directory path constants
+│       ├── _types.py        # Type definitions
+│       ├── _utils.py        # Settings utilities
+│       └── _validation.py   # Settings validation
 │
 ├── tests/                   # Tests
 │   ├── unit/               # Unit tests (fast, isolated)
@@ -260,6 +282,7 @@ story-factory/
 │   ├── UNDO_REDO.md        # Undo/redo system
 │   ├── UX_UI_IMPROVEMENTS.md # UI/UX improvements
 │   ├── COPILOT_INSTRUCTIONS.md # GitHub Copilot config
+│   ├── README.md           # Docs index / redirect
 │   ├── codemaps/           # Architecture maps
 │   └── plans/              # Design documents
 │
@@ -299,14 +322,32 @@ story-factory/
 # ui/state.py
 class AppState:
     """Centralized UI state."""
+    # Current project
     project_id: str | None = None
     project: StoryState | None = None
     world_db: WorldDatabase | None = None
 
-    # UI-only state
-    selected_entity_id: str | None = None
+    # Interview state
+    interview_history: list[dict] = field(default_factory=list)
+    interview_complete: bool = False
+
+    # Writing / generation control
+    current_chapter: int = 0
+    is_writing: bool = False
+    generation_cancel_requested: bool = False
+    generation_pause_requested: bool = False
+
+    # UI navigation
     active_tab: str = "write"
+    selected_entity_id: str | None = None
     feedback_mode: str = "per-chapter"
+
+    # Undo/redo history
+    _undo_stack: list[UndoAction] = field(default_factory=list)
+    _redo_stack: list[UndoAction] = field(default_factory=list)
+
+    # Background task tracking + project list cache
+    # ... (30+ fields total — see src/ui/state.py for full definition)
 ```
 
 ### 2. Service Container Pattern
@@ -321,33 +362,35 @@ class ServiceContainer:
     - Easy dependency management
     - Consistent settings across services
     """
-    def __init__(self, settings: Settings):
-        self.settings = settings
-        self.embedding = EmbeddingService(settings)
-        self.project = ProjectService(settings, self.embedding)
-        self.world = WorldService(settings)
-        self.model = ModelService(settings)
-        self.export = ExportService(settings)
-        self.mode = ModelModeService(settings)
+    def __init__(self, settings: Settings | None = None):
+        self.settings = settings or Settings.load()
+        self.embedding = EmbeddingService(self.settings)
+        self.project = ProjectService(self.settings, self.embedding)
+        self.world = WorldService(self.settings)
+        self.model = ModelService(self.settings)
+        self.export = ExportService(self.settings)
+        self.mode = ModelModeService(self.settings)
         self.scoring = ScoringService(self.mode)
-        self.context_retrieval = ContextRetrievalService(settings, self.embedding)
-        self.timeline = TimelineService(settings)
+        self.context_retrieval = ContextRetrievalService(self.settings, self.embedding)
+        self.timeline = TimelineService(self.settings)
         self.story = StoryService(
-            settings, mode_service=self.mode,
+            self.settings, mode_service=self.mode,
             context_retrieval=self.context_retrieval,
             timeline=self.timeline,
         )
-        self.world_quality = WorldQualityService(settings, self.mode)
-        self.suggestion = SuggestionService(settings)
-        self.template = TemplateService(settings)
-        self.backup = BackupService(settings)
-        self.import_svc = ImportService(settings, self.mode)
-        self.comparison = ComparisonService(settings)
-        self.conflict_analysis = ConflictAnalysisService(settings)
-        self.world_template = WorldTemplateService(settings)
-        self.content_guidelines = ContentGuidelinesService(settings)
-        self.calendar = CalendarService(settings)
-        self.temporal_validation = TemporalValidationService(settings)
+        self.world_quality = WorldQualityService(self.settings, self.mode)
+        self.suggestion = SuggestionService(self.settings)
+        self.template = TemplateService(self.settings)
+        self.backup = BackupService(self.settings)
+        self.import_svc = ImportService(self.settings, self.mode)
+        self.comparison = ComparisonService(self.settings)
+        self.conflict_analysis = ConflictAnalysisService(self.settings)
+        self.world_template = WorldTemplateService(self.settings)
+        self.content_guidelines = ContentGuidelinesService(self.settings)
+        self.calendar = CalendarService(self.settings)
+        self.temporal_validation = TemporalValidationService(self.settings)
+        # Wire temporal_validation into WorldService for health metrics DI
+        self.world._temporal_validation = self.temporal_validation
 
 # main.py - Services created once and passed to UI
 settings = Settings.load()
@@ -413,9 +456,9 @@ RAG retrieval failures are non-fatal — agents proceed with empty context if re
 Services use explicit error handling with custom exceptions:
 ```python
 # Ollama connection errors
-from utils.error_handling import handle_ollama_errors
+from src.utils.error_handling import handle_ollama_errors
 
-@handle_ollama_errors(default_value=None)
+@handle_ollama_errors(default_return=None)
 def get_models() -> list[str]:
     return ollama.list()
 ```
@@ -440,7 +483,7 @@ Agents use retry logic and validation:
 ### 4. Logging
 - Module-level loggers: `logger = logging.getLogger(__name__)`
 - Centralized configuration in utils/logging_config.py
-- Default: INFO level, file: logs/story_factory.log
+- Default: INFO level, file: output/logs/story_factory.log
 - Configurable via CLI args: --log-level, --log-file
 
 ## API Patterns
@@ -448,7 +491,7 @@ Agents use retry logic and validation:
 ### Services
 ```python
 class ProjectService:
-    def __init__(self, settings: Settings): ...
+    def __init__(self, settings: Settings, embedding_service: EmbeddingService): ...
     def create_project(self, name: str) -> StoryState: ...
     def load_project(self, project_id: str) -> StoryState: ...
     def list_projects(self) -> list[ProjectSummary]: ...
@@ -518,10 +561,12 @@ class WritePage:
 ```python
 # services/__init__.py
 class ServiceContainer:
-    def __init__(self, settings: Settings):
-        self.project = ProjectService(settings)
-        self.story = StoryService(settings)
-        # ... all services
+    def __init__(self, settings: Settings | None = None):
+        self.settings = settings or Settings.load()
+        self.embedding = EmbeddingService(self.settings)
+        self.project = ProjectService(self.settings, self.embedding)
+        self.story = StoryService(self.settings, mode_service=..., ...)
+        # ... all 21 services (see full example in Section 2 above)
 
 # main.py
 services = ServiceContainer(settings)
@@ -621,9 +666,9 @@ communities = world_db.get_communities()
 
 **Example**:
 ```python
-from utils.error_handling import handle_ollama_errors, retry_with_fallback
+from src.utils.error_handling import handle_ollama_errors, retry_with_fallback
 
-@handle_ollama_errors(default_value=None)
+@handle_ollama_errors(default_return=None)
 @retry_with_fallback(max_retries=3)
 async def generate_content(prompt: str) -> str:
     # Automatically retries on connection errors

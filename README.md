@@ -469,10 +469,11 @@ Export from the web UI via the "Export" button or programmatically via the expor
 story-factory/
 ├── main.py                 # Entry point
 ├── src/                    # All application source code
-│   ├── settings.py         # Settings management & model registry
+│   ├── settings/           # Settings package (config & model registry)
 │   ├── settings.example.json # Example configuration
 │   ├── agents/             # AI agent implementations
 │   │   ├── base.py         # Base agent class with retry + rate limiting
+│   │   ├── architect/      # Story structure and world design (package)
 │   │   ├── interviewer.py  # Story requirements gathering
 │   │   ├── writer.py       # Prose generation
 │   │   ├── editor.py       # Refinement and polish
@@ -493,7 +494,10 @@ story-factory/
 │   │   ├── timeline_types.py # Timeline data types
 │   │   ├── world_calendar.py # Calendar models
 │   │   ├── world_health.py # World health metrics
-│   │   └── world_settings.py # World-specific settings
+│   │   ├── world_settings.py # World-specific settings
+│   │   ├── _chapter_versions.py # Chapter version tracking
+│   │   ├── world_quality/  # Quality scoring models
+│   │   └── builtin_templates/ # Built-in template registry
 │   ├── services/           # Business logic layer
 │   │   ├── orchestrator/   # Multi-agent coordination
 │   │   │   ├── __init__.py # Main StoryOrchestrator
@@ -959,7 +963,7 @@ Copyright (c) 2026 Aurelio Amoroso. All Rights Reserved. See [LICENSE](LICENSE) 
 
 - **GitHub Issues**: [Report bugs or request features](https://github.com/Aureliolo/story-factory/issues)
 - **GitHub Discussions**: [Ask questions and share ideas](https://github.com/Aureliolo/story-factory/discussions)
-- **Logs**: Check `logs/story_factory.log` for detailed error information
+- **Logs**: Check `output/logs/story_factory.log` for detailed error information
 
 ### Community
 
@@ -969,7 +973,7 @@ Copyright (c) 2026 Aurelio Amoroso. All Rights Reserved. See [LICENSE](LICENSE) 
 
 ### Before Asking for Help
 
-1. **Check the logs**: `logs/story_factory.log`
+1. **Check the logs**: `output/logs/story_factory.log`
 2. **Search existing issues**: Someone may have had the same problem
 3. **Read the docs**: Check relevant documentation sections
 4. **Verify your setup**:

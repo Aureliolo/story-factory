@@ -42,7 +42,7 @@ Create an issue with:
   - Python version (`python --version`)
   - Ollama version (`ollama --version`)
   - GPU info (`nvidia-smi`)
-- **Error logs**: From `logs/story_factory.log`
+- **Error logs**: From `output/logs/story_factory.log`
 - **Screenshots**: If UI-related
 
 ### Suggesting Features
@@ -129,7 +129,7 @@ Follow the existing architecture:
 - **Agents** (`src/agents/`): AI interactions, extend BaseAgent
 - **Utils** (`src/utils/`): Helper functions, pure Python
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
 
 ### Naming Conventions
 
@@ -251,7 +251,7 @@ logger.error("Error messages for failures")
 ### Writing Tests
 
 1. **Test file location**: Mirror source structure in `tests/`
-   - `src/agents/writer.py` → `tests/unit/test_writer.py`
+   - `src/agents/writer.py` → `tests/unit/test_agents/test_writer.py`
 
 2. **Test naming**: `test_<what_is_being_tested>`
    ```python
@@ -268,7 +268,7 @@ logger.error("Error messages for failures")
    ```python
    from unittest.mock import patch, MagicMock
 
-   @patch("agents.base.ollama.Client")
+   @patch("src.agents.base.ollama.Client")
    def test_agent_generation(mock_ollama):
        mock_ollama.return_value.generate.return_value = {"response": "test"}
        # ... test code
