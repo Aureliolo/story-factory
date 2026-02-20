@@ -3,6 +3,7 @@
 Settings are stored in settings.json and can be modified via the web UI.
 """
 
+import copy
 import json
 import logging
 import os
@@ -13,6 +14,11 @@ from typing import Any, ClassVar
 
 from src.memory.mode_models import LearningTrigger
 from src.settings import _validation as _validation_mod
+from src.settings._backup import (
+    _create_settings_backup,
+    _log_settings_changes,
+    _recover_from_backup,
+)
 from src.settings._model_registry import RECOMMENDED_MODELS
 from src.settings._paths import BACKUPS_DIR, SETTINGS_FILE
 from src.settings._types import check_minimum_quality
@@ -154,6 +160,14 @@ def _merge_with_defaults(data: dict[str, Any], settings_cls: type[Settings]) -> 
                         )
                         inner[inner_key] = inner_val
                         changed = True
+
+    file_keys = sum(1 for k in data if k in known_fields)
+    logger.info(
+        "Merge summary: %d keys from file, %d known fields, changed=%s",
+        file_keys,
+        len(known_fields),
+        changed,
+    )
 
     return changed
 
@@ -475,6 +489,7 @@ class Settings:
         """Save settings to JSON file."""
         # Validate before saving
         self.validate()
+        _create_settings_backup(SETTINGS_FILE)
         _atomic_write_json(SETTINGS_FILE, asdict(self))
 
     def validate(self) -> bool:
@@ -510,6 +525,8 @@ class Settings:
         if use_cache and cls._cached_instance is not None:
             return cls._cached_instance
 
+        loaded_from_file = False
+
         if SETTINGS_FILE.exists():
             try:
                 with open(SETTINGS_FILE) as f:
@@ -526,6 +543,8 @@ class Settings:
                     except OSError as copy_err:
                         logger.warning("Failed to backup corrupted settings: %s", copy_err)
                     data = {}
+                else:
+                    loaded_from_file = bool(data)
             except json.JSONDecodeError as e:
                 logger.error("Corrupted settings file (invalid JSON): %s", e)
                 backup_path = SETTINGS_FILE.with_suffix(".json.corrupt")
@@ -537,6 +556,24 @@ class Settings:
                 data = {}
         else:
             data = {}
+
+        # If primary file was missing/corrupt/empty, try to recover from backup
+        recovered_from_backup = False
+        if not data:
+            recovered = _recover_from_backup(SETTINGS_FILE)
+            if recovered is not None:
+                data = recovered
+                loaded_from_file = True
+                recovered_from_backup = True
+
+        logger.info(
+            "Settings load: loaded_from_file=%s, keys_read=%d",
+            loaded_from_file,
+            len(data),
+        )
+
+        # Snapshot before merge for change logging
+        original_data = copy.deepcopy(data)
 
         # Merge structure with defaults: add new fields, remove obsolete ones
         changed = _merge_with_defaults(data, cls)
@@ -555,9 +592,24 @@ class Settings:
         except TypeError as e:
             raise ValueError(f"A setting has an invalid type: {e}") from e
 
+        # Log what changed during merge + validation
+        final_data = asdict(settings)
+        _log_settings_changes(original_data, final_data, "load")
+
         if changed:
-            logger.info("Settings updated during load, saving to disk")
-            _atomic_write_json(SETTINGS_FILE, asdict(settings))
+            if loaded_from_file:
+                # Only auto-save when we actually loaded user data.
+                # This prevents overwriting a .bak with pure defaults
+                # when the primary file was transiently unavailable.
+                logger.info("Settings updated during load, saving to disk")
+                if not recovered_from_backup:
+                    # Don't back up a corrupt/empty primary over the good .bak
+                    _create_settings_backup(SETTINGS_FILE)
+                _atomic_write_json(SETTINGS_FILE, final_data)
+            else:
+                # First install or complete data loss — write defaults
+                logger.info("No existing settings found, writing defaults to disk")
+                _atomic_write_json(SETTINGS_FILE, final_data)
 
         cls._cached_instance = settings
         return settings

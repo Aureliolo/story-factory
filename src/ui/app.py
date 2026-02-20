@@ -71,10 +71,14 @@ class StoryFactoryApp:
             self.services.settings.last_project_id = None
             self.services.settings.save()
         except Exception as e:
-            logger.warning("Failed to auto-load last project %s: %s", last_id, e)
-            # Clear invalid project reference
-            self.services.settings.last_project_id = None
-            self.services.settings.save()
+            # Transient errors (DB locked, temp file issue, etc.) — log but
+            # do NOT clear last_project_id.  The project may still be valid
+            # and will load successfully on the next restart.
+            logger.warning(
+                "Failed to auto-load last project %s (keeping setting for next restart): %s",
+                last_id,
+                e,
+            )
 
     def _apply_theme(self) -> None:
         """Apply dark theme to the page."""
