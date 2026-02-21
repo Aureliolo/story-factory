@@ -391,6 +391,20 @@ class TestParseTimestamp:
         assert lifecycle is not None
         assert lifecycle.death is None  # ValidationError caught
 
+    def test_extract_first_appearance_dict_out_of_range_month(self):
+        """Test that out-of-range month in first_appearance dict is handled."""
+        attributes = {"lifecycle": {"first_appearance": {"year": 500, "month": 13}}}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.first_appearance is None  # ValidationError caught
+
+    def test_extract_last_appearance_dict_out_of_range_day(self):
+        """Test that out-of-range day in last_appearance dict is handled."""
+        attributes = {"lifecycle": {"last_appearance": {"year": 800, "day": 32}}}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.last_appearance is None  # ValidationError caught
+
 
 class TestExtractLifecycleFromAttributes:
     """Tests for extract_lifecycle_from_attributes function."""
