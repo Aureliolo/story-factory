@@ -210,8 +210,8 @@ class TestParseTimestamp:
 
         Known limitation: _extract_era_name_from_segments cannot distinguish
         "Era 3: -500 - -101" (range notation) from a real era name because
-        the segment starts with "Era", not a digit. TODO(#391): improve
-        segment filtering to reject segments containing numeric range notation.
+        the segment starts with "Era", not a digit.  See issue #391 for
+        improving segment filtering to reject numeric range notation.
         """
         ts = parse_timestamp("Year -10, Era 3: -500 - -101")
         assert ts.year == -10
