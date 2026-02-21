@@ -95,12 +95,14 @@ def build_world(
         """Report world build progress to callback."""
         nonlocal current_step
         current_step += 1
+        prefixed = f"[{current_step}/{total_steps}] {message}"
+        logger.info("Build progress: %s", prefixed)
         if progress_callback:
             progress_callback(
                 WorldBuildProgress(
                     step=current_step,
                     total_steps=total_steps,
-                    message=message,
+                    message=prefixed,
                     entity_type=entity_type,
                     count=count,
                 )

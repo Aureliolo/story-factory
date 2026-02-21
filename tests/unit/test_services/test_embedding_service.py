@@ -5,6 +5,7 @@ data embedding, batch re-embedding, model change detection, and database
 callback attachment.
 """
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -187,6 +188,205 @@ class TestEmbedText:
             result = service.embed_text("Some text")
 
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# embed_text truncation tests
+# ---------------------------------------------------------------------------
+
+
+class TestEmbedTextTruncation:
+    """Tests for embedding input truncation when text exceeds model context limit."""
+
+    def test_text_truncated_when_exceeds_context_limit(self, service):
+        """Truncates prompt when estimated tokens exceed model context size."""
+        mock_client = MagicMock()
+        response = MagicMock()
+        response.__getitem__ = lambda self, key: FAKE_EMBEDDING if key == "embedding" else None
+        mock_client.embeddings.return_value = response
+
+        long_text = "a" * 3000  # ~1500 tokens at 2 chars/token, should exceed 512 limit
+        fake_prefix = "search_document: "
+
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch("src.services.embedding_service.get_model_context_size", return_value=512),
+            patch("src.services.embedding_service.get_embedding_prefix", return_value=fake_prefix),
+        ):
+            result = service.embed_text(long_text)
+
+        assert result == FAKE_EMBEDDING
+        # Verify the prompt was truncated to exactly max_chars = (512 - 10) * 2 = 1004
+        call_kwargs = mock_client.embeddings.call_args
+        actual_prompt = call_kwargs.kwargs["prompt"]
+        assert len(actual_prompt) == (512 - 10) * 2
+        # Verify prefix is preserved at start of truncated prompt
+        assert actual_prompt.startswith(fake_prefix)
+
+    def test_text_not_truncated_when_within_limit(self, service):
+        """Short text is passed through unchanged when within context limit."""
+        mock_client = MagicMock()
+        response = MagicMock()
+        response.__getitem__ = lambda self, key: FAKE_EMBEDDING if key == "embedding" else None
+        mock_client.embeddings.return_value = response
+
+        short_text = "Hello world"
+
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch("src.services.embedding_service.get_model_context_size", return_value=512),
+        ):
+            result = service.embed_text(short_text)
+
+        assert result == FAKE_EMBEDDING
+        # Prompt should contain the full text (with prefix)
+        call_kwargs = mock_client.embeddings.call_args
+        actual_prompt = call_kwargs.kwargs["prompt"]
+        assert short_text in actual_prompt
+
+    def test_no_truncation_when_context_size_unavailable(self, service):
+        """Text is passed as-is when model context size is unavailable (None)."""
+        mock_client = MagicMock()
+        response = MagicMock()
+        response.__getitem__ = lambda self, key: FAKE_EMBEDDING if key == "embedding" else None
+        mock_client.embeddings.return_value = response
+
+        long_text = "b" * 5000
+
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch("src.services.embedding_service.get_model_context_size", return_value=None),
+        ):
+            result = service.embed_text(long_text)
+
+        assert result == FAKE_EMBEDDING
+        call_kwargs = mock_client.embeddings.call_args
+        actual_prompt = call_kwargs.kwargs["prompt"]
+        assert long_text in actual_prompt
+
+    def test_truncation_logs_warning(self, service, caplog):
+        """Logs a warning when truncation occurs."""
+        mock_client = MagicMock()
+        response = MagicMock()
+        response.__getitem__ = lambda self, key: FAKE_EMBEDDING if key == "embedding" else None
+        mock_client.embeddings.return_value = response
+
+        long_text = "c" * 3000
+
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch("src.services.embedding_service.get_model_context_size", return_value=512),
+            caplog.at_level(logging.WARNING),
+        ):
+            service.embed_text(long_text)
+
+        assert any("truncated" in msg.lower() for msg in caplog.messages)
+
+    def test_truncation_accounts_for_embedding_prefix(self, service):
+        """Truncation applies to the combined prefix+text prompt, not just raw text."""
+        mock_client = MagicMock()
+        response = MagicMock()
+        response.__getitem__ = lambda self, key: FAKE_EMBEDDING if key == "embedding" else None
+        mock_client.embeddings.return_value = response
+
+        fake_prefix = "search_document: "  # 18 chars
+        # Text that fits alone but exceeds limit when prefix is included
+        max_chars = (512 - 10) * 2  # 1004
+        text_len = max_chars - len(fake_prefix) + 100  # 100 chars over with prefix
+        long_text = "x" * text_len
+
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch("src.services.embedding_service.get_model_context_size", return_value=512),
+            patch("src.services.embedding_service.get_embedding_prefix", return_value=fake_prefix),
+        ):
+            result = service.embed_text(long_text)
+
+        assert result == FAKE_EMBEDDING
+        call_kwargs = mock_client.embeddings.call_args
+        actual_prompt = call_kwargs.kwargs["prompt"]
+        # Prompt should be truncated to max_chars and start with the prefix
+        assert len(actual_prompt) == max_chars
+        assert actual_prompt.startswith(fake_prefix)
+
+    def test_tiny_context_limit_returns_empty(self, service, caplog):
+        """Returns empty list and logs error when context_limit <= 10."""
+        mock_client = MagicMock()
+
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch("src.services.embedding_service.get_model_context_size", return_value=5),
+            caplog.at_level(logging.WARNING),
+        ):
+            result = service.embed_text("Some text")
+
+        assert result == []
+        mock_client.embeddings.assert_not_called()
+        assert any("invalid context size" in msg.lower() for msg in caplog.messages)
+
+    def test_get_model_context_size_exception_returns_empty(self, service):
+        """Falls back to empty list when get_model_context_size raises an unexpected exception."""
+        mock_client = MagicMock()
+
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch(
+                "src.services.embedding_service.get_model_context_size",
+                side_effect=RuntimeError("API exploded"),
+            ),
+        ):
+            result = service.embed_text("Some text")
+
+        # Should be caught by the generic except Exception handler
+        assert result == []
+
+    def test_context_limit_too_small_for_prefix_returns_empty(self, service, caplog):
+        """Returns empty list when max_chars is smaller than the prefix length."""
+        mock_client = MagicMock()
+        # context_limit=15 → max_chars = (15-10)*2 = 10, prefix_len=11 → guard triggers
+        long_prefix = "x" * 11
+
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch("src.services.embedding_service.get_model_context_size", return_value=15),
+            patch("src.services.embedding_service.get_embedding_prefix", return_value=long_prefix),
+            caplog.at_level(logging.ERROR),
+        ):
+            result = service.embed_text("Some text")
+
+        assert result == []
+        mock_client.embeddings.assert_not_called()
+        assert any("too small to embed" in msg.lower() for msg in caplog.messages)
+
+    def test_context_limit_exactly_10_returns_empty(self, service, caplog):
+        """context_limit == 10 is treated as invalid and returns empty."""
+        mock_client = MagicMock()
+
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch("src.services.embedding_service.get_model_context_size", return_value=10),
+            caplog.at_level(logging.WARNING),
+        ):
+            result = service.embed_text("Some text")
+
+        assert result == []
+        mock_client.embeddings.assert_not_called()
+
+    def test_context_limit_11_proceeds_with_embedding(self, service):
+        """context_limit == 11 is valid and proceeds with embedding."""
+        mock_client = MagicMock()
+        response = MagicMock()
+        response.__getitem__ = lambda self, key: FAKE_EMBEDDING if key == "embedding" else None
+        mock_client.embeddings.return_value = response
+
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch("src.services.embedding_service.get_model_context_size", return_value=11),
+        ):
+            result = service.embed_text("Hi")
+
+        assert result == FAKE_EMBEDDING
+        mock_client.embeddings.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
