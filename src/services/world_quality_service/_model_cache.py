@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 # Time-to-live for environment context cache (VRAM and installed models)
 # These checks involve subprocess calls (nvidia-smi, ollama list), so we
 # cache them briefly to avoid overhead on every cache access.
-_ENV_CONTEXT_TTL_SECONDS = 1.0
+_ENV_CONTEXT_TTL_SECONDS = 60.0
 
 
 class ModelResolutionCache:
@@ -150,9 +150,7 @@ class ModelResolutionCache:
         with self._lock:
             self._check_context()
             model = self._resolved_creator_models.get(role)
-            if model is not None:
-                logger.debug("Creator model cache hit for role=%s: %s", role, model)
-            else:
+            if model is None:
                 logger.debug("Creator model cache miss for role=%s", role)
             return model
 
@@ -183,9 +181,7 @@ class ModelResolutionCache:
         with self._lock:
             self._check_context()
             model = self._resolved_judge_models.get(role)
-            if model is not None:
-                logger.debug("Judge model cache hit for role=%s: %s", role, model)
-            else:
+            if model is None:
                 logger.debug("Judge model cache miss for role=%s", role)
             return model
 

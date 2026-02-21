@@ -638,6 +638,47 @@ class TestWorldQualityServiceInit:
         assert model == "test-model"
 
 
+class TestJudgeConfigCaching:
+    """Tests for JudgeConsistencyConfig caching in WorldQualityService."""
+
+    def test_judge_config_cached_on_second_call(self, service):
+        """get_judge_config() returns the same cached instance on repeated calls."""
+        config1 = service.get_judge_config()
+        config2 = service.get_judge_config()
+        assert config1 is config2
+
+    def test_judge_config_cleared_on_invalidate(self, service):
+        """invalidate_model_cache() clears the cached JudgeConsistencyConfig."""
+        config1 = service.get_judge_config()
+        assert service._judge_config is not None
+
+        service.invalidate_model_cache()
+        assert service._judge_config is None
+
+        # Next call creates a fresh config
+        config2 = service.get_judge_config()
+        assert config2 is not config1
+
+    def test_invalidate_before_any_get_judge_config(self, service):
+        """invalidate_model_cache() is a no-op when _judge_config was never populated."""
+        assert service._judge_config is None  # initial state
+        service.invalidate_model_cache()  # must not raise
+        assert service._judge_config is None
+
+        # Subsequent get_judge_config still creates a fresh config
+        config = service.get_judge_config()
+        assert config is not None
+
+    def test_invalidate_also_clears_client(self, service):
+        """invalidate_model_cache() also clears the cached Ollama client."""
+        # Populate the client cache
+        _ = service.client
+        assert service._client is not None
+
+        service.invalidate_model_cache()
+        assert service._client is None
+
+
 class TestRecordEntityQuality:
     """Tests for record_entity_quality method."""
 

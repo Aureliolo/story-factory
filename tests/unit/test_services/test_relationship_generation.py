@@ -65,6 +65,103 @@ class TestExistingPairsNotCapped:
             assert expected in prompt_arg, f"Pair {expected} missing from prompt"
 
 
+class TestEntityFrequencyHintReturnsTuple:
+    """L1: _compute_entity_frequency_hint returns (hint, counter) tuple."""
+
+    def test_returns_tuple_with_hint_and_counter(self):
+        """_compute_entity_frequency_hint should return (str, Counter) tuple."""
+        from collections import Counter
+
+        from src.services.world_quality_service._relationship import (
+            _compute_entity_frequency_hint,
+        )
+
+        entity_names = ["Alpha", "Beta", "Gamma", "Delta"]
+        existing_rels = [
+            ("Alpha", "Beta", "knows"),
+            ("Alpha", "Gamma", "rivals"),
+            ("Alpha", "Delta", "allies_with"),
+            ("Alpha", "Beta", "mentors"),  # Alpha has 4 rels
+        ]
+
+        hint, freq = _compute_entity_frequency_hint(entity_names, existing_rels)
+
+        # Should return a Counter
+        assert isinstance(freq, Counter)
+        # Alpha appears in 4 relationships (as source in all 4)
+        assert freq["Alpha"] == 4
+        # Beta appears in 2 relationships (as target in "knows" and "mentors")
+        assert freq["Beta"] == 2
+        # Gamma appears once (as target in "rivals")
+        assert freq["Gamma"] == 1
+        # Delta appears once (as target in "allies_with")
+        assert freq["Delta"] == 1
+        # Hint should mention over-connected Alpha
+        assert "Alpha" in hint
+
+    def test_returns_empty_hint_with_counter_for_few_entities(self):
+        """With fewer than 3 entities, hint is empty but counter is still returned."""
+        from collections import Counter
+
+        from src.services.world_quality_service._relationship import (
+            _compute_entity_frequency_hint,
+        )
+
+        entity_names = ["Alpha", "Beta"]
+        existing_rels = [("Alpha", "Beta", "knows")]
+
+        hint, freq = _compute_entity_frequency_hint(entity_names, existing_rels)
+
+        assert hint == ""
+        assert isinstance(freq, Counter)
+        # Counter should still be populated even when hint is empty
+        assert freq["Alpha"] == 1  # source in ("Alpha", "Beta", "knows")
+        assert freq["Beta"] == 1  # target in ("Alpha", "Beta", "knows")
+
+    def test_counter_reusable_for_sorting(self):
+        """Returned counter can be used for sorting unused pairs."""
+        from src.services.world_quality_service._relationship import (
+            _compute_entity_frequency_hint,
+        )
+
+        entity_names = ["A", "B", "C", "D"]
+        existing_rels = [("A", "B", "knows"), ("A", "C", "knows")]
+
+        _hint, freq = _compute_entity_frequency_hint(entity_names, existing_rels)
+
+        # D has 0 connections, should sort first
+        sorted_names = sorted(entity_names, key=lambda n: freq[n])
+        assert sorted_names[0] == "D"
+
+    def test_balanced_distribution_returns_empty_hint(self):
+        """Balanced frequency distribution returns empty hint with populated counter."""
+        from collections import Counter
+
+        from src.services.world_quality_service._relationship import (
+            _compute_entity_frequency_hint,
+        )
+
+        # Each entity appears exactly 2 times (balanced — not under/over-connected)
+        entity_names = ["Alice", "Bob", "Carol", "Dave"]
+        existing_rels = [
+            ("Alice", "Bob", "knows"),
+            ("Carol", "Dave", "rivals"),
+            ("Alice", "Carol", "mentors"),
+            ("Bob", "Dave", "allies_with"),
+        ]
+
+        hint, freq = _compute_entity_frequency_hint(entity_names, existing_rels)
+
+        # Balanced: no entity has <= 1 or >= 4 connections → empty hint
+        assert hint == ""
+        assert isinstance(freq, Counter)
+        # Each entity appears exactly twice
+        assert freq["Alice"] == 2
+        assert freq["Bob"] == 2
+        assert freq["Carol"] == 2
+        assert freq["Dave"] == 2
+
+
 class TestConsecutiveFailureEarlyTermination:
     """A2: Batch stops after MAX_CONSECUTIVE_BATCH_FAILURES consecutive failures."""
 

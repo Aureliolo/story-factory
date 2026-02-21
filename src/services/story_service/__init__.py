@@ -16,6 +16,7 @@ from collections.abc import Callable, Generator
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from src.memory.mode_database import ModeDatabase
     from src.memory.world_database import WorldDatabase
     from src.services.context_retrieval_service import ContextRetrievalService
     from src.services.model_mode_service import ModelModeService
@@ -47,6 +48,7 @@ class StoryService:
         mode_service: ModelModeService | None = None,
         context_retrieval: ContextRetrievalService | None = None,
         timeline: TimelineService | None = None,
+        mode_db: ModeDatabase | None = None,
     ):
         """Create a StoryService configured with application settings and an optional mode service.
 
@@ -59,6 +61,8 @@ class StoryService:
                 for RAG-based prompt enrichment in agent calls.
             timeline (TimelineService | None): Optional timeline service for temporal context
                 in agent prompts.
+            mode_db (ModeDatabase | None): Shared ModeDatabase instance passed to orchestrators
+                for ETA calculations.
         """
         validate_not_none(settings, "settings")
         validate_type(settings, "settings", Settings)
@@ -67,6 +71,7 @@ class StoryService:
         self.mode_service = mode_service  # For learning hooks
         self.context_retrieval = context_retrieval  # For RAG context injection
         self.timeline = timeline  # For temporal context in prompts
+        self._mode_db = mode_db  # Shared ModeDatabase for orchestrators
         # Use OrderedDict for LRU cache behavior
         self._orchestrators: OrderedDict[str, StoryOrchestrator] = OrderedDict()
         logger.debug("StoryService initialized successfully")
@@ -95,6 +100,7 @@ class StoryService:
             mode_service=self.mode_service,
             context_retrieval=self.context_retrieval,
             timeline=self.timeline,
+            mode_db=self._mode_db,
         )
         orchestrator.story_state = state
         self._orchestrators[state.id] = orchestrator

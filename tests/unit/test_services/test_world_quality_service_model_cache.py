@@ -588,3 +588,30 @@ class TestEnvironmentContextCaching:
         # Verify env context cache was cleared
         assert service._model_cache._env_context_cache is None
         assert service._model_cache._env_context_timestamp == 0.0
+
+    def test_env_context_ttl_is_60_seconds(self):
+        """TTL should be 60s to avoid redundant subprocess calls during builds."""
+        from src.services.world_quality_service._model_cache import _ENV_CONTEXT_TTL_SECONDS
+
+        assert _ENV_CONTEXT_TTL_SECONDS == 60.0
+
+    @patch("src.settings.get_installed_models_with_sizes", return_value={"test-model:8b": 8.0})
+    @patch("src.settings.get_available_vram", return_value=16)
+    def test_no_cache_hit_log_spam(self, mock_vram, mock_models, service, caplog):
+        """Cache hits should NOT produce debug logs (resolver layer logs them instead)."""
+        import logging
+
+        with caplog.at_level(
+            logging.DEBUG, logger="src.services.world_quality_service._model_cache"
+        ):
+            # First call — cache miss
+            service._get_creator_model("character")
+            # Second call — cache hit
+            service._get_creator_model("character")
+
+        # Should NOT see "Creator model cache hit" from ModelResolutionCache
+        cache_hit_msgs = [r for r in caplog.records if "cache hit" in r.message.lower()]
+        assert len(cache_hit_msgs) == 0, (
+            f"Expected no cache-hit log lines from ModelResolutionCache, got: "
+            f"{[r.message for r in cache_hit_msgs]}"
+        )

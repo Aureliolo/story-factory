@@ -5,7 +5,6 @@ import logging
 from nicegui import ui
 from nicegui.elements.column import Column
 
-from src.memory.mode_database import ModeDatabase
 from src.services import ServiceContainer
 from src.settings import AGENT_ROLES
 from src.ui.local_prefs import load_prefs_deferred, save_pref
@@ -51,7 +50,7 @@ class AnalyticsPage:
         """
         self.state = state
         self.services = services
-        self._db = ModeDatabase()
+        self._db = services.mode_db
 
         # UI element references
         self._summary_section: Column | None = None

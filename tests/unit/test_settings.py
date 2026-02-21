@@ -335,6 +335,34 @@ class TestSettingsValidation:
         with pytest.raises(ValueError, match="subprocess_timeout must be between"):
             settings.validate()
 
+    def test_validate_raises_on_non_positive_small_model_size_threshold(self):
+        """Should raise ValueError for non-positive small_model_size_threshold_gb."""
+        settings = Settings()
+        settings.small_model_size_threshold_gb = 0.0
+        with pytest.raises(ValueError, match="small_model_size_threshold_gb must be positive"):
+            settings.validate()
+
+    def test_validate_raises_on_negative_small_model_size_threshold(self):
+        """Should raise ValueError for negative small_model_size_threshold_gb."""
+        settings = Settings()
+        settings.small_model_size_threshold_gb = -1.0
+        with pytest.raises(ValueError, match="small_model_size_threshold_gb must be positive"):
+            settings.validate()
+
+    def test_validate_raises_on_non_positive_small_model_timeout_cap(self):
+        """Should raise ValueError for non-positive small_model_timeout_cap."""
+        settings = Settings()
+        settings.small_model_timeout_cap = 0.0
+        with pytest.raises(ValueError, match="small_model_timeout_cap must be positive"):
+            settings.validate()
+
+    def test_validate_raises_on_negative_small_model_timeout_cap(self):
+        """Should raise ValueError for negative small_model_timeout_cap."""
+        settings = Settings()
+        settings.small_model_timeout_cap = -5.0
+        with pytest.raises(ValueError, match="small_model_timeout_cap must be positive"):
+            settings.validate()
+
     def test_validate_raises_on_non_bool_content_check_enabled(self):
         """Should raise ValueError for non-boolean content_check_enabled."""
         settings = Settings()
@@ -3239,6 +3267,78 @@ class TestGetScaledTimeout:
 
         # Formula: 60 * (1 + 10/20) = 60 * 1.5 = 90
         assert timeout == 90.0
+
+    def test_small_model_capped_at_45s(self):
+        """Small model (<5GB) should have timeout capped at 45s."""
+        from unittest.mock import patch
+
+        from src.settings._types import ModelInfo
+
+        mock_info = ModelInfo(
+            name="fake-mini:latest",
+            size_gb=2.3,
+            vram_required=3,
+            quality=4,
+            speed=9,
+            uncensored=True,
+            description="Test small model",
+            tags=["writer"],
+        )
+        with patch("src.settings._utils.get_model_info", return_value=mock_info):
+            settings = Settings()
+            settings.ollama_timeout = 120
+            timeout = settings.get_scaled_timeout("fake-mini:latest")
+
+        # Formula: 120 * (1 + 2.3/20) = 120 * 1.115 = 133.8, but capped to 45
+        assert timeout == 45.0
+
+    def test_model_just_under_5gb_still_capped(self):
+        """Model at 4.9GB should still be capped at 45s."""
+        from unittest.mock import patch
+
+        from src.settings._types import ModelInfo
+
+        mock_info = ModelInfo(
+            name="fake-small:3b",
+            size_gb=4.9,
+            vram_required=6,
+            quality=5,
+            speed=8,
+            uncensored=True,
+            description="Test model",
+            tags=["writer"],
+        )
+        with patch("src.settings._utils.get_model_info", return_value=mock_info):
+            settings = Settings()
+            settings.ollama_timeout = 120
+            timeout = settings.get_scaled_timeout("fake-small:3b")
+
+        # Formula: 120 * (1 + 4.9/20) = 120 * 1.245 = 149.4, capped to 45
+        assert timeout == 45.0
+
+    def test_model_at_5gb_not_capped(self):
+        """Model exactly at 5GB should NOT be capped."""
+        from unittest.mock import patch
+
+        from src.settings._types import ModelInfo
+
+        mock_info = ModelInfo(
+            name="fake-medium:5b",
+            size_gb=5.0,
+            vram_required=6,
+            quality=5,
+            speed=7,
+            uncensored=True,
+            description="Test model",
+            tags=["writer"],
+        )
+        with patch("src.settings._utils.get_model_info", return_value=mock_info):
+            settings = Settings()
+            settings.ollama_timeout = 120
+            timeout = settings.get_scaled_timeout("fake-medium:5b")
+
+        # Formula: 120 * (1 + 5/20) = 120 * 1.25 = 150 — not capped (>=5GB)
+        assert timeout == 150.0
 
 
 class TestRagContextValidation:

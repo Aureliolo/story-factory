@@ -8,6 +8,7 @@ import logging
 import time
 from dataclasses import dataclass
 
+from src.memory.mode_database import ModeDatabase
 from src.settings import Settings
 
 from .backup_service import BackupService
@@ -70,6 +71,7 @@ class ServiceContainer:
     temporal_validation: TemporalValidationService
     embedding: EmbeddingService
     context_retrieval: ContextRetrievalService
+    mode_db: ModeDatabase
 
     def __init__(self, settings: Settings | None = None):
         """
@@ -91,6 +93,7 @@ class ServiceContainer:
         self.model = ModelService(self.settings)
         self.export = ExportService(self.settings)
         self.mode = ModelModeService(self.settings)
+        self.mode_db = self.mode.db  # shared ModeDatabase instance
         self.scoring = ScoringService(self.mode)
         self.context_retrieval = ContextRetrievalService(self.settings, self.embedding)
         self.timeline = TimelineService(self.settings)
@@ -102,8 +105,9 @@ class ServiceContainer:
             mode_service=self.mode,
             context_retrieval=self.context_retrieval,
             timeline=self.timeline,
+            mode_db=self.mode_db,
         )
-        self.world_quality = WorldQualityService(self.settings, self.mode)
+        self.world_quality = WorldQualityService(self.settings, self.mode, self.mode_db)
         self.suggestion = SuggestionService(self.settings)
         self.template = TemplateService(self.settings)
         self.backup = BackupService(self.settings)
@@ -113,7 +117,7 @@ class ServiceContainer:
         self.world_template = WorldTemplateService(self.settings)
         self.content_guidelines = ContentGuidelinesService(self.settings)
         self.calendar = CalendarService(self.settings)
-        service_count = len(self.__class__.__annotations__) - 1  # exclude 'settings'
+        service_count = len(self.__class__.__annotations__) - 2  # exclude 'settings' and 'mode_db'
         logger.info(
             "ServiceContainer initialized: %d services in %.2fs",
             service_count,

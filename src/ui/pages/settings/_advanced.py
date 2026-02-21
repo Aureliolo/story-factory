@@ -370,6 +370,32 @@ def build_circuit_breaker_section(page: SettingsPage) -> None:
                     width="w-16",
                 )
 
+        ui.separator().classes("my-3")
+        _subsection_header("Small Model Timeout Cap", "timer")
+
+        with ui.row().classes("items-center gap-3 flex-wrap"):
+            with ui.column().classes("gap-1"):
+                ui.label("Size Threshold (GB)").classes("text-xs text-gray-500")
+                page._small_model_size_threshold_input = page._build_number_input(
+                    value=page.settings.small_model_size_threshold_gb,
+                    min_val=1.0,
+                    max_val=20.0,
+                    step=0.5,
+                    tooltip_text="Models under this size (GB) get capped timeout (1-20)",
+                    width="w-16",
+                )
+
+            with ui.column().classes("gap-1"):
+                ui.label("Timeout Cap (s)").classes("text-xs text-gray-500")
+                page._small_model_timeout_cap_input = page._build_number_input(
+                    value=page.settings.small_model_timeout_cap,
+                    min_val=10.0,
+                    max_val=300.0,
+                    step=5.0,
+                    tooltip_text="Max timeout in seconds for small models (10-300)",
+                    width="w-16",
+                )
+
     logger.debug("Circuit breaker section built")
 
 
@@ -830,6 +856,9 @@ def save_to_settings(page: SettingsPage) -> None:
         ("_judge_outlier_std_threshold_input", "judge_outlier_std_threshold", float),
         ("_judge_outlier_strategy_select", "judge_outlier_strategy", None),
         ("_llm_semaphore_timeout_input", "llm_semaphore_timeout", int),
+        # Small model timeout cap
+        ("_small_model_size_threshold_input", "small_model_size_threshold_gb", float),
+        ("_small_model_timeout_cap_input", "small_model_timeout_cap", float),
         # RAG context settings
         ("_rag_context_enabled_switch", "rag_context_enabled", None),
         ("_rag_context_max_tokens_input", "rag_context_max_tokens", int),
@@ -915,6 +944,9 @@ def refresh_from_settings(page: SettingsPage) -> None:
         ("_judge_outlier_std_threshold_input", "judge_outlier_std_threshold"),
         ("_judge_outlier_strategy_select", "judge_outlier_strategy"),
         ("_llm_semaphore_timeout_input", "llm_semaphore_timeout"),
+        # Small model timeout cap
+        ("_small_model_size_threshold_input", "small_model_size_threshold_gb"),
+        ("_small_model_timeout_cap_input", "small_model_timeout_cap"),
         # RAG context settings
         ("_rag_context_enabled_switch", "rag_context_enabled"),
         ("_rag_context_max_tokens_input", "rag_context_max_tokens"),
