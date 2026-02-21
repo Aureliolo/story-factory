@@ -162,6 +162,10 @@ Write all text in {brief.language}."""
 def _generated_data_to_world_calendar(result: GeneratedCalendarData) -> WorldCalendar:
     """Convert a GeneratedCalendarData Pydantic model to a WorldCalendar.
 
+    Resolves ``era_start_year`` from the era list using a multi-step fallback:
+    (1) exact name match on ``result.era_name``, (2) case-insensitive match,
+    (3) ongoing era (``end_year is None``), (4) last era's ``start_year``.
+
     Parameters:
         result: Structured LLM response with calendar data.
 
@@ -213,12 +217,34 @@ def _generated_data_to_world_calendar(result: GeneratedCalendarData) -> WorldCal
     # Match era_start_year to the era matching current_era_name for consistency
     era_start_year = 1
     if eras:
+        # Try exact match first
         current_era_obj = next((era for era in eras if era.name == result.era_name), None)
+        # Try case-insensitive match
+        if not current_era_obj:
+            current_era_obj = next(
+                (era for era in eras if era.name.lower() == result.era_name.lower()),
+                None,
+            )
+            if current_era_obj:
+                logger.debug(
+                    "Matched current era '%s' via case-insensitive lookup to '%s'",
+                    result.era_name,
+                    current_era_obj.name,
+                )
+        # Fall back to the ongoing era (end_year=None = current era)
+        if not current_era_obj:
+            current_era_obj = next((era for era in eras if era.end_year is None), None)
+            if current_era_obj:
+                logger.warning(
+                    "Current era '%s' not found by name; using ongoing era '%s'",
+                    result.era_name,
+                    current_era_obj.name,
+                )
         if current_era_obj:
             era_start_year = current_era_obj.start_year
         else:
             logger.warning(
-                "Current era '%s' not found in historical eras; "
+                "Current era '%s' not found in historical eras and no ongoing era; "
                 "falling back to last era's start year.",
                 result.era_name,
             )

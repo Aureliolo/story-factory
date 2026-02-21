@@ -6,11 +6,12 @@ These models define the structure for:
 - Lifecycle tracking for entities
 """
 
+import json
 import logging
 import re
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 if TYPE_CHECKING:
     from src.memory.world_calendar import WorldCalendar
@@ -43,7 +44,9 @@ class StoryTimestamp(BaseModel):
     @property
     def sort_key(self) -> tuple[int, int, int, int]:
         """
-        Provide a tuple key used to order StoryTimestamp values chronologically, with calendar dates before relative orders and unknown times last.
+        Provide a tuple key used to order StoryTimestamp values
+        chronologically, with calendar dates before relative orders
+        and unknown times last.
 
         Returns:
             tuple[int, int, int, int]: A sortable key:
@@ -175,13 +178,13 @@ class EntityLifecycle(BaseModel):
         if self.birth and self.birth.year is not None:
             if self.death and self.death.year is not None:
                 result = self.death.year - self.birth.year
-                logger.debug(f"EntityLifecycle.lifespan (birth/death): {result}")
+                logger.debug("EntityLifecycle.lifespan (birth/death): %s", result)
                 return result
         # For factions/locations: use founding/destruction
         if self.founding_year is not None:
             if self.destruction_year is not None:
                 result = self.destruction_year - self.founding_year
-                logger.debug(f"EntityLifecycle.lifespan (founding/destruction): {result}")
+                logger.debug("EntityLifecycle.lifespan (founding/destruction): %s", result)
                 return result
         logger.debug("EntityLifecycle.lifespan: unavailable")
         return None
@@ -194,9 +197,9 @@ class EntityLifecycle(BaseModel):
             Birth year, founding year, or None.
         """
         if self.birth and self.birth.year is not None:
-            logger.debug(f"EntityLifecycle.start_year (birth): {self.birth.year}")
+            logger.debug("EntityLifecycle.start_year (birth): %s", self.birth.year)
             return self.birth.year
-        logger.debug(f"EntityLifecycle.start_year (founding): {self.founding_year}")
+        logger.debug("EntityLifecycle.start_year (founding): %s", self.founding_year)
         return self.founding_year
 
     @property
@@ -207,9 +210,9 @@ class EntityLifecycle(BaseModel):
             Death year, destruction year, or None if still active.
         """
         if self.death and self.death.year is not None:
-            logger.debug(f"EntityLifecycle.end_year (death): {self.death.year}")
+            logger.debug("EntityLifecycle.end_year (death): %s", self.death.year)
             return self.death.year
-        logger.debug(f"EntityLifecycle.end_year (destruction): {self.destruction_year}")
+        logger.debug("EntityLifecycle.end_year (destruction): %s", self.destruction_year)
         return self.destruction_year
 
 
@@ -255,34 +258,169 @@ class TimelineItem(BaseModel):
         return self.end is not None
 
 
-def parse_timestamp(text: str) -> StoryTimestamp:
-    """
-    Parse a free-form timestamp string into a StoryTimestamp model.
+def _try_parse_json_timestamp(text: str) -> StoryTimestamp | None:
+    """Try to parse text as a JSON object containing timestamp fields.
 
-    Preserves the original input in `raw_text`. Extracts calendar fields (`year`, `month`, `day`) when present; if no year is found, attempts to derive `relative_order` from phrases like "chapter N", "event/part/phase/act N", or from a standalone day value. If no structured information can be determined, the result contains only `raw_text`.
+    Handles LLM output that arrives as stringified JSON, e.g.
+    ``'{"year": -2037, "era_name": "Dark Age"}'``.
 
     Parameters:
-        text (str): The timestamp string to parse.
+        text: The raw input string (stripped).
 
     Returns:
-        StoryTimestamp: Parsed timestamp with `raw_text` preserved and any discovered `year`, `month`, `day`, or `relative_order` populated.
+        A new StoryTimestamp with ``raw_text`` set to *text* and any extracted
+        fields populated, or None if the text is not valid JSON, not a dict,
+        or contains no usable timestamp fields (year, month, day, era_name,
+        calendar_id).
     """
-    logger.debug(f"Parsing timestamp: {text!r}")
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError, ValueError:
+        return None
 
-    result = StoryTimestamp(raw_text=text.strip())
-    text_lower = text.lower().strip()
+    if not isinstance(data, dict):
+        return None
 
-    # Try to extract year
+    fields: dict[str, Any] = {}
+
+    if "year" in data and data["year"] is not None:
+        if isinstance(data["year"], bool):
+            logger.warning("JSON timestamp has non-integer year: %r", data["year"])
+        else:
+            try:
+                fields["year"] = int(data["year"])
+            except ValueError, TypeError:
+                logger.warning("JSON timestamp has non-integer year: %r", data["year"])
+
+    raw_era = data.get("era_name")
+    if raw_era:
+        stripped_era = str(raw_era).strip()
+        if stripped_era:
+            fields["era_name"] = stripped_era
+
+    raw_cid = data.get("calendar_id")
+    if raw_cid:
+        stripped_cid = str(raw_cid).strip()
+        if stripped_cid:
+            fields["calendar_id"] = stripped_cid
+
+    if "month" in data and data["month"] is not None:
+        try:
+            month_val = int(data["month"])
+            if 1 <= month_val <= 12:
+                fields["month"] = month_val
+            else:
+                logger.warning("JSON timestamp month out of range: %d", month_val)
+        except ValueError, TypeError:
+            logger.warning("JSON timestamp has non-integer month: %r", data["month"])
+
+    if "day" in data and data["day"] is not None:
+        try:
+            day_val = int(data["day"])
+            if 1 <= day_val <= 31:
+                fields["day"] = day_val
+            else:
+                logger.warning("JSON timestamp day out of range: %d", day_val)
+        except ValueError, TypeError:
+            logger.warning("JSON timestamp has non-integer day: %r", data["day"])
+
+    if fields:
+        logger.debug("Parsed timestamp from JSON: %s", fields)
+        return StoryTimestamp(raw_text=text, **fields)
+    return None
+
+
+_CALENDAR_SUFFIXES = frozenset({"bc", "bce", "ad", "ce"})
+_KEYWORD_PATTERN = re.compile(
+    r"^\s*(?:year|month|day|chapter|event|part|phase|act|in)\b", re.IGNORECASE
+)
+_DIGIT_START = re.compile(r"^\s*-?\d")
+
+
+def _extract_era_name_from_segments(text: str) -> str | None:
+    """Extract era_name from comma-separated timestamp segments.
+
+    After year/month/day extraction, any remaining segment that does not
+    match a known keyword pattern (year, month, day, chapter, event, part,
+    phase, act, in), start with a digit or minus sign, or equal a calendar
+    era suffix (BC, BCE, AD, CE) is treated as an era name.
+
+    Parameters:
+        text: The original timestamp string.
+
+    Returns:
+        The era name string, or None if no candidate segment is found.
+    """
+    logger.debug("Extracting era name from segments: %r", text)
+
+    for segment in text.split(","):
+        stripped = segment.strip()
+        if not stripped:
+            continue
+        if _KEYWORD_PATTERN.match(stripped):
+            logger.debug("Skipping keyword segment: %r", stripped)
+            continue
+        if _DIGIT_START.match(stripped):
+            logger.debug("Skipping digit-start segment: %r", stripped)
+            continue
+        if stripped.lower() in _CALENDAR_SUFFIXES:
+            logger.debug("Skipping calendar suffix segment: %r", stripped)
+            continue
+        logger.debug("Found era name candidate: %r", stripped)
+        return stripped
+    logger.debug("No era name candidate found in: %r", text)
+    return None
+
+
+def parse_timestamp(text: str) -> StoryTimestamp:
+    """Parse a free-form timestamp string into a StoryTimestamp model.
+
+    Preserves the original input in ``raw_text``. First attempts JSON parsing
+    for structured LLM output (e.g. ``{"year": -2037, "era_name": "Dark Age"}``).
+    Then falls back to regex extraction of calendar fields (``year``, ``month``,
+    ``day``).  Supports negative years and BC/BCE/AD/CE era suffixes (BC/BCE
+    negate a positive year value). Extracts ``era_name`` from comma-separated
+    segments. If no year is found, attempts to derive ``relative_order`` from
+    phrases like "chapter N", "event/part/phase/act N", or from a standalone
+    day value.
+
+    Parameters:
+        text: The timestamp string to parse.
+
+    Returns:
+        Parsed timestamp with ``raw_text`` preserved and any discovered fields populated.
+    """
+    logger.debug("Parsing timestamp: %r", text)
+    stripped = text.strip()
+
+    # Strategy 1: Try JSON parsing first (handles stringified LLM output)
+    json_result = _try_parse_json_timestamp(stripped)
+    if json_result is not None:
+        return json_result
+
+    # Strategy 2: Regex extraction — accumulate fields, construct once
+    fields: dict[str, Any] = {"raw_text": stripped}
+    text_lower = stripped.lower()
+
+    # Try to extract year (supports negative years and BC/BCE suffix)
     year_patterns = [
-        r"year\s+(\d+)",
-        r"(\d{3,4})\s*(?:ad|ce|bc|bce)?",  # 3-4 digit numbers
-        r"in\s+(\d{3,4})",
+        (r"year\s+(-?\d+)", False),  # "Year 1042" or "Year -2037"
+        (r"(-?\d{3,4})\s*(ad|ce|bc|bce)\b", True),  # "1042 BCE" — has era suffix
+        (r"(-?\d{3,4})(?:\s|,|$)", False),  # bare 3-4 digit number
+        (r"in\s+(-?\d{3,4})", False),  # "in 1042" or "in -1042"
     ]
-    for pattern in year_patterns:
+    for pattern, has_suffix_group in year_patterns:
         match = re.search(pattern, text_lower)
         if match:
-            result.year = int(match.group(1))
-            logger.debug(f"Extracted year: {result.year}")
+            year = int(match.group(1))
+            # Negate year for BC/BCE suffix if year is positive
+            if has_suffix_group and match.lastindex is not None and match.lastindex >= 2:
+                suffix = match.group(2)
+                if suffix in ("bc", "bce") and year > 0:
+                    year = -year
+                    logger.debug("Negated year for %s suffix: %d", suffix, year)
+            fields["year"] = year
+            logger.debug("Extracted year: %d", year)
             break
 
     # Try to extract month
@@ -295,9 +433,9 @@ def parse_timestamp(text: str) -> StoryTimestamp:
         if match:
             month_val = int(match.group(1))
             if 1 <= month_val <= 12:
-                result.month = month_val
-                logger.debug(f"Extracted month: {result.month}")
-            break
+                fields["month"] = month_val
+                logger.debug("Extracted month: %d", month_val)
+                break
 
     # Try to extract day
     day_patterns = [
@@ -309,29 +447,72 @@ def parse_timestamp(text: str) -> StoryTimestamp:
         if match:
             day_val = int(match.group(1))
             if 1 <= day_val <= 31:
-                result.day = day_val
-                logger.debug(f"Extracted day: {result.day}")
-            break
+                fields["day"] = day_val
+                logger.debug("Extracted day: %d", day_val)
+                break
+
+    # Try to extract era_name from comma-separated segments
+    era_candidate = _extract_era_name_from_segments(stripped)
+    if era_candidate:
+        fields["era_name"] = era_candidate
+        logger.debug("Extracted era_name from segment: %s", era_candidate)
 
     # If no calendar date found, try relative ordering
-    if result.year is None:
+    if "year" not in fields:
         # Try chapter number
         chapter_match = re.search(r"chapter\s+(\d+)", text_lower)
         if chapter_match:
-            result.relative_order = int(chapter_match.group(1))
-            logger.debug(f"Extracted chapter as relative_order: {result.relative_order}")
+            fields["relative_order"] = int(chapter_match.group(1))
+            logger.debug("Extracted chapter as relative_order: %d", fields["relative_order"])
         # Try "event N" or "part N"
         elif event_match := re.search(r"(?:event|part|phase|act)\s+(\d+)", text_lower):
-            result.relative_order = int(event_match.group(1))
-            logger.debug(f"Extracted event/part as relative_order: {result.relative_order}")
+            fields["relative_order"] = int(event_match.group(1))
+            logger.debug(
+                "Extracted event/part as relative_order: %d",
+                fields["relative_order"],
+            )
         # If we only have day and nothing else, use it as relative order
-        elif result.day is not None and result.year is None and result.month is None:
-            result.relative_order = result.day
-            result.day = None  # Clear day since we're using relative ordering
-            logger.debug(f"Using standalone day as relative_order: {result.relative_order}")
+        elif "day" in fields and "month" not in fields:
+            fields["relative_order"] = fields.pop("day")
+            logger.debug(
+                "Using standalone day as relative_order: %d",
+                fields["relative_order"],
+            )
 
-    logger.debug(f"Parsed timestamp result: {result}")
+    result = StoryTimestamp(**fields)
+    logger.debug("Parsed timestamp result: %s", result)
     return result
+
+
+def _parse_year(value: object, field_name: str) -> int | None:
+    """Coerce a raw LLM year value to int, with type-aware logging.
+
+    Handles: bool (rejected), int (pass-through), float (truncated to int),
+    str (parsed via ``int()``), and anything else (logged and rejected).
+
+    Parameters:
+        value: The raw value from LLM output (any type).
+        field_name: Field label for log messages (e.g. "founding_year").
+
+    Returns:
+        The year as an int, or None if the value cannot be converted.
+    """
+    if isinstance(value, bool):
+        logger.warning("Unexpected %s type: bool (%r)", field_name, value)
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        logger.debug("Converted float %s to int: %s", field_name, value)
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError as exc:
+            logger.warning("Could not parse %s string: %r — %s", field_name, value, exc)
+            return None
+    logger.warning("Unexpected %s type: %s (%r)", field_name, type(value).__name__, value)
+    return None
 
 
 def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifecycle | None:
@@ -339,9 +520,10 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
     Build an EntityLifecycle from an attributes dictionary's "lifecycle" entry.
 
     If present, the "lifecycle" value must be a mapping that may contain any of
-    "birth", "death", "first_appearance", and "last_appearance". Each field may be
-    either a dict of StoryTimestamp fields or a string that will be parsed by
-    parse_timestamp.
+    "birth", "death", "first_appearance", "last_appearance", "temporal_notes",
+    "founding_year", and "destruction_year". Timestamp fields may be either a
+    dict of StoryTimestamp fields or a string parsed by ``parse_timestamp``.
+    Year fields accept int, float (truncated to int), or string values.
 
     Parameters:
         attributes (dict[str, Any]): Entity attributes; may include a "lifecycle"
@@ -351,7 +533,7 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
         EntityLifecycle constructed from the "lifecycle" data, or `None` if the
         "lifecycle" entry is missing or not a mapping.
     """
-    logger.debug(f"Extracting lifecycle from attributes: {list(attributes.keys())}")
+    logger.debug("Extracting lifecycle from attributes: %s", list(attributes.keys()))
 
     lifecycle_data = attributes.get("lifecycle")
     if lifecycle_data is None:
@@ -359,8 +541,10 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
 
     if not isinstance(lifecycle_data, dict):
         logger.warning(
-            f"Malformed lifecycle data: expected dict, got {type(lifecycle_data).__name__} "
-            f"(value: {lifecycle_data!r}). Ignoring lifecycle for this entity."
+            "Malformed lifecycle data: expected dict, got %s (value: %r). "
+            "Ignoring lifecycle for this entity.",
+            type(lifecycle_data).__name__,
+            lifecycle_data,
         )
         return None
 
@@ -368,25 +552,37 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
 
     if birth_data := lifecycle_data.get("birth"):
         if isinstance(birth_data, dict):
-            result.birth = StoryTimestamp(**birth_data)
+            try:
+                result.birth = StoryTimestamp(**birth_data)
+            except ValidationError as exc:
+                logger.warning("Malformed birth timestamp dict %r: %s", birth_data, exc)
         elif isinstance(birth_data, str):
             result.birth = parse_timestamp(birth_data)
 
     if death_data := lifecycle_data.get("death"):
         if isinstance(death_data, dict):
-            result.death = StoryTimestamp(**death_data)
+            try:
+                result.death = StoryTimestamp(**death_data)
+            except ValidationError as exc:
+                logger.warning("Malformed death timestamp dict %r: %s", death_data, exc)
         elif isinstance(death_data, str):
             result.death = parse_timestamp(death_data)
 
     if first_data := lifecycle_data.get("first_appearance"):
         if isinstance(first_data, dict):
-            result.first_appearance = StoryTimestamp(**first_data)
+            try:
+                result.first_appearance = StoryTimestamp(**first_data)
+            except ValidationError as exc:
+                logger.warning("Malformed first_appearance timestamp dict %r: %s", first_data, exc)
         elif isinstance(first_data, str):
             result.first_appearance = parse_timestamp(first_data)
 
     if last_data := lifecycle_data.get("last_appearance"):
         if isinstance(last_data, dict):
-            result.last_appearance = StoryTimestamp(**last_data)
+            try:
+                result.last_appearance = StoryTimestamp(**last_data)
+            except ValidationError as exc:
+                logger.warning("Malformed last_appearance timestamp dict %r: %s", last_data, exc)
         elif isinstance(last_data, str):
             result.last_appearance = parse_timestamp(last_data)
 
@@ -397,20 +593,17 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
     # Use 'is not None' to handle year 0 correctly
     founding = lifecycle_data.get("founding_year")
     if founding is not None:
-        if isinstance(founding, int):
-            result.founding_year = founding
-        elif isinstance(founding, str) and founding.isdigit():
-            result.founding_year = int(founding)
+        result.founding_year = _parse_year(founding, "founding_year")
 
     destruction = lifecycle_data.get("destruction_year")
     if destruction is not None:
-        if isinstance(destruction, int):
-            result.destruction_year = destruction
-        elif isinstance(destruction, str) and destruction.isdigit():
-            result.destruction_year = int(destruction)
+        result.destruction_year = _parse_year(destruction, "destruction_year")
 
     logger.debug(
-        f"Extracted lifecycle: birth={result.birth}, death={result.death}, "
-        f"founding={result.founding_year}, destruction={result.destruction_year}"
+        "Extracted lifecycle: birth=%s, death=%s, founding=%s, destruction=%s",
+        result.birth,
+        result.death,
+        result.founding_year,
+        result.destruction_year,
     )
     return result
