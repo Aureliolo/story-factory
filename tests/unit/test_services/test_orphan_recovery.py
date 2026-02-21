@@ -287,13 +287,47 @@ class TestRecoverOrphansAlreadyConnected:
         assert count == 1
 
 
-class TestRecoverOrphansEntityIdResolution:
-    """Test orphan recovery resolves entities by ID when names collide across types."""
+class TestRecoverOrphansMissingRelationType:
+    """Test orphan recovery defaults relation_type to 'related_to' when omitted."""
 
-    def test_same_name_different_types_resolves_by_id(
+    def test_missing_relation_type_defaults_to_related_to(
         self, mock_svc, story_state, mock_world_db, mock_services
     ):
-        """Test that orphan with same name as another entity type is correctly identified by ID."""
+        """Test that missing relation_type in generated relationship defaults to 'related_to'."""
+        mock_world_db.add_entity("character", "Hero", "A brave hero")
+        villain_id = mock_world_db.add_entity("character", "Villain", "Evil villain")
+        castle_id = mock_world_db.add_entity("location", "Castle", "Dark castle")
+        mock_world_db.add_relationship(villain_id, castle_id, "resides_in", "Lives in castle")
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 7.5
+
+        # Quality service returns a relationship WITHOUT relation_type
+        mock_services.world_quality.generate_relationship_with_quality.return_value = (
+            {
+                "source": "Hero",
+                "target": "Villain",
+                "description": "They have a connection",
+            },
+            mock_quality_scores,
+            1,
+        )
+
+        count = _recover_orphans(mock_svc, story_state, mock_world_db, mock_services)
+
+        assert count == 1
+        relationships = mock_world_db.list_relationships()
+        hero_rels = [r for r in relationships if r.relation_type == "related_to"]
+        assert len(hero_rels) == 1
+
+
+class TestRecoverOrphansEntityIdResolution:
+    """Test orphan recovery handles cross-type name collisions correctly."""
+
+    def test_same_name_different_types_resolves_via_direct_reference(
+        self, mock_svc, story_state, mock_world_db, mock_services
+    ):
+        """Test that orphan with same name as another entity type is resolved via direct object reference."""
         # "The Feathered Dominion" exists as both a faction and a concept
         faction_id = mock_world_db.add_entity(
             "faction", "The Feathered Dominion", "A powerful bird faction"

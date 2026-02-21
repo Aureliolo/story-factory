@@ -51,8 +51,15 @@ def _recover_orphans(
     for r in world_db.list_relationships():
         source_entity_obj = entity_by_id.get(r.source_id)
         target_entity_obj = entity_by_id.get(r.target_id)
-        if source_entity_obj and target_entity_obj:
-            existing_rels.append((source_entity_obj.name, target_entity_obj.name, r.relation_type))
+        if not source_entity_obj or not target_entity_obj:
+            logger.warning(
+                "Skipping relationship %s -> %s (%s): missing entity reference",
+                r.source_id,
+                r.target_id,
+                r.relation_type,
+            )
+            continue
+        existing_rels.append((source_entity_obj.name, target_entity_obj.name, r.relation_type))
 
     # Track orphan names still needing connections (mutable set for fast lookup)
     orphan_names = {o.name.lower() for o in orphans}
@@ -109,8 +116,10 @@ def _recover_orphans(
                     )
                     continue
 
-                # Find entities — prefer direct ID match for the orphan to avoid
-                # cross-type name collisions in fuzzy name lookup
+                # Find entities — when the orphan's normalized name matches a
+                # relationship endpoint, use the orphan object directly (bypassing
+                # fuzzy lookup) to avoid cross-type name collisions where multiple
+                # entities share the same name
                 source_name_norm = _normalize_name(rel["source"])
                 target_name_norm = _normalize_name(rel["target"])
                 orphan_name_norm = _normalize_name(orphan.name)

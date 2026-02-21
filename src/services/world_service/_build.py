@@ -823,21 +823,21 @@ def _generate_relationships(
     all_entities = world_db.list_entities()
     entity_names = [e.name for e in all_entities]
 
-    # Map IDs to names so the quality service gets name pairs for duplicate detection
+    # Map IDs to entity objects so the quality service gets name pairs for duplicate detection
     # 3-tuples: (source_name, target_name, relation_type) for diversity analysis
-    entity_by_id = {e.id: e.name for e in all_entities}
+    entity_by_id = {e.id: e for e in all_entities}
     existing_rels: list[tuple[str, str, str]] = []
     for r in world_db.list_relationships():
-        source_name = entity_by_id.get(r.source_id)
-        target_name = entity_by_id.get(r.target_id)
-        if not source_name or not target_name:
+        source_entity_obj = entity_by_id.get(r.source_id)
+        target_entity_obj = entity_by_id.get(r.target_id)
+        if not source_entity_obj or not target_entity_obj:
             logger.warning(
                 "Skipping relationship %s -> %s: missing entity reference",
                 r.source_id,
                 r.target_id,
             )
             continue
-        existing_rels.append((source_name, target_name, r.relation_type))
+        existing_rels.append((source_entity_obj.name, target_entity_obj.name, r.relation_type))
 
     rel_count = random.randint(
         svc.settings.world_gen_relationships_min,

@@ -551,7 +551,7 @@ class TestGenerateLocations:
 
         assert count == 0
 
-    def test_passes_location_names_only(
+    def test_generate_locations_passes_all_entity_names(
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
         """Test that ALL entity names are passed for cross-type collision detection."""
