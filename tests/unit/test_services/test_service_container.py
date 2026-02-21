@@ -53,8 +53,8 @@ class TestServiceContainer:
             container = ServiceContainer(settings)
 
         assert any("Initializing ServiceContainer" in r.message for r in caplog.records)
-        # Service count is computed dynamically from dataclass annotations
-        expected_count = len(container.__class__.__annotations__) - 1
+        # Service count excludes 'settings' and 'mode_db' (not a service)
+        expected_count = len(container.__class__.__annotations__) - 2
         assert any(
             "ServiceContainer initialized" in r.message
             and f"{expected_count} services" in r.message
