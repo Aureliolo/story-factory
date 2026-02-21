@@ -335,6 +335,34 @@ class TestSettingsValidation:
         with pytest.raises(ValueError, match="subprocess_timeout must be between"):
             settings.validate()
 
+    def test_validate_raises_on_non_positive_small_model_size_threshold(self):
+        """Should raise ValueError for non-positive small_model_size_threshold_gb."""
+        settings = Settings()
+        settings.small_model_size_threshold_gb = 0.0
+        with pytest.raises(ValueError, match="small_model_size_threshold_gb must be positive"):
+            settings.validate()
+
+    def test_validate_raises_on_negative_small_model_size_threshold(self):
+        """Should raise ValueError for negative small_model_size_threshold_gb."""
+        settings = Settings()
+        settings.small_model_size_threshold_gb = -1.0
+        with pytest.raises(ValueError, match="small_model_size_threshold_gb must be positive"):
+            settings.validate()
+
+    def test_validate_raises_on_non_positive_small_model_timeout_cap(self):
+        """Should raise ValueError for non-positive small_model_timeout_cap."""
+        settings = Settings()
+        settings.small_model_timeout_cap = 0.0
+        with pytest.raises(ValueError, match="small_model_timeout_cap must be positive"):
+            settings.validate()
+
+    def test_validate_raises_on_negative_small_model_timeout_cap(self):
+        """Should raise ValueError for negative small_model_timeout_cap."""
+        settings = Settings()
+        settings.small_model_timeout_cap = -5.0
+        with pytest.raises(ValueError, match="small_model_timeout_cap must be positive"):
+            settings.validate()
+
     def test_validate_raises_on_non_bool_content_check_enabled(self):
         """Should raise ValueError for non-boolean content_check_enabled."""
         settings = Settings()

@@ -2214,6 +2214,45 @@ class TestCalculateETAEdgeCases:
             # Should return None due to exception handling
             assert eta is None
 
+    def test_eta_reuses_cached_mode_db(self):
+        """Test _calculate_eta reuses cached _mode_db instead of creating a new one."""
+        from unittest.mock import patch
+
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = StoryState(
+            id="test",
+            status="writing",
+            brief=StoryBrief(
+                premise="Test",
+                genre="Fantasy",
+                tone="Epic",
+                setting_time="Medieval",
+                setting_place="Kingdom",
+                target_length="novella",
+                language="English",
+                content_rating="general",
+            ),
+        )
+        orchestrator._current_phase = "writer"
+        orchestrator._total_chapters = 3
+        orchestrator._completed_chapters = 1
+        orchestrator._phase_start_time = datetime.now()
+
+        # Pre-populate _mode_db with a mock to simulate the cached instance
+        mock_db = MagicMock()
+        mock_db.get_model_performance.return_value = [{"avg_tokens_per_second": 50.0}]
+        orchestrator._mode_db = mock_db
+
+        # ModeDatabase constructor should NOT be called — the cached instance should be reused
+        with patch("src.memory.mode_database.ModeDatabase") as mock_db_class:
+            orchestrator._calculate_eta()
+
+            # ModeDatabase() should not have been instantiated
+            mock_db_class.assert_not_called()
+
+        # The cached instance should still be the same object
+        assert orchestrator._mode_db is mock_db
+
 
 class TestGenerateMoreCharacters:
     """Tests for generate_more_characters method covering lines 465-484."""

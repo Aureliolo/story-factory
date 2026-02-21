@@ -2268,11 +2268,9 @@ class TestSharedModeDatabasePattern:
 
     def test_service_container_exposes_mode_db(self, tmp_path: Path) -> None:
         """ServiceContainer should expose mode_db from ModelModeService.db."""
-        from unittest.mock import patch
-
         from src.services import ServiceContainer
 
-        with patch("src.memory.mode_database.DEFAULT_DB_PATH", tmp_path / "mode_scores.db"):
+        with patch("src.services.model_mode_service.DEFAULT_DB_PATH", tmp_path / "mode_scores.db"):
             container = ServiceContainer()
         # mode_db should be the same object as mode.db (public property)
         assert container.mode_db is container.mode.db

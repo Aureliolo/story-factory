@@ -296,6 +296,17 @@ def _validate_timeouts(settings: Settings) -> None:
             f"got {settings.subprocess_timeout}"
         )
 
+    if settings.small_model_size_threshold_gb <= 0:
+        raise ValueError(
+            f"small_model_size_threshold_gb must be positive, "
+            f"got {settings.small_model_size_threshold_gb}"
+        )
+
+    if settings.small_model_timeout_cap <= 0:
+        raise ValueError(
+            f"small_model_timeout_cap must be positive, got {settings.small_model_timeout_cap}"
+        )
+
 
 def _validate_world_quality(settings: Settings) -> None:
     """Validate world quality settings."""
