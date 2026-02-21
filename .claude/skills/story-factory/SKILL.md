@@ -2,6 +2,15 @@
 
 Common multi-step workflows derived from commit history patterns. All file paths verified against the actual codebase.
 
+## Add New Setting
+
+Settings always require changes across 4 files:
+
+1. **Add field** to `src/settings/_settings.py` (Settings class)
+2. **Add validation** in `src/settings/_validation.py`
+3. **Expose in UI** in the relevant `src/ui/pages/settings/_*.py` page
+4. **Add tests** in `tests/unit/test_settings.py`
+
 ## Add New Entity Type
 
 When adding a new entity type that participates in the quality loop (like locations, factions, items, concepts, events):
@@ -30,7 +39,7 @@ When modifying quality scoring or the refinement loop:
 1. **Update loop logic** in `src/services/world_quality_service/_quality_loop.py`
 2. **Modify scoring models** in `src/memory/world_quality/_models.py` or `src/memory/world_quality/_entity_scores.py`
 3. **Update analytics** in `src/services/world_quality_service/_analytics.py`
-4. **Update settings** in `src/settings.py` and expose in `src/ui/pages/settings/`
+4. **Update settings** in `src/settings/_settings.py` and expose in `src/ui/pages/settings/`
 5. **Add tests** for new scoring/loop behaviors
 
 ## World Building Pipeline Improvements
@@ -56,10 +65,30 @@ When diagnosing model behavior, performance, or data issues:
 
 When adding or improving UI pages/components:
 
-1. **Update component** in `src/ui/components/` or `src/ui/pages/`
+1. **Update component** in `src/ui/pages/` (use package structure for complex pages)
 2. **Modify related services** for data fetching — services live in `src/services/`, never import UI modules
-3. **Update graph renderer** in `src/ui/graph_renderer/` if visualization changes are needed
+3. **Update graph renderer** in `src/ui/pages/world/_graph.py` if visualization changes are needed
 4. **Add component tests** in `tests/component/` using NiceGUI User fixture
+
+## Modularization Pattern
+
+When a file exceeds ~800 lines, split it into a package with underscore-prefixed private modules:
+
+```
+# Before: single large file
+src/services/world_quality_service.py
+
+# After: package with focused modules
+src/services/world_quality_service/
+├── __init__.py           # Public API, re-exports
+├── _quality_loop.py      # Core loop logic
+├── _character.py         # Character-specific logic
+├── _location.py          # Location-specific logic
+├── _batch.py             # Shared batch helpers
+└── _analytics.py         # Scoring analytics
+```
+
+Split by domain/responsibility, not by type. Pre-commit enforces a 1000-line limit.
 
 ## Naming Conventions
 
@@ -71,6 +100,7 @@ When adding or improving UI pages/components:
 | Functions/methods | snake_case | `build_world()`, `generate_structured()` |
 | Constants | SCREAMING_SNAKE_CASE | `MIN_GPU_RESIDENCY`, `RECOMMENDED_MODELS` |
 | Test files | test_ prefix | `test_settings.py`, `test_world_service.py` |
+| Scripts | verb_noun pattern | `investigate_vram_usage.py`, `evaluate_models.py` |
 
 ## Git Conventions
 
