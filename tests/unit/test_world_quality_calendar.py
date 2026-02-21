@@ -308,7 +308,7 @@ class TestRefineCalendar:
         ):
             _refine_calendar(mock_svc, sample_calendar_dict, scores, story_state, 0.7)
 
-    def test_preserves_era_name_warns_when_missing(self, mock_svc, story_state):
+    def test_preserves_era_name_warns_when_missing(self, mock_svc, story_state, caplog):
         """Test refinement warns and falls back to 'Unknown' when original era name is missing."""
         scores = CalendarQualityScores(
             internal_consistency=6.0,
@@ -338,6 +338,7 @@ class TestRefineCalendar:
         ):
             result = _refine_calendar(mock_svc, calendar_no_era, scores, story_state, 0.7)
         assert result["current_era_name"] == "Unknown"
+        assert "Original calendar dict missing 'current_era_name'" in caplog.text
 
 
 class TestGeneratedDataToWorldCalendar:

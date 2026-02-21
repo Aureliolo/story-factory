@@ -89,6 +89,16 @@ class TestStoryTimestamp:
         assert "3" in ts.display_text
         assert "15" in ts.display_text
 
+    def test_display_text_with_era_name(self):
+        """Test display_text includes era_name when set and no raw_text."""
+        ts = StoryTimestamp(year=1042, era_name="Dark Age")
+        assert ts.display_text == "Year 1042 Dark Age"
+
+    def test_display_text_with_era_name_and_month(self):
+        """Test display_text includes era_name alongside month."""
+        ts = StoryTimestamp(year=1042, month=3, era_name="Third Age")
+        assert ts.display_text == "Year 1042 Third Age, Month 3"
+
     def test_display_text_unknown_time(self):
         """Test display_text returns 'Unknown time' when no date info."""
         ts = StoryTimestamp()
@@ -196,13 +206,15 @@ class TestParseTimestamp:
         assert ts.era_name == "Era 2"
 
     def test_parse_compound_negative_year_string(self):
-        """Test parsing compound string extracts first year, not range."""
+        """Test parsing compound string extracts first year, not range.
+
+        Known limitation: _extract_era_name_from_segments cannot distinguish
+        "Era 3: -500 - -101" (range notation) from a real era name because
+        the segment starts with "Era", not a digit. TODO(#391): improve
+        segment filtering to reject segments containing numeric range notation.
+        """
         ts = parse_timestamp("Year -10, Era 3: -500 - -101")
         assert ts.year == -10
-        # The "Era 3: -500 - -101" segment is a range notation, not an era name.
-        # _extract_era_name_from_segments filters segments starting with digits,
-        # but this segment starts with "Era" so it passes through. Document the
-        # current behavior explicitly.
         assert ts.era_name == "Era 3: -500 - -101"
 
     def test_parse_negative_year_string(self):
@@ -284,7 +296,7 @@ class TestParseTimestamp:
     def test_parse_json_array_falls_through_to_regex(self):
         """Test that JSON array input falls through to regex parsing."""
         ts = parse_timestamp("[1042, 3]")
-        # Array is valid JSON but not a dict, so JSON path returns False
+        # Array is valid JSON but not a dict, so JSON path returns None
         # Regex then finds 1042 as a 4-digit number
         assert ts.year == 1042
 
@@ -328,6 +340,56 @@ class TestParseTimestamp:
         ts = parse_timestamp("Year 1042, BCE")
         assert ts.year == 1042
         assert ts.era_name is None
+
+    # --- JSON boolean year tests (consistency with _parse_year) ---
+
+    def test_parse_json_bool_true_year_is_rejected(self):
+        """Boolean True year in JSON should be rejected (not coerced to 1)."""
+        ts = parse_timestamp('{"year": true}')
+        assert ts.year is None
+
+    def test_parse_json_bool_false_year_is_rejected(self):
+        """Boolean False year in JSON should be rejected (not coerced to 0)."""
+        ts = parse_timestamp('{"year": false}')
+        assert ts.year is None
+
+    # --- Additional regex pattern coverage ---
+
+    def test_parse_part_as_relative(self):
+        """Test parsing 'Part N' as relative order."""
+        ts = parse_timestamp("Part 3")
+        assert ts.relative_order == 3
+
+    def test_parse_phase_as_relative(self):
+        """Test parsing 'Phase N' as relative order."""
+        ts = parse_timestamp("Phase 2")
+        assert ts.relative_order == 2
+
+    def test_parse_act_as_relative(self):
+        """Test parsing 'Act N' as relative order."""
+        ts = parse_timestamp("Act 1")
+        assert ts.relative_order == 1
+
+    def test_parse_in_year_pattern(self):
+        """Test parsing 'in <year>' pattern."""
+        ts = parse_timestamp("Born in 1042")
+        assert ts.year == 1042
+
+    # --- ValidationError handling for dict timestamps ---
+
+    def test_extract_birth_dict_out_of_range_month(self):
+        """Test that out-of-range month in birth dict is handled gracefully."""
+        attributes = {"lifecycle": {"birth": {"year": 1000, "month": 15}}}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.birth is None  # ValidationError caught
+
+    def test_extract_death_dict_out_of_range_day(self):
+        """Test that out-of-range day in death dict is handled gracefully."""
+        attributes = {"lifecycle": {"death": {"year": 1080, "day": 35}}}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.death is None  # ValidationError caught
 
 
 class TestExtractLifecycleFromAttributes:
