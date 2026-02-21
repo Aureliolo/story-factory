@@ -280,6 +280,36 @@ class TestParseTimestamp:
         ts = parse_timestamp("Year 1042")
         assert ts.era_name is None
 
+    def test_parse_json_array_falls_through_to_regex(self):
+        """Test that JSON array input falls through to regex parsing."""
+        ts = parse_timestamp("[1042, 3]")
+        # Array is valid JSON but not a dict, so JSON path returns False
+        # Regex then finds 1042 as a 4-digit number
+        assert ts.year == 1042
+
+    def test_parse_json_non_integer_year(self):
+        """Test that non-integer year in JSON logs warning."""
+        ts = parse_timestamp('{"year": "not_a_number"}')
+        assert ts.year is None
+
+    def test_parse_json_non_integer_month(self):
+        """Test that non-integer month in JSON is handled gracefully."""
+        ts = parse_timestamp('{"year": 1200, "month": "abc"}')
+        assert ts.year == 1200
+        assert ts.month is None
+
+    def test_parse_json_non_integer_day(self):
+        """Test that non-integer day in JSON is handled gracefully."""
+        ts = parse_timestamp('{"year": 1200, "day": "abc"}')
+        assert ts.year == 1200
+        assert ts.day is None
+
+    def test_parse_era_name_skips_empty_segments(self):
+        """Test that empty comma segments don't produce era_name."""
+        ts = parse_timestamp("Year 1200, , ")
+        assert ts.year == 1200
+        assert ts.era_name is None
+
 
 class TestExtractLifecycleFromAttributes:
     """Tests for extract_lifecycle_from_attributes function."""
