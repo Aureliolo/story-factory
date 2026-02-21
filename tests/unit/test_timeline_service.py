@@ -467,6 +467,34 @@ class TestExtractLifecycleFromAttributes:
         assert lifecycle is not None
         assert lifecycle.destruction_year == 1500
 
+    def test_extract_bool_founding_year_ignored(self):
+        """Test that bool founding_year is rejected (bool is subclass of int)."""
+        attributes = {"lifecycle": {"founding_year": True}}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.founding_year is None
+
+    def test_extract_bool_destruction_year_ignored(self):
+        """Test that bool destruction_year is rejected (bool is subclass of int)."""
+        attributes = {"lifecycle": {"destruction_year": False}}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.destruction_year is None
+
+    def test_extract_unexpected_type_founding_year(self):
+        """Test that unexpected type for founding_year logs warning."""
+        attributes = {"lifecycle": {"founding_year": [1000]}}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.founding_year is None
+
+    def test_extract_unexpected_type_destruction_year(self):
+        """Test that unexpected type for destruction_year logs warning."""
+        attributes = {"lifecycle": {"destruction_year": {"year": 1500}}}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.destruction_year is None
+
     def test_extract_malformed_lifecycle_not_dict(self):
         """Test when lifecycle data is not a dict (malformed)."""
         from typing import Any
