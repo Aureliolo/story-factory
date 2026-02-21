@@ -914,6 +914,31 @@ class TestValidateAndNormalizeAttributes:
         # Should not raise, but should flatten
         assert "flattening deep structures" in caplog.text
 
+    def test_deep_attributes_warning_includes_key_names(self, caplog):
+        """Test warning message includes the names of affected deep keys."""
+        attrs = {"shallow": "ok", "deep_one": {"l2": {"l3": {"l4": "too deep"}}}}
+
+        with caplog.at_level(logging.WARNING):
+            validate_and_normalize_attributes(attrs)
+
+        # The warning should identify 'deep_one' as an affected key
+        warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warning_records) >= 1
+        assert "deep_one" in warning_records[0].message
+
+    def test_flatten_logs_key_path(self, caplog):
+        """Test flatten_deep_attributes logs key path at DEBUG level."""
+        attrs = {"outer": {"inner": {"leaf": {"too": "deep"}}}}
+
+        with caplog.at_level(logging.DEBUG):
+            flatten_deep_attributes(attrs, max_depth=3, current_depth=1)
+
+        # Should log path like "outer.inner" at DEBUG level
+        debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+        path_records = [r for r in debug_records if "path:" in r.message]
+        assert len(path_records) >= 1
+        assert "outer.inner" in path_records[0].message
+
 
 class TestWorldDatabaseDestructor:
     """Tests for __del__ destructor."""

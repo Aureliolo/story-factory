@@ -5,6 +5,7 @@ data embedding, batch re-embedding, model change detection, and database
 callback attachment.
 """
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -187,6 +188,95 @@ class TestEmbedText:
             result = service.embed_text("Some text")
 
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# embed_text truncation tests
+# ---------------------------------------------------------------------------
+
+
+class TestEmbedTextTruncation:
+    """Tests for embedding input truncation when text exceeds model context limit."""
+
+    def test_text_truncated_when_exceeds_context_limit(self, service):
+        """Truncates prompt when estimated tokens exceed model context size."""
+        mock_client = MagicMock()
+        response = MagicMock()
+        response.__getitem__ = lambda self, key: FAKE_EMBEDDING if key == "embedding" else None
+        mock_client.embeddings.return_value = response
+
+        long_text = "a" * 3000  # ~750 tokens, should exceed 512 limit
+
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch("src.services.embedding_service.get_model_context_size", return_value=512),
+        ):
+            result = service.embed_text(long_text)
+
+        assert result == FAKE_EMBEDDING
+        # Verify the prompt was truncated: max_chars = (512 - 10) * 4 = 2008
+        call_kwargs = mock_client.embeddings.call_args
+        actual_prompt = call_kwargs.kwargs.get("prompt") or call_kwargs[1].get("prompt")
+        assert len(actual_prompt) <= (512 - 10) * 4
+
+    def test_text_not_truncated_when_within_limit(self, service):
+        """Short text is passed through unchanged when within context limit."""
+        mock_client = MagicMock()
+        response = MagicMock()
+        response.__getitem__ = lambda self, key: FAKE_EMBEDDING if key == "embedding" else None
+        mock_client.embeddings.return_value = response
+
+        short_text = "Hello world"
+
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch("src.services.embedding_service.get_model_context_size", return_value=512),
+        ):
+            result = service.embed_text(short_text)
+
+        assert result == FAKE_EMBEDDING
+        # Prompt should contain the full text (with prefix)
+        call_kwargs = mock_client.embeddings.call_args
+        actual_prompt = call_kwargs.kwargs.get("prompt") or call_kwargs[1].get("prompt")
+        assert short_text in actual_prompt
+
+    def test_no_truncation_when_context_size_unavailable(self, service):
+        """Text is passed as-is when model context size is unavailable (None)."""
+        mock_client = MagicMock()
+        response = MagicMock()
+        response.__getitem__ = lambda self, key: FAKE_EMBEDDING if key == "embedding" else None
+        mock_client.embeddings.return_value = response
+
+        long_text = "b" * 5000
+
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch("src.services.embedding_service.get_model_context_size", return_value=None),
+        ):
+            result = service.embed_text(long_text)
+
+        assert result == FAKE_EMBEDDING
+        call_kwargs = mock_client.embeddings.call_args
+        actual_prompt = call_kwargs.kwargs.get("prompt") or call_kwargs[1].get("prompt")
+        assert long_text in actual_prompt
+
+    def test_truncation_logs_warning(self, service, caplog):
+        """Logs a warning when truncation occurs."""
+        mock_client = MagicMock()
+        response = MagicMock()
+        response.__getitem__ = lambda self, key: FAKE_EMBEDDING if key == "embedding" else None
+        mock_client.embeddings.return_value = response
+
+        long_text = "c" * 3000
+
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch("src.services.embedding_service.get_model_context_size", return_value=512),
+            caplog.at_level(logging.WARNING),
+        ):
+            service.embed_text(long_text)
+
+        assert any("truncated" in r.message.lower() for r in caplog.records)
 
 
 # ---------------------------------------------------------------------------

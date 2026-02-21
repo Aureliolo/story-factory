@@ -16,6 +16,7 @@ import ollama
 from src.memory.entities import Entity, Relationship, WorldEvent
 from src.memory.story_state import StoryState
 from src.memory.world_database import WorldDatabase
+from src.services.llm_client import get_model_context_size
 from src.settings import Settings
 from src.settings._model_registry import get_embedding_prefix
 
@@ -111,6 +112,19 @@ class EmbeddingService:
 
             with self._lock:
                 client = self._get_client()
+                context_limit = get_model_context_size(client, model)
+                if context_limit is not None:
+                    max_chars = (context_limit - 10) * 4  # conservative margin
+                    if len(prompt) > max_chars:
+                        logger.warning(
+                            "Embedding input truncated for model '%s' (est. %d tokens > "
+                            "limit %d). Preview: '%.60s...'",
+                            model,
+                            len(prompt) // 4,
+                            context_limit,
+                            text[:60],
+                        )
+                        prompt = prompt[:max_chars]
                 response = client.embeddings(model=model, prompt=prompt)
 
             embedding: list[float] = response["embedding"]

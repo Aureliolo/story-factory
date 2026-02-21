@@ -154,10 +154,17 @@ class StoryFactoryApp:
             """
             Handle an unhandled UI exception by logging it.
 
+            Downgrades NiceGUI framework teardown errors (parent slot / element
+            deleted) to DEBUG to avoid double-logging with safe_progress_update().
+
             Parameters:
                 e (Exception): The exception to handle.
             """
-            logger.exception("Unhandled UI exception: %s", e)
+            msg = str(e).lower()
+            if isinstance(e, RuntimeError) and ("parent slot" in msg or "has been deleted" in msg):
+                logger.debug("UI element teardown (expected): %s", e)
+            else:
+                logger.exception("Unhandled UI exception: %s", e)
 
         # NiceGUI 3.6+: use app.on_exception for global handling (logging only)
         # ui.on_exception triggers script mode and cannot be used with @ui.page
