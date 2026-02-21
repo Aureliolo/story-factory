@@ -6,6 +6,7 @@ These models define the structure for:
 - Lifecycle tracking for entities
 """
 
+import json
 import logging
 import re
 from typing import TYPE_CHECKING, Any
@@ -255,34 +256,143 @@ class TimelineItem(BaseModel):
         return self.end is not None
 
 
-def parse_timestamp(text: str) -> StoryTimestamp:
-    """
-    Parse a free-form timestamp string into a StoryTimestamp model.
+def _try_parse_json_timestamp(text: str, result: StoryTimestamp) -> bool:
+    """Try to parse text as a JSON object containing timestamp fields.
 
-    Preserves the original input in `raw_text`. Extracts calendar fields (`year`, `month`, `day`) when present; if no year is found, attempts to derive `relative_order` from phrases like "chapter N", "event/part/phase/act N", or from a standalone day value. If no structured information can be determined, the result contains only `raw_text`.
+    Handles LLM output that arrives as stringified JSON, e.g.
+    ``'{"year": -2037, "era_name": "Dark Age"}'``.
 
     Parameters:
-        text (str): The timestamp string to parse.
+        text: The raw input string (stripped).
+        result: StoryTimestamp to populate in-place.
 
     Returns:
-        StoryTimestamp: Parsed timestamp with `raw_text` preserved and any discovered `year`, `month`, `day`, or `relative_order` populated.
+        True if JSON was parsed successfully; False otherwise.
     """
-    logger.debug(f"Parsing timestamp: {text!r}")
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError, ValueError:
+        return False
+
+    if not isinstance(data, dict):
+        return False
+
+    parsed_any = False
+
+    if "year" in data and data["year"] is not None:
+        try:
+            result.year = int(data["year"])
+            parsed_any = True
+        except ValueError, TypeError:
+            logger.warning("JSON timestamp has non-integer year: %r", data["year"])
+
+    if data.get("era_name"):
+        result.era_name = str(data["era_name"])
+        parsed_any = True
+
+    if data.get("calendar_id"):
+        result.calendar_id = str(data["calendar_id"])
+        parsed_any = True
+
+    if "month" in data and data["month"] is not None:
+        try:
+            month_val = int(data["month"])
+            if 1 <= month_val <= 12:
+                result.month = month_val
+                parsed_any = True
+        except ValueError, TypeError:
+            pass
+
+    if "day" in data and data["day"] is not None:
+        try:
+            day_val = int(data["day"])
+            if 1 <= day_val <= 31:
+                result.day = day_val
+                parsed_any = True
+        except ValueError, TypeError:
+            pass
+
+    if parsed_any:
+        logger.debug("Parsed timestamp from JSON: %s", result)
+    return parsed_any
+
+
+def _extract_era_name_from_segments(text: str) -> str | None:
+    """Extract era_name from comma-separated timestamp segments.
+
+    After year/month/day extraction, any remaining segment that does not
+    match a known keyword pattern (year, month, day, chapter, etc.) or
+    start with digits is treated as an era name.
+
+    Parameters:
+        text: The original timestamp string.
+
+    Returns:
+        The era name string, or None if no candidate segment is found.
+    """
+    keyword_pattern = re.compile(
+        r"^\s*(?:year|month|day|chapter|event|part|phase|act|in)\s", re.IGNORECASE
+    )
+    digit_start = re.compile(r"^\s*-?\d")
+
+    for segment in text.split(","):
+        stripped = segment.strip()
+        if not stripped:
+            continue
+        if keyword_pattern.search(stripped):
+            continue
+        if digit_start.match(stripped):
+            continue
+        return stripped
+    return None
+
+
+def parse_timestamp(text: str) -> StoryTimestamp:
+    """Parse a free-form timestamp string into a StoryTimestamp model.
+
+    Preserves the original input in ``raw_text``. First attempts JSON parsing
+    for structured LLM output (e.g. ``{"year": -2037, "era_name": "Dark Age"}``).
+    Then falls back to regex extraction of calendar fields (``year``, ``month``,
+    ``day``).  Supports negative years and BC/BCE suffixes. Extracts ``era_name``
+    from comma-separated segments. If no year is found, attempts to derive
+    ``relative_order`` from phrases like "chapter N", "event/part/phase/act N",
+    or from a standalone day value.
+
+    Parameters:
+        text: The timestamp string to parse.
+
+    Returns:
+        Parsed timestamp with ``raw_text`` preserved and any discovered fields populated.
+    """
+    logger.debug("Parsing timestamp: %r", text)
 
     result = StoryTimestamp(raw_text=text.strip())
+
+    # Strategy 1: Try JSON parsing first (handles stringified LLM output)
+    if _try_parse_json_timestamp(text.strip(), result):
+        return result
+
     text_lower = text.lower().strip()
 
-    # Try to extract year
+    # Strategy 2: Regex extraction
+    # Try to extract year (supports negative years and BC/BCE suffix)
     year_patterns = [
-        r"year\s+(\d+)",
-        r"(\d{3,4})\s*(?:ad|ce|bc|bce)?",  # 3-4 digit numbers
-        r"in\s+(\d{3,4})",
+        (r"year\s+(-?\d+)", False),  # "Year 1042" or "Year -2037"
+        (r"(-?\d{3,4})\s*(ad|ce|bc|bce)\b", True),  # "1042 BCE" — has era suffix
+        (r"(-?\d{3,4})(?:\s|,|$)", False),  # bare 3-4 digit number
+        (r"in\s+(-?\d{3,4})", False),  # "in 1042" or "in -1042"
     ]
-    for pattern in year_patterns:
+    for pattern, has_suffix_group in year_patterns:
         match = re.search(pattern, text_lower)
         if match:
             result.year = int(match.group(1))
-            logger.debug(f"Extracted year: {result.year}")
+            # Negate year for BC/BCE suffix if year is positive
+            if has_suffix_group and match.lastindex is not None and match.lastindex >= 2:
+                suffix = match.group(2)
+                if suffix in ("bc", "bce") and result.year > 0:
+                    result.year = -result.year
+                    logger.debug("Negated year for %s suffix: %d", suffix, result.year)
+            logger.debug("Extracted year: %d", result.year)
             break
 
     # Try to extract month
@@ -296,7 +406,7 @@ def parse_timestamp(text: str) -> StoryTimestamp:
             month_val = int(match.group(1))
             if 1 <= month_val <= 12:
                 result.month = month_val
-                logger.debug(f"Extracted month: {result.month}")
+                logger.debug("Extracted month: %d", result.month)
             break
 
     # Try to extract day
@@ -310,8 +420,15 @@ def parse_timestamp(text: str) -> StoryTimestamp:
             day_val = int(match.group(1))
             if 1 <= day_val <= 31:
                 result.day = day_val
-                logger.debug(f"Extracted day: {result.day}")
+                logger.debug("Extracted day: %d", result.day)
             break
+
+    # Try to extract era_name from comma-separated segments
+    if result.era_name is None:
+        era_candidate = _extract_era_name_from_segments(text)
+        if era_candidate:
+            result.era_name = era_candidate
+            logger.debug("Extracted era_name from segment: %s", result.era_name)
 
     # If no calendar date found, try relative ordering
     if result.year is None:
@@ -319,18 +436,18 @@ def parse_timestamp(text: str) -> StoryTimestamp:
         chapter_match = re.search(r"chapter\s+(\d+)", text_lower)
         if chapter_match:
             result.relative_order = int(chapter_match.group(1))
-            logger.debug(f"Extracted chapter as relative_order: {result.relative_order}")
+            logger.debug("Extracted chapter as relative_order: %d", result.relative_order)
         # Try "event N" or "part N"
         elif event_match := re.search(r"(?:event|part|phase|act)\s+(\d+)", text_lower):
             result.relative_order = int(event_match.group(1))
-            logger.debug(f"Extracted event/part as relative_order: {result.relative_order}")
+            logger.debug("Extracted event/part as relative_order: %d", result.relative_order)
         # If we only have day and nothing else, use it as relative order
         elif result.day is not None and result.year is None and result.month is None:
             result.relative_order = result.day
             result.day = None  # Clear day since we're using relative ordering
-            logger.debug(f"Using standalone day as relative_order: {result.relative_order}")
+            logger.debug("Using standalone day as relative_order: %d", result.relative_order)
 
-    logger.debug(f"Parsed timestamp result: {result}")
+    logger.debug("Parsed timestamp result: %s", result)
     return result
 
 
@@ -399,15 +516,21 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
     if founding is not None:
         if isinstance(founding, int):
             result.founding_year = founding
-        elif isinstance(founding, str) and founding.isdigit():
-            result.founding_year = int(founding)
+        elif isinstance(founding, str):
+            try:
+                result.founding_year = int(founding)
+            except ValueError:
+                logger.warning("Could not parse founding_year string: %r", founding)
 
     destruction = lifecycle_data.get("destruction_year")
     if destruction is not None:
         if isinstance(destruction, int):
             result.destruction_year = destruction
-        elif isinstance(destruction, str) and destruction.isdigit():
-            result.destruction_year = int(destruction)
+        elif isinstance(destruction, str):
+            try:
+                result.destruction_year = int(destruction)
+            except ValueError:
+                logger.warning("Could not parse destruction_year string: %r", destruction)
 
     logger.debug(
         f"Extracted lifecycle: birth={result.birth}, death={result.death}, "

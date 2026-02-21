@@ -181,6 +181,105 @@ class TestParseTimestamp:
         ts = parse_timestamp("Before the great war")
         assert ts.raw_text == "Before the great war"
 
+    # --- Negative year tests (Issue #383 C1) ---
+
+    def test_parse_negative_year_json(self):
+        """Test parsing JSON with negative year."""
+        ts = parse_timestamp('{"year": -2037}')
+        assert ts.year == -2037
+
+    def test_parse_negative_year_with_era_json(self):
+        """Test parsing JSON with negative year and era_name."""
+        ts = parse_timestamp('{"era_name": "Era 2", "year": -10}')
+        assert ts.year == -10
+        assert ts.era_name == "Era 2"
+
+    def test_parse_compound_negative_year_string(self):
+        """Test parsing compound string extracts first year, not range."""
+        ts = parse_timestamp("Year -10, Era 3: -500 - -101")
+        assert ts.year == -10
+
+    def test_parse_negative_year_string(self):
+        """Test parsing 'Year -2037' string format."""
+        ts = parse_timestamp("Year -2037")
+        assert ts.year == -2037
+
+    def test_parse_year_with_bce_suffix(self):
+        """Test parsing year with BCE suffix negates the year."""
+        ts = parse_timestamp("1042 BCE")
+        assert ts.year == -1042
+
+    def test_parse_year_with_bc_suffix(self):
+        """Test parsing year with BC suffix negates the year."""
+        ts = parse_timestamp("1042 BC")
+        assert ts.year == -1042
+
+    def test_parse_year_ad_remains_positive(self):
+        """Test parsing year with AD suffix stays positive."""
+        ts = parse_timestamp("1042 AD")
+        assert ts.year == 1042
+
+    def test_parse_year_ce_remains_positive(self):
+        """Test parsing year with CE suffix stays positive."""
+        ts = parse_timestamp("500 CE")
+        assert ts.year == 500
+
+    def test_parse_negative_year_already_negative_with_bce(self):
+        """Test that -1042 BCE does not double-negate."""
+        ts = parse_timestamp("-1042 BCE")
+        assert ts.year == -1042
+
+    # --- era_name extraction tests (Issue #383 H6) ---
+
+    def test_parse_era_name_from_json(self):
+        """Test era_name is extracted from JSON input."""
+        ts = parse_timestamp('{"year": 1200, "era_name": "Dark Age"}')
+        assert ts.year == 1200
+        assert ts.era_name == "Dark Age"
+
+    def test_parse_calendar_id_from_json(self):
+        """Test calendar_id is extracted from JSON input."""
+        ts = parse_timestamp('{"year": 1200, "calendar_id": "abc123"}')
+        assert ts.year == 1200
+        assert ts.calendar_id == "abc123"
+
+    def test_parse_era_name_from_comma_separated_string(self):
+        """Test era_name extracted from 'Year 1200, Dark Age'."""
+        ts = parse_timestamp("Year 1200, Dark Age")
+        assert ts.year == 1200
+        assert ts.era_name == "Dark Age"
+
+    def test_parse_era_name_with_month(self):
+        """Test era_name extracted from 'Year 1200, Month 3, Dark Age'."""
+        ts = parse_timestamp("Year 1200, Month 3, Dark Age")
+        assert ts.year == 1200
+        assert ts.month == 3
+        assert ts.era_name == "Dark Age"
+
+    def test_parse_json_month_day_validation(self):
+        """Test JSON parsing validates month and day ranges."""
+        ts = parse_timestamp('{"year": 1200, "month": 13, "day": 32}')
+        assert ts.year == 1200
+        assert ts.month is None  # 13 is out of range
+        assert ts.day is None  # 32 is out of range
+
+    def test_parse_json_full_timestamp(self):
+        """Test JSON parsing with all fields present."""
+        ts = parse_timestamp(
+            '{"year": -500, "month": 6, "day": 15, "era_name": "Ancient Era", '
+            '"calendar_id": "cal-1"}'
+        )
+        assert ts.year == -500
+        assert ts.month == 6
+        assert ts.day == 15
+        assert ts.era_name == "Ancient Era"
+        assert ts.calendar_id == "cal-1"
+
+    def test_parse_non_json_string_no_era(self):
+        """Test that non-JSON strings without era segments don't set era_name."""
+        ts = parse_timestamp("Year 1042")
+        assert ts.era_name is None
+
 
 class TestExtractLifecycleFromAttributes:
     """Tests for extract_lifecycle_from_attributes function."""
@@ -256,6 +355,34 @@ class TestExtractLifecycleFromAttributes:
         assert lifecycle is not None
         assert lifecycle.birth is None
         assert lifecycle.death is None
+
+    def test_extract_negative_founding_year_int(self):
+        """Test extracting negative founding_year as int."""
+        attributes = {"lifecycle": {"founding_year": -500}}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.founding_year == -500
+
+    def test_extract_negative_founding_year_string(self):
+        """Test extracting negative founding_year as string."""
+        attributes = {"lifecycle": {"founding_year": "-500"}}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.founding_year == -500
+
+    def test_extract_negative_destruction_year_string(self):
+        """Test extracting negative destruction_year as string."""
+        attributes = {"lifecycle": {"destruction_year": "-100"}}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.destruction_year == -100
+
+    def test_extract_invalid_founding_year_string(self):
+        """Test that unparseable founding_year string is handled gracefully."""
+        attributes = {"lifecycle": {"founding_year": "unknown"}}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.founding_year is None
 
     def test_extract_malformed_lifecycle_not_dict(self):
         """Test when lifecycle data is not a dict (malformed)."""

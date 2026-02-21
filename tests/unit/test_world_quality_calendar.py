@@ -409,6 +409,55 @@ class TestGeneratedDataToWorldCalendar:
         assert calendar.era_start_year == 1
         assert calendar.eras == []
 
+    def test_era_lookup_case_insensitive(self):
+        """Test that era lookup matches case-insensitively."""
+        data = GeneratedCalendarData(
+            era_name="dark age",  # Lowercase
+            era_abbreviation="DA",
+            current_year=500,
+            months=[{"name": "Frostmoon", "days": 30}],
+            day_names=["Day1"],
+            historical_eras=[
+                {"name": "Dark Age", "start_year": 100, "end_year": None, "description": ""},
+            ],
+        )
+        calendar = _generated_data_to_world_calendar(data)
+        assert calendar.era_start_year == 100
+
+    def test_era_lookup_ongoing_fallback(self):
+        """Test that ongoing era (end_year=None) is used when name doesn't match."""
+        data = GeneratedCalendarData(
+            era_name="Custom Era Name",  # Doesn't match any era
+            era_abbreviation="CE",
+            current_year=500,
+            months=[{"name": "Frostmoon", "days": 30}],
+            day_names=["Day1"],
+            historical_eras=[
+                {"name": "Era 1", "start_year": 1, "end_year": 99, "description": "Past"},
+                {"name": "Era 2", "start_year": 100, "end_year": None, "description": "Current"},
+            ],
+        )
+        calendar = _generated_data_to_world_calendar(data)
+        # Should use the ongoing era (Era 2, start_year=100), not the last era
+        assert calendar.era_start_year == 100
+
+    def test_era_lookup_no_match_no_ongoing_falls_back_to_last(self):
+        """Test fallback to last era when no match and no ongoing era."""
+        data = GeneratedCalendarData(
+            era_name="Nonexistent Era",
+            era_abbreviation="NE",
+            current_year=500,
+            months=[{"name": "Frostmoon", "days": 30}],
+            day_names=["Day1"],
+            historical_eras=[
+                {"name": "Era 1", "start_year": 1, "end_year": 99, "description": "Past"},
+                {"name": "Era 2", "start_year": 100, "end_year": 299, "description": "Also past"},
+            ],
+        )
+        calendar = _generated_data_to_world_calendar(data)
+        # Falls back to last era's start_year
+        assert calendar.era_start_year == 100
+
 
 class TestCalendarContext:
     """Tests for calendar context methods on WorldQualityService."""
