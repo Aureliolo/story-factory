@@ -331,3 +331,36 @@ class TestRecoverOrphansEntityIdResolution:
         assert len(orphan_rels) == 1
         assert orphan_rels[0].relation_type == "inspires"
         assert orphan_rels[0].target_id == hero_id
+
+    def test_neither_endpoint_matches_orphan_name_falls_back_to_fuzzy(
+        self, mock_svc, story_state, mock_world_db, mock_services
+    ):
+        """Test fallback to fuzzy name lookup when neither endpoint matches the orphan name."""
+        mock_world_db.add_entity("character", "Hero", "A brave hero")
+        villain_id = mock_world_db.add_entity("character", "Villain", "Evil villain")
+        castle_id = mock_world_db.add_entity("location", "Castle", "Dark castle")
+        mock_world_db.add_relationship(villain_id, castle_id, "resides_in", "Lives in castle")
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        # Quality service returns a relationship where neither name matches orphan "Hero"
+        # (LLM used a different spelling/variation)
+        mock_services.world_quality.generate_relationship_with_quality.return_value = (
+            {
+                "source": "The Hero",
+                "target": "Villain",
+                "relation_type": "rivals",
+                "description": "They are rivals",
+            },
+            mock_quality_scores,
+            1,
+        )
+
+        count = _recover_orphans(mock_svc, story_state, mock_world_db, mock_services)
+
+        assert count == 1
+        # Both endpoints resolved via fuzzy matching (neither exactly matched orphan name)
+        relationships = mock_world_db.list_relationships()
+        rival_rels = [r for r in relationships if r.relation_type == "rivals"]
+        assert len(rival_rels) == 1
