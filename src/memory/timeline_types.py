@@ -326,6 +326,10 @@ def _try_parse_json_timestamp(text: str) -> StoryTimestamp | None:
 
 
 _CALENDAR_SUFFIXES = frozenset({"bc", "bce", "ad", "ce"})
+_KEYWORD_PATTERN = re.compile(
+    r"^\s*(?:year|month|day|chapter|event|part|phase|act|in)\s", re.IGNORECASE
+)
+_DIGIT_START = re.compile(r"^\s*-?\d")
 
 
 def _extract_era_name_from_segments(text: str) -> str | None:
@@ -343,19 +347,15 @@ def _extract_era_name_from_segments(text: str) -> str | None:
         The era name string, or None if no candidate segment is found.
     """
     logger.debug("Extracting era name from segments: %r", text)
-    keyword_pattern = re.compile(
-        r"^\s*(?:year|month|day|chapter|event|part|phase|act|in)\s", re.IGNORECASE
-    )
-    digit_start = re.compile(r"^\s*-?\d")
 
     for segment in text.split(","):
         stripped = segment.strip()
         if not stripped:
             continue
-        if keyword_pattern.match(stripped):
+        if _KEYWORD_PATTERN.match(stripped):
             logger.debug("Skipping keyword segment: %r", stripped)
             continue
-        if digit_start.match(stripped):
+        if _DIGIT_START.match(stripped):
             logger.debug("Skipping digit-start segment: %r", stripped)
             continue
         if stripped.lower() in _CALENDAR_SUFFIXES:
@@ -473,6 +473,37 @@ def parse_timestamp(text: str) -> StoryTimestamp:
     return result
 
 
+def _parse_year(value: object, field_name: str) -> int | None:
+    """Coerce a raw LLM year value to int, with type-aware logging.
+
+    Handles: bool (rejected), int (pass-through), float (truncated to int),
+    str (parsed via ``int()``), and anything else (logged and rejected).
+
+    Parameters:
+        value: The raw value from LLM output (any type).
+        field_name: Field label for log messages (e.g. "founding_year").
+
+    Returns:
+        The year as an int, or None if the value cannot be converted.
+    """
+    if isinstance(value, bool):
+        logger.warning("Unexpected %s type: bool (%r)", field_name, value)
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        logger.debug("Converted float %s to int: %s", field_name, value)
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            logger.warning("Could not parse %s string: %r", field_name, value)
+            return None
+    logger.warning("Unexpected %s type: %s (%r)", field_name, type(value).__name__, value)
+    return None
+
+
 def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifecycle | None:
     """
     Build an EntityLifecycle from an attributes dictionary's "lifecycle" entry.
@@ -539,45 +570,11 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
     # Use 'is not None' to handle year 0 correctly
     founding = lifecycle_data.get("founding_year")
     if founding is not None:
-        if isinstance(founding, bool):
-            logger.warning("Unexpected founding_year type: bool (%r)", founding)
-        elif isinstance(founding, int):
-            result.founding_year = founding
-        elif isinstance(founding, float):
-            result.founding_year = int(founding)
-            logger.debug("Converted float founding_year to int: %s", founding)
-        elif isinstance(founding, str):
-            try:
-                result.founding_year = int(founding)
-            except ValueError:
-                logger.warning("Could not parse founding_year string: %r", founding)
-        else:
-            logger.warning(
-                "Unexpected founding_year type: %s (%r)",
-                type(founding).__name__,
-                founding,
-            )
+        result.founding_year = _parse_year(founding, "founding_year")
 
     destruction = lifecycle_data.get("destruction_year")
     if destruction is not None:
-        if isinstance(destruction, bool):
-            logger.warning("Unexpected destruction_year type: bool (%r)", destruction)
-        elif isinstance(destruction, int):
-            result.destruction_year = destruction
-        elif isinstance(destruction, float):
-            result.destruction_year = int(destruction)
-            logger.debug("Converted float destruction_year to int: %s", destruction)
-        elif isinstance(destruction, str):
-            try:
-                result.destruction_year = int(destruction)
-            except ValueError:
-                logger.warning("Could not parse destruction_year string: %r", destruction)
-        else:
-            logger.warning(
-                "Unexpected destruction_year type: %s (%r)",
-                type(destruction).__name__,
-                destruction,
-            )
+        result.destruction_year = _parse_year(destruction, "destruction_year")
 
     logger.debug(
         "Extracted lifecycle: birth=%s, death=%s, founding=%s, destruction=%s",
