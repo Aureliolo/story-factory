@@ -88,10 +88,14 @@ class TestEntityFrequencyHintReturnsTuple:
 
         # Should return a Counter
         assert isinstance(freq, Counter)
-        # Alpha appears 4 times (as source in all 4)
+        # Alpha appears in 4 relationships (as source in all 4)
         assert freq["Alpha"] == 4
-        # Beta appears twice
+        # Beta appears in 2 relationships (as target in "knows" and "mentors")
         assert freq["Beta"] == 2
+        # Gamma appears once (as target in "rivals")
+        assert freq["Gamma"] == 1
+        # Delta appears once (as target in "allies_with")
+        assert freq["Delta"] == 1
         # Hint should mention over-connected Alpha
         assert "Alpha" in hint
 
@@ -110,6 +114,9 @@ class TestEntityFrequencyHintReturnsTuple:
 
         assert hint == ""
         assert isinstance(freq, Counter)
+        # Counter should still be populated even when hint is empty
+        assert freq["Alpha"] == 1  # source in ("Alpha", "Beta", "knows")
+        assert freq["Beta"] == 1  # target in ("Alpha", "Beta", "knows")
 
     def test_counter_reusable_for_sorting(self, story_state):
         """Returned counter can be used for sorting unused pairs."""

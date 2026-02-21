@@ -301,6 +301,8 @@ class Settings:
     # Timeout settings (in seconds)
     ollama_timeout: int = 120  # Timeout for Ollama API requests
     subprocess_timeout: int = 10  # Timeout for subprocess calls (ollama list, etc.)
+    small_model_size_threshold_gb: float = 5.0  # Models under this size get capped timeout
+    small_model_timeout_cap: float = 45.0  # Max timeout (s) for small models
 
     # World quality refinement settings
     world_quality_enabled: bool = True  # Enable quality refinement for world generation
@@ -834,7 +836,11 @@ class Settings:
         """Get timeout scaled by model size. Larger models need more time.
 
         Scaling formula: base_timeout * (1 + size_gb / 20)
-        Examples with 120s base timeout:
+        Small models (below ``small_model_size_threshold_gb``) are capped at
+        ``small_model_timeout_cap`` to detect hung calls faster.
+
+        Examples with 120s base timeout (default thresholds):
+        - 4GB model: 45s (capped — small models capped at small_model_timeout_cap)
         - 5GB model: 150s
         - 20GB model: 240s
         - 40GB model: 360s
@@ -862,10 +868,9 @@ class Settings:
         scale_factor = 1 + (size_gb / 20)
         scaled = base_timeout * scale_factor
 
-        # Small models (< 5GB) are fast — cap their timeout to avoid
-        # long waits on hung calls.
-        if size_gb < 5.0:
-            scaled = min(scaled, 45.0)
+        # Small models are fast — cap their timeout to detect hangs faster.
+        if size_gb < self.small_model_size_threshold_gb:
+            scaled = min(scaled, self.small_model_timeout_cap)
 
         logger.debug(f"Timeout for {model_id}: {scaled:.0f}s (size={size_gb:.1f}GB)")
         return scaled

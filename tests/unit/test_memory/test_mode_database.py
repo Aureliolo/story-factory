@@ -1947,7 +1947,7 @@ class TestRefinementEffectivenessTracking:
             project_id="test-project",
             entity_type="character",
             entity_name="Hero",
-            model_id="huihui_ai/dolphin3-abliterated:8b",
+            model_id="test-model:8b",
             scores=scores,
             iterations_used=3,
             generation_time_seconds=5.5,
@@ -2266,11 +2266,14 @@ class TestSharedModeDatabasePattern:
         assert p1_scores[0]["model_id"] == "model-a"
         assert p2_scores[0]["model_id"] == "model-b"
 
-    def test_service_container_exposes_mode_db(self) -> None:
-        """ServiceContainer should expose mode_db from ModelModeService._db."""
+    def test_service_container_exposes_mode_db(self, tmp_path: Path) -> None:
+        """ServiceContainer should expose mode_db from ModelModeService.db."""
+        from unittest.mock import patch
+
         from src.services import ServiceContainer
 
-        container = ServiceContainer()
-        # mode_db should be the same object as mode._db
-        assert container.mode_db is container.mode._db
+        with patch("src.memory.mode_database.DEFAULT_DB_PATH", tmp_path / "mode_scores.db"):
+            container = ServiceContainer()
+        # mode_db should be the same object as mode.db (public property)
+        assert container.mode_db is container.mode.db
         assert isinstance(container.mode_db, ModeDatabase)

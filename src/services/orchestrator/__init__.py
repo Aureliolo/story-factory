@@ -351,7 +351,9 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         try:
             from src.memory.mode_database import ModeDatabase
 
-            db = self._mode_db if self._mode_db is not None else ModeDatabase()
+            if self._mode_db is None:
+                self._mode_db = ModeDatabase()
+            db = self._mode_db
 
             # Get historical times for current model and role
             genre = self.story_state.brief.genre if self.story_state.brief else None

@@ -3247,7 +3247,7 @@ class TestGetScaledTimeout:
         from src.settings._types import ModelInfo
 
         mock_info = ModelInfo(
-            name="phi4-mini:latest",
+            name="fake-mini:latest",
             size_gb=2.3,
             vram_required=3,
             quality=4,
@@ -3259,7 +3259,7 @@ class TestGetScaledTimeout:
         with patch("src.settings._utils.get_model_info", return_value=mock_info):
             settings = Settings()
             settings.ollama_timeout = 120
-            timeout = settings.get_scaled_timeout("phi4-mini:latest")
+            timeout = settings.get_scaled_timeout("fake-mini:latest")
 
         # Formula: 120 * (1 + 2.3/20) = 120 * 1.115 = 133.8, but capped to 45
         assert timeout == 45.0
@@ -3271,7 +3271,7 @@ class TestGetScaledTimeout:
         from src.settings._types import ModelInfo
 
         mock_info = ModelInfo(
-            name="small-model:3b",
+            name="fake-small:3b",
             size_gb=4.9,
             vram_required=6,
             quality=5,
@@ -3283,7 +3283,7 @@ class TestGetScaledTimeout:
         with patch("src.settings._utils.get_model_info", return_value=mock_info):
             settings = Settings()
             settings.ollama_timeout = 120
-            timeout = settings.get_scaled_timeout("small-model:3b")
+            timeout = settings.get_scaled_timeout("fake-small:3b")
 
         # Formula: 120 * (1 + 4.9/20) = 120 * 1.245 = 149.4, capped to 45
         assert timeout == 45.0
@@ -3295,7 +3295,7 @@ class TestGetScaledTimeout:
         from src.settings._types import ModelInfo
 
         mock_info = ModelInfo(
-            name="medium-model:5b",
+            name="fake-medium:5b",
             size_gb=5.0,
             vram_required=6,
             quality=5,
@@ -3307,7 +3307,7 @@ class TestGetScaledTimeout:
         with patch("src.settings._utils.get_model_info", return_value=mock_info):
             settings = Settings()
             settings.ollama_timeout = 120
-            timeout = settings.get_scaled_timeout("medium-model:5b")
+            timeout = settings.get_scaled_timeout("fake-medium:5b")
 
         # Formula: 120 * (1 + 5/20) = 120 * 1.25 = 150 — not capped (>=5GB)
         assert timeout == 150.0

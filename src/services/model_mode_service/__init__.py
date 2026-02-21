@@ -74,6 +74,15 @@ class ModelModeService:
         self._loaded_models: set[str] = set()
         logger.debug("ModelModeService initialized successfully")
 
+    @property
+    def db(self) -> ModeDatabase:
+        """Shared ModeDatabase instance for external consumers.
+
+        Returns:
+            ModeDatabase: The underlying scoring/analytics database.
+        """
+        return self._db
+
     # === Mode Management ===
 
     def get_current_mode(self) -> GenerationMode:

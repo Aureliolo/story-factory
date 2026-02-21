@@ -93,7 +93,7 @@ class ServiceContainer:
         self.model = ModelService(self.settings)
         self.export = ExportService(self.settings)
         self.mode = ModelModeService(self.settings)
-        self.mode_db = self.mode._db  # shared ModeDatabase instance
+        self.mode_db = self.mode.db  # shared ModeDatabase instance
         self.scoring = ScoringService(self.mode)
         self.context_retrieval = ContextRetrievalService(self.settings, self.embedding)
         self.timeline = TimelineService(self.settings)
@@ -117,7 +117,7 @@ class ServiceContainer:
         self.world_template = WorldTemplateService(self.settings)
         self.content_guidelines = ContentGuidelinesService(self.settings)
         self.calendar = CalendarService(self.settings)
-        service_count = len(self.__class__.__annotations__) - 1  # exclude 'settings'
+        service_count = len(self.__class__.__annotations__) - 2  # exclude 'settings' and 'mode_db'
         logger.info(
             "ServiceContainer initialized: %d services in %.2fs",
             service_count,

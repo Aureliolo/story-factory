@@ -246,6 +246,7 @@ class WorldQualityService(EntityDelegatesMixin):
         self._client: ollama.Client | None = None
         self._analytics_db: ModeDatabase | None = mode_db
         self._judge_config: JudgeConsistencyConfig | None = None
+        self._judge_config_lock = threading.RLock()
         self._model_cache = ModelResolutionCache(settings, mode_service)
         self._calendar_context: str | None = None
         self._calendar_context_lock = threading.RLock()
@@ -418,13 +419,15 @@ class WorldQualityService(EntityDelegatesMixin):
         Provide the judge consistency configuration derived from the service settings.
 
         Returns cached instance on subsequent calls. Cleared by invalidate_model_cache().
+        Thread-safe: guarded by ``_judge_config_lock``.
 
         Returns:
             JudgeConsistencyConfig: Configuration for judge consistency constructed from the current settings.
         """
-        if self._judge_config is None:
-            self._judge_config = JudgeConsistencyConfig.from_settings(self.settings)
-        return self._judge_config
+        with self._judge_config_lock:
+            if self._judge_config is None:
+                self._judge_config = JudgeConsistencyConfig.from_settings(self.settings)
+            return self._judge_config
 
     def _resolve_model_for_role(self, agent_role: str) -> str:
         """
@@ -440,13 +443,16 @@ class WorldQualityService(EntityDelegatesMixin):
 
     def invalidate_model_cache(self) -> None:
         """
-        Clear cached model resolution mappings and judge config.
+        Clear cached model resolution mappings, judge config, and Ollama client.
 
         Forces subsequent model-resolution calls to recompute models instead of using cached results.
-        Also clears the cached JudgeConsistencyConfig so settings changes take effect.
+        Also clears the cached JudgeConsistencyConfig and Ollama client so settings changes
+        (including timeout and URL) take effect.
         """
         self._model_cache.invalidate()
-        self._judge_config = None
+        with self._judge_config_lock:
+            self._judge_config = None
+        self._client = None
 
     def _get_creator_model(self, entity_type: str | None = None) -> str:
         """
