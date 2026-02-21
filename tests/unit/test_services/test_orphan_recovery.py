@@ -332,6 +332,46 @@ class TestRecoverOrphansEntityIdResolution:
         assert orphan_rels[0].relation_type == "inspires"
         assert orphan_rels[0].target_id == hero_id
 
+    def test_orphan_as_target_resolves_by_id(
+        self, mock_svc, story_state, mock_world_db, mock_services
+    ):
+        """Test orphan is correctly used when its name matches the target endpoint."""
+        faction_id = mock_world_db.add_entity(
+            "faction", "The Feathered Dominion", "A powerful bird faction"
+        )
+        concept_id = mock_world_db.add_entity(
+            "concept", "The Feathered Dominion", "Philosophical concept of avian rule"
+        )
+        hero_id = mock_world_db.add_entity("character", "Hero", "A brave hero")
+
+        # Connect hero and faction so concept is the orphan
+        mock_world_db.add_relationship(hero_id, faction_id, "member_of", "Belongs to faction")
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        # Quality service returns orphan as TARGET (not source)
+        mock_services.world_quality.generate_relationship_with_quality.return_value = (
+            {
+                "source": "Hero",
+                "target": "The Feathered Dominion",
+                "relation_type": "studies",
+                "description": "The hero studies the concept",
+            },
+            mock_quality_scores,
+            1,
+        )
+
+        count = _recover_orphans(mock_svc, story_state, mock_world_db, mock_services)
+
+        assert count == 1
+        # Verify the relationship was created with the CONCEPT entity (the orphan) as target
+        relationships = mock_world_db.list_relationships()
+        orphan_rels = [r for r in relationships if r.target_id == concept_id]
+        assert len(orphan_rels) == 1
+        assert orphan_rels[0].relation_type == "studies"
+        assert orphan_rels[0].source_id == hero_id
+
     def test_neither_endpoint_matches_orphan_name_falls_back_to_fuzzy(
         self, mock_svc, story_state, mock_world_db, mock_services
     ):
