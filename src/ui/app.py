@@ -155,7 +155,8 @@ class StoryFactoryApp:
             Handle an unhandled UI exception by logging it.
 
             Downgrades NiceGUI framework teardown errors (parent slot / element
-            deleted) to DEBUG to avoid double-logging with safe_progress_update().
+            deleted) to DEBUG to avoid double-logging with
+            safe_progress_update() in src/ui/components/build_dialog.py.
 
             Parameters:
                 e (Exception): The exception to handle.

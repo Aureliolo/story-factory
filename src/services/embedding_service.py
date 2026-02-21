@@ -9,7 +9,7 @@ change and batch re-embedding when the model changes.
 import hashlib
 import logging
 import threading
-from typing import Any
+from collections.abc import Callable
 
 import ollama
 
@@ -21,6 +21,11 @@ from src.settings import Settings
 from src.settings._model_registry import get_embedding_prefix
 
 logger = logging.getLogger(__name__)
+
+# Embedding context-limit constants
+_MIN_USABLE_CONTEXT_TOKENS = 10  # Below this, context window is unusable
+_EMBEDDING_CONTEXT_MARGIN_TOKENS = 10  # Reserve tokens for model overhead
+_CHARS_PER_TOKEN_ESTIMATE = 2  # Conservative char-to-token ratio (safe for CJK/code)
 
 
 class EmbeddingService:
@@ -94,7 +99,10 @@ class EmbeddingService:
         """Generate an embedding vector for the given text.
 
         Applies the model-specific prompt prefix from the registry for optimal
-        embedding quality.
+        embedding quality. If the combined prefix + text exceeds the model's
+        context window, the prompt is truncated with a warning log. Returns an
+        empty list if the model reports an unusably small context size
+        (<= _MIN_USABLE_CONTEXT_TOKENS tokens).
 
         Args:
             text: The text to embed.
@@ -114,20 +122,33 @@ class EmbeddingService:
                 client = self._get_client()
                 context_limit = get_model_context_size(client, model)
                 if context_limit is not None:
-                    if context_limit <= 10:
-                        logger.warning(
-                            "Invalid context size %d for model '%s'; skipping embedding",
+                    if context_limit <= _MIN_USABLE_CONTEXT_TOKENS:
+                        logger.error(
+                            "Invalid context size %d for model '%s'; skipping embedding. "
+                            "Check 'ollama show %s' for model metadata issues.",
+                            context_limit,
+                            model,
+                            model,
+                        )
+                        return []
+                    max_chars = (
+                        context_limit - _EMBEDDING_CONTEXT_MARGIN_TOKENS
+                    ) * _CHARS_PER_TOKEN_ESTIMATE
+                    prefix_len = len(prefix)
+                    if max_chars <= prefix_len:
+                        logger.error(
+                            "Context limit %d too small to embed any content beyond "
+                            "prefix for model '%s'; skipping embedding",
                             context_limit,
                             model,
                         )
                         return []
-                    max_chars = (context_limit - 10) * 4  # conservative margin
                     if len(prompt) > max_chars:
                         logger.warning(
                             "Embedding input truncated for model '%s' (est. %d tokens > "
-                            "limit %d). Preview: '%.60s...'",
+                            "limit %d). Preview: '%s...'",
                             model,
-                            len(prompt) // 4,
+                            len(prompt) // _CHARS_PER_TOKEN_ESTIMATE,
                             context_limit,
                             text[:60],
                         )
@@ -336,7 +357,7 @@ class EmbeddingService:
         self,
         db: WorldDatabase,
         story_state: StoryState,
-        progress_callback: Any = None,
+        progress_callback: Callable[[int, int, str], None] | None = None,
     ) -> dict[str, int]:
         """Batch-embed all world content: entities, relationships, events, and story state.
 
@@ -395,8 +416,8 @@ class EmbeddingService:
         """Check if re-embedding is needed and perform it if so.
 
         Triggers full re-embedding when the model has changed (detected by
-        comparing stored model names with current setting). Skips if content
-        hashes are unchanged.
+        comparing stored model names with current setting). Skips if the
+        model has not changed since the last embedding run.
 
         Args:
             db: WorldDatabase instance.
