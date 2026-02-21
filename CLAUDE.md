@@ -198,9 +198,10 @@ Diagnostic and investigation scripts in `scripts/`:
 Custom Claude Code skills in `.claude/skills/`:
 - `analyze-logs` — Multi-agent log analysis (10 specialists + coordinator)
 - `aurelio-review-pr` — Full PR review pipeline with local + external feedback
+- `post-merge-cleanup` — Switch to default branch, pull, delete merged branches, prune remotes
 - `story-factory` — Project workflow reference patterns
 
-Invoke via `/analyze-logs`, `/aurelio-review-pr`, etc.
+Invoke via `/analyze-logs`, `/aurelio-review-pr`, `/post-merge-cleanup`, etc.
 
 ## Testing
 
