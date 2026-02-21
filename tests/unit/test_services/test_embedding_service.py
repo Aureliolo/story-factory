@@ -341,6 +341,24 @@ class TestEmbedTextTruncation:
         # Should be caught by the generic except Exception handler
         assert result == []
 
+    def test_context_limit_too_small_for_prefix_returns_empty(self, service, caplog):
+        """Returns empty list when max_chars is smaller than the prefix length."""
+        mock_client = MagicMock()
+        # context_limit=15 → max_chars = (15-10)*2 = 10, prefix_len=11 → guard triggers
+        long_prefix = "x" * 11
+
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch("src.services.embedding_service.get_model_context_size", return_value=15),
+            patch("src.services.embedding_service.get_embedding_prefix", return_value=long_prefix),
+            caplog.at_level(logging.ERROR),
+        ):
+            result = service.embed_text("Some text")
+
+        assert result == []
+        mock_client.embeddings.assert_not_called()
+        assert any("too small to embed" in msg.lower() for msg in caplog.messages)
+
     def test_context_limit_exactly_10_returns_empty(self, service, caplog):
         """context_limit == 10 is treated as invalid and returns empty."""
         mock_client = MagicMock()
