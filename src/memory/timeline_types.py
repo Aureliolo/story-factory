@@ -342,6 +342,7 @@ def _extract_era_name_from_segments(text: str) -> str | None:
     Returns:
         The era name string, or None if no candidate segment is found.
     """
+    logger.debug("Extracting era name from segments: %r", text)
     keyword_pattern = re.compile(
         r"^\s*(?:year|month|day|chapter|event|part|phase|act|in)\s", re.IGNORECASE
     )
@@ -352,12 +353,17 @@ def _extract_era_name_from_segments(text: str) -> str | None:
         if not stripped:
             continue
         if keyword_pattern.match(stripped):
+            logger.debug("Skipping keyword segment: %r", stripped)
             continue
         if digit_start.match(stripped):
+            logger.debug("Skipping digit-start segment: %r", stripped)
             continue
         if stripped.lower() in _CALENDAR_SUFFIXES:
+            logger.debug("Skipping calendar suffix segment: %r", stripped)
             continue
+        logger.debug("Found era name candidate: %r", stripped)
         return stripped
+    logger.debug("No era name candidate found in: %r", text)
     return None
 
 
@@ -388,7 +394,7 @@ def parse_timestamp(text: str) -> StoryTimestamp:
         return json_result
 
     result = StoryTimestamp(raw_text=stripped)
-    text_lower = text.lower().strip()
+    text_lower = stripped.lower()
 
     # Strategy 2: Regex extraction
     # Try to extract year (supports negative years and BC/BCE suffix)

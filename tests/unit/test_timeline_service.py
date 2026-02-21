@@ -1,6 +1,7 @@
 """Tests for the timeline service."""
 
 from datetime import datetime
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -497,8 +498,6 @@ class TestExtractLifecycleFromAttributes:
 
     def test_extract_malformed_lifecycle_not_dict(self):
         """Test when lifecycle data is not a dict (malformed)."""
-        from typing import Any
-
         # String instead of dict
         attributes: dict[str, Any] = {"lifecycle": "invalid string lifecycle"}
         lifecycle = extract_lifecycle_from_attributes(attributes)
