@@ -176,13 +176,13 @@ class EntityLifecycle(BaseModel):
         if self.birth and self.birth.year is not None:
             if self.death and self.death.year is not None:
                 result = self.death.year - self.birth.year
-                logger.debug(f"EntityLifecycle.lifespan (birth/death): {result}")
+                logger.debug("EntityLifecycle.lifespan (birth/death): %s", result)
                 return result
         # For factions/locations: use founding/destruction
         if self.founding_year is not None:
             if self.destruction_year is not None:
                 result = self.destruction_year - self.founding_year
-                logger.debug(f"EntityLifecycle.lifespan (founding/destruction): {result}")
+                logger.debug("EntityLifecycle.lifespan (founding/destruction): %s", result)
                 return result
         logger.debug("EntityLifecycle.lifespan: unavailable")
         return None
@@ -195,9 +195,9 @@ class EntityLifecycle(BaseModel):
             Birth year, founding year, or None.
         """
         if self.birth and self.birth.year is not None:
-            logger.debug(f"EntityLifecycle.start_year (birth): {self.birth.year}")
+            logger.debug("EntityLifecycle.start_year (birth): %s", self.birth.year)
             return self.birth.year
-        logger.debug(f"EntityLifecycle.start_year (founding): {self.founding_year}")
+        logger.debug("EntityLifecycle.start_year (founding): %s", self.founding_year)
         return self.founding_year
 
     @property
@@ -208,9 +208,9 @@ class EntityLifecycle(BaseModel):
             Death year, destruction year, or None if still active.
         """
         if self.death and self.death.year is not None:
-            logger.debug(f"EntityLifecycle.end_year (death): {self.death.year}")
+            logger.debug("EntityLifecycle.end_year (death): %s", self.death.year)
             return self.death.year
-        logger.debug(f"EntityLifecycle.end_year (destruction): {self.destruction_year}")
+        logger.debug("EntityLifecycle.end_year (destruction): %s", self.destruction_year)
         return self.destruction_year
 
 
@@ -256,7 +256,7 @@ class TimelineItem(BaseModel):
         return self.end is not None
 
 
-def _try_parse_json_timestamp(text: str, result: StoryTimestamp) -> bool:
+def _try_parse_json_timestamp(text: str) -> StoryTimestamp | None:
     """Try to parse text as a JSON object containing timestamp fields.
 
     Handles LLM output that arrives as stringified JSON, e.g.
@@ -264,65 +264,77 @@ def _try_parse_json_timestamp(text: str, result: StoryTimestamp) -> bool:
 
     Parameters:
         text: The raw input string (stripped).
-        result: StoryTimestamp to populate in-place.
 
     Returns:
-        True if JSON was parsed successfully; False otherwise.
+        A new StoryTimestamp with ``raw_text`` set to *text* and any extracted
+        fields populated, or None if the text is not valid JSON, not a dict,
+        or contains no usable timestamp fields (year, month, day, era_name,
+        calendar_id).
     """
     try:
         data = json.loads(text)
     except json.JSONDecodeError, ValueError:
-        return False
+        return None
 
     if not isinstance(data, dict):
-        return False
+        return None
 
-    parsed_any = False
+    fields: dict[str, Any] = {}
 
     if "year" in data and data["year"] is not None:
         try:
-            result.year = int(data["year"])
-            parsed_any = True
+            fields["year"] = int(data["year"])
         except ValueError, TypeError:
             logger.warning("JSON timestamp has non-integer year: %r", data["year"])
 
-    if data.get("era_name"):
-        result.era_name = str(data["era_name"])
-        parsed_any = True
+    raw_era = data.get("era_name")
+    if raw_era:
+        stripped_era = str(raw_era).strip()
+        if stripped_era:
+            fields["era_name"] = stripped_era
 
-    if data.get("calendar_id"):
-        result.calendar_id = str(data["calendar_id"])
-        parsed_any = True
+    raw_cid = data.get("calendar_id")
+    if raw_cid:
+        stripped_cid = str(raw_cid).strip()
+        if stripped_cid:
+            fields["calendar_id"] = stripped_cid
 
     if "month" in data and data["month"] is not None:
         try:
             month_val = int(data["month"])
             if 1 <= month_val <= 12:
-                result.month = month_val
-                parsed_any = True
+                fields["month"] = month_val
+            else:
+                logger.warning("JSON timestamp month out of range: %d", month_val)
         except ValueError, TypeError:
-            pass
+            logger.warning("JSON timestamp has non-integer month: %r", data["month"])
 
     if "day" in data and data["day"] is not None:
         try:
             day_val = int(data["day"])
             if 1 <= day_val <= 31:
-                result.day = day_val
-                parsed_any = True
+                fields["day"] = day_val
+            else:
+                logger.warning("JSON timestamp day out of range: %d", day_val)
         except ValueError, TypeError:
-            pass
+            logger.warning("JSON timestamp has non-integer day: %r", data["day"])
 
-    if parsed_any:
-        logger.debug("Parsed timestamp from JSON: %s", result)
-    return parsed_any
+    if fields:
+        logger.debug("Parsed timestamp from JSON: %s", fields)
+        return StoryTimestamp(raw_text=text, **fields)
+    return None
+
+
+_CALENDAR_SUFFIXES = frozenset({"bc", "bce", "ad", "ce"})
 
 
 def _extract_era_name_from_segments(text: str) -> str | None:
     """Extract era_name from comma-separated timestamp segments.
 
     After year/month/day extraction, any remaining segment that does not
-    match a known keyword pattern (year, month, day, chapter, etc.) or
-    start with digits is treated as an era name.
+    match a known keyword pattern (year, month, day, chapter, event, part,
+    phase, act, in), start with a digit or minus sign, or equal a calendar
+    era suffix (BC, BCE, AD, CE) is treated as an era name.
 
     Parameters:
         text: The original timestamp string.
@@ -339,9 +351,11 @@ def _extract_era_name_from_segments(text: str) -> str | None:
         stripped = segment.strip()
         if not stripped:
             continue
-        if keyword_pattern.search(stripped):
+        if keyword_pattern.match(stripped):
             continue
         if digit_start.match(stripped):
+            continue
+        if stripped.lower() in _CALENDAR_SUFFIXES:
             continue
         return stripped
     return None
@@ -353,10 +367,11 @@ def parse_timestamp(text: str) -> StoryTimestamp:
     Preserves the original input in ``raw_text``. First attempts JSON parsing
     for structured LLM output (e.g. ``{"year": -2037, "era_name": "Dark Age"}``).
     Then falls back to regex extraction of calendar fields (``year``, ``month``,
-    ``day``).  Supports negative years and BC/BCE suffixes. Extracts ``era_name``
-    from comma-separated segments. If no year is found, attempts to derive
-    ``relative_order`` from phrases like "chapter N", "event/part/phase/act N",
-    or from a standalone day value.
+    ``day``).  Supports negative years and BC/BCE/AD/CE era suffixes (BC/BCE
+    negate a positive year value). Extracts ``era_name`` from comma-separated
+    segments. If no year is found, attempts to derive ``relative_order`` from
+    phrases like "chapter N", "event/part/phase/act N", or from a standalone
+    day value.
 
     Parameters:
         text: The timestamp string to parse.
@@ -365,13 +380,14 @@ def parse_timestamp(text: str) -> StoryTimestamp:
         Parsed timestamp with ``raw_text`` preserved and any discovered fields populated.
     """
     logger.debug("Parsing timestamp: %r", text)
-
-    result = StoryTimestamp(raw_text=text.strip())
+    stripped = text.strip()
 
     # Strategy 1: Try JSON parsing first (handles stringified LLM output)
-    if _try_parse_json_timestamp(text.strip(), result):
-        return result
+    json_result = _try_parse_json_timestamp(stripped)
+    if json_result is not None:
+        return json_result
 
+    result = StoryTimestamp(raw_text=stripped)
     text_lower = text.lower().strip()
 
     # Strategy 2: Regex extraction
@@ -407,7 +423,7 @@ def parse_timestamp(text: str) -> StoryTimestamp:
             if 1 <= month_val <= 12:
                 result.month = month_val
                 logger.debug("Extracted month: %d", result.month)
-            break
+                break
 
     # Try to extract day
     day_patterns = [
@@ -421,7 +437,7 @@ def parse_timestamp(text: str) -> StoryTimestamp:
             if 1 <= day_val <= 31:
                 result.day = day_val
                 logger.debug("Extracted day: %d", result.day)
-            break
+                break
 
     # Try to extract era_name from comma-separated segments
     if result.era_name is None:
@@ -456,9 +472,10 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
     Build an EntityLifecycle from an attributes dictionary's "lifecycle" entry.
 
     If present, the "lifecycle" value must be a mapping that may contain any of
-    "birth", "death", "first_appearance", and "last_appearance". Each field may be
-    either a dict of StoryTimestamp fields or a string that will be parsed by
-    parse_timestamp.
+    "birth", "death", "first_appearance", "last_appearance", "temporal_notes",
+    "founding_year", and "destruction_year". Timestamp fields may be either a
+    dict of StoryTimestamp fields or a string parsed by ``parse_timestamp``.
+    Year fields accept int, float (truncated to int), or string values.
 
     Parameters:
         attributes (dict[str, Any]): Entity attributes; may include a "lifecycle"
@@ -468,7 +485,7 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
         EntityLifecycle constructed from the "lifecycle" data, or `None` if the
         "lifecycle" entry is missing or not a mapping.
     """
-    logger.debug(f"Extracting lifecycle from attributes: {list(attributes.keys())}")
+    logger.debug("Extracting lifecycle from attributes: %s", list(attributes.keys()))
 
     lifecycle_data = attributes.get("lifecycle")
     if lifecycle_data is None:
@@ -476,8 +493,10 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
 
     if not isinstance(lifecycle_data, dict):
         logger.warning(
-            f"Malformed lifecycle data: expected dict, got {type(lifecycle_data).__name__} "
-            f"(value: {lifecycle_data!r}). Ignoring lifecycle for this entity."
+            "Malformed lifecycle data: expected dict, got %s (value: %r). "
+            "Ignoring lifecycle for this entity.",
+            type(lifecycle_data).__name__,
+            lifecycle_data,
         )
         return None
 
@@ -514,26 +533,51 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
     # Use 'is not None' to handle year 0 correctly
     founding = lifecycle_data.get("founding_year")
     if founding is not None:
-        if isinstance(founding, int):
+        if isinstance(founding, bool):
+            logger.warning("Unexpected founding_year type: bool (%r)", founding)
+        elif isinstance(founding, int):
             result.founding_year = founding
+        elif isinstance(founding, float):
+            result.founding_year = int(founding)
+            logger.debug("Converted float founding_year to int: %s", founding)
         elif isinstance(founding, str):
             try:
                 result.founding_year = int(founding)
             except ValueError:
                 logger.warning("Could not parse founding_year string: %r", founding)
+        else:
+            logger.warning(
+                "Unexpected founding_year type: %s (%r)",
+                type(founding).__name__,
+                founding,
+            )
 
     destruction = lifecycle_data.get("destruction_year")
     if destruction is not None:
-        if isinstance(destruction, int):
+        if isinstance(destruction, bool):
+            logger.warning("Unexpected destruction_year type: bool (%r)", destruction)
+        elif isinstance(destruction, int):
             result.destruction_year = destruction
+        elif isinstance(destruction, float):
+            result.destruction_year = int(destruction)
+            logger.debug("Converted float destruction_year to int: %s", destruction)
         elif isinstance(destruction, str):
             try:
                 result.destruction_year = int(destruction)
             except ValueError:
                 logger.warning("Could not parse destruction_year string: %r", destruction)
+        else:
+            logger.warning(
+                "Unexpected destruction_year type: %s (%r)",
+                type(destruction).__name__,
+                destruction,
+            )
 
     logger.debug(
-        f"Extracted lifecycle: birth={result.birth}, death={result.death}, "
-        f"founding={result.founding_year}, destruction={result.destruction_year}"
+        "Extracted lifecycle: birth=%s, death=%s, founding=%s, destruction=%s",
+        result.birth,
+        result.death,
+        result.founding_year,
+        result.destruction_year,
     )
     return result

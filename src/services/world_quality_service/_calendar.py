@@ -162,6 +162,10 @@ Write all text in {brief.language}."""
 def _generated_data_to_world_calendar(result: GeneratedCalendarData) -> WorldCalendar:
     """Convert a GeneratedCalendarData Pydantic model to a WorldCalendar.
 
+    Resolves ``era_start_year`` from the era list using a multi-step fallback:
+    (1) exact name match on ``result.era_name``, (2) case-insensitive match,
+    (3) ongoing era (``end_year is None``), (4) last era's ``start_year``.
+
     Parameters:
         result: Structured LLM response with calendar data.
 
