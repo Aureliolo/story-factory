@@ -129,12 +129,39 @@ def _recover_orphans(
                 if source_name_norm == orphan_name_norm:
                     source_entity = orphan
                     target_entity = _find_entity_by_name(all_entities, rel["target"])
+                    logger.debug(
+                        "Orphan '%s' matched source '%s' (normalized: '%s'),"
+                        " using direct reference; target '%s' via fuzzy lookup",
+                        orphan.name,
+                        rel["source"],
+                        source_name_norm,
+                        rel["target"],
+                    )
                 elif target_name_norm == orphan_name_norm:
                     source_entity = _find_entity_by_name(all_entities, rel["source"])
                     target_entity = orphan
+                    logger.debug(
+                        "Orphan '%s' matched target '%s' (normalized: '%s'),"
+                        " using direct reference; source '%s' via fuzzy lookup",
+                        orphan.name,
+                        rel["target"],
+                        target_name_norm,
+                        rel["source"],
+                    )
                 else:
                     source_entity = _find_entity_by_name(all_entities, rel["source"])
                     target_entity = _find_entity_by_name(all_entities, rel["target"])
+                    logger.debug(
+                        "Orphan '%s' (normalized: '%s') matched neither source '%s'"
+                        " (normalized: '%s') nor target '%s' (normalized: '%s'),"
+                        " using fuzzy lookup for both",
+                        orphan.name,
+                        orphan_name_norm,
+                        rel["source"],
+                        source_name_norm,
+                        rel["target"],
+                        target_name_norm,
+                    )
 
                 if source_entity and target_entity:
                     # Safety check: verify at least one endpoint is an orphan

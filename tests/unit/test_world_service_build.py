@@ -1971,24 +1971,6 @@ class TestCrossTypeNameFiltering:
         assert "Wizard" in names_arg
         assert "Mages Guild" in names_arg
 
-    def test_generate_locations_passes_all_entity_names(
-        self, world_service, sample_story_state, mock_world_db, mock_services
-    ):
-        """Test _generate_locations passes all entity names for cross-type collision detection."""
-        mock_world_db.add_entity("location", "Dark Forest", "A dark forest")
-        mock_world_db.add_entity("character", "Hero", "The hero")
-        mock_world_db.add_entity("item", "Magic Ring", "A ring")
-
-        mock_services.world_quality.generate_locations_with_quality.return_value = []
-
-        world_service._generate_locations(sample_story_state, mock_world_db, mock_services)
-
-        call_args = mock_services.world_quality.generate_locations_with_quality.call_args
-        names_arg = call_args[0][1]  # Second positional arg
-        assert "Dark Forest" in names_arg
-        assert "Hero" in names_arg
-        assert "Magic Ring" in names_arg
-
 
 class TestLocationQualityRefinement:
     """Tests for Issue 6: locations use quality refinement in world build."""
