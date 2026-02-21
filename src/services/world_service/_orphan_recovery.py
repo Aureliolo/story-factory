@@ -9,9 +9,10 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from src.memory.entities import Entity
 from src.memory.story_state import StoryState
 from src.memory.world_database import WorldDatabase
-from src.services.world_service._name_matching import _find_entity_by_name
+from src.services.world_service._name_matching import _find_entity_by_name, _normalize_name
 from src.utils.exceptions import GenerationCancelledError, WorldGenerationError
 
 if TYPE_CHECKING:
@@ -43,15 +44,22 @@ def _recover_orphans(
     )
 
     all_entities = world_db.list_entities()
-    entity_by_id = {e.id: e.name for e in all_entities}
+    entity_by_id = {e.id: e for e in all_entities}
 
     # Build existing relationships list
     existing_rels: list[tuple[str, str, str]] = []
     for r in world_db.list_relationships():
-        source_name = entity_by_id.get(r.source_id)
-        target_name = entity_by_id.get(r.target_id)
-        if source_name and target_name:
-            existing_rels.append((source_name, target_name, r.relation_type))
+        source_entity_obj = entity_by_id.get(r.source_id)
+        target_entity_obj = entity_by_id.get(r.target_id)
+        if not source_entity_obj or not target_entity_obj:
+            logger.warning(
+                "Skipping relationship %s -> %s (%s): missing entity reference",
+                r.source_id,
+                r.target_id,
+                r.relation_type,
+            )
+            continue
+        existing_rels.append((source_entity_obj.name, target_entity_obj.name, r.relation_type))
 
     # Track orphan names still needing connections (mutable set for fast lookup)
     orphan_names = {o.name.lower() for o in orphans}
@@ -108,9 +116,52 @@ def _recover_orphans(
                     )
                     continue
 
-                # Find entities and add to database
-                source_entity = _find_entity_by_name(all_entities, rel["source"])
-                target_entity = _find_entity_by_name(all_entities, rel["target"])
+                # Find entities — when the orphan's normalized name matches a
+                # relationship endpoint, use the orphan object directly (bypassing
+                # fuzzy lookup) to avoid cross-type name collisions where multiple
+                # entities share the same name
+                source_name_norm = _normalize_name(rel["source"])
+                target_name_norm = _normalize_name(rel["target"])
+                orphan_name_norm = _normalize_name(orphan.name)
+
+                source_entity: Entity | None
+                target_entity: Entity | None
+                if source_name_norm == orphan_name_norm:
+                    source_entity = orphan
+                    target_entity = _find_entity_by_name(all_entities, rel["target"])
+                    logger.debug(
+                        "Orphan '%s' matched source '%s' (normalized: '%s'),"
+                        " using direct reference; target '%s' via fuzzy lookup",
+                        orphan.name,
+                        rel["source"],
+                        source_name_norm,
+                        rel["target"],
+                    )
+                elif target_name_norm == orphan_name_norm:
+                    source_entity = _find_entity_by_name(all_entities, rel["source"])
+                    target_entity = orphan
+                    logger.debug(
+                        "Orphan '%s' matched target '%s' (normalized: '%s'),"
+                        " using direct reference; source '%s' via fuzzy lookup",
+                        orphan.name,
+                        rel["target"],
+                        target_name_norm,
+                        rel["source"],
+                    )
+                else:
+                    source_entity = _find_entity_by_name(all_entities, rel["source"])
+                    target_entity = _find_entity_by_name(all_entities, rel["target"])
+                    logger.debug(
+                        "Orphan '%s' (normalized: '%s') matched neither source '%s'"
+                        " (normalized: '%s') nor target '%s' (normalized: '%s'),"
+                        " using fuzzy lookup for both",
+                        orphan.name,
+                        orphan_name_norm,
+                        rel["source"],
+                        source_name_norm,
+                        rel["target"],
+                        target_name_norm,
+                    )
 
                 if source_entity and target_entity:
                     # Safety check: verify at least one endpoint is an orphan

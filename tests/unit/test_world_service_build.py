@@ -551,10 +551,10 @@ class TestGenerateLocations:
 
         assert count == 0
 
-    def test_passes_location_names_only(
+    def test_generate_locations_passes_all_entity_names(
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
-        """Test that only location-type names are passed for duplicate checking."""
+        """Test that ALL entity names are passed for cross-type collision detection."""
         # Add entities of different types
         mock_world_db.add_entity("character", "Hero", "The hero")
         mock_world_db.add_entity("location", "Castle", "A castle")
@@ -564,12 +564,12 @@ class TestGenerateLocations:
 
         world_service._generate_locations(sample_story_state, mock_world_db, mock_services)
 
-        # Verify only location names were passed
+        # Verify all entity names are passed (cross-type collision detection)
         call_args = mock_services.world_quality.generate_locations_with_quality.call_args
         existing_names = call_args[0][1]  # Second positional arg
         assert "Castle" in existing_names
-        assert "Hero" not in existing_names
-        assert "Guild" not in existing_names
+        assert "Hero" in existing_names
+        assert "Guild" in existing_names
 
 
 class TestGenerateFactions:
@@ -1912,13 +1912,13 @@ class TestWorldBuildCancellation:
         assert count == 0
 
 
-class TestPerTypeNameFiltering:
-    """Tests for Issue 3: per-type entity name filtering in build functions."""
+class TestCrossTypeNameFiltering:
+    """Tests for cross-type entity name collision detection in build functions."""
 
-    def test_generate_factions_passes_faction_names_only(
+    def test_generate_factions_passes_all_entity_names(
         self, world_service, sample_story_state, mock_world_db, mock_services
     ):
-        """Test _generate_factions passes only faction names, not all entity names."""
+        """Test _generate_factions passes all entity names for cross-type collision detection."""
         # Add entities of different types
         mock_world_db.add_entity("location", "Dark Forest", "A dark forest")
         mock_world_db.add_entity("character", "Hero", "The hero")
@@ -1929,16 +1929,16 @@ class TestPerTypeNameFiltering:
         world_service._generate_factions(sample_story_state, mock_world_db, mock_services)
 
         call_args = mock_services.world_quality.generate_factions_with_quality.call_args
-        faction_names_arg = call_args[0][1]  # Second positional arg = existing_names
-        # Should only contain faction names, not location or character names
-        assert "Knights" in faction_names_arg
-        assert "Dark Forest" not in faction_names_arg
-        assert "Hero" not in faction_names_arg
+        names_arg = call_args[0][1]  # Second positional arg = existing_names
+        # Should contain ALL entity names for cross-type collision detection
+        assert "Knights" in names_arg
+        assert "Dark Forest" in names_arg
+        assert "Hero" in names_arg
 
-    def test_generate_items_passes_item_names_only(
+    def test_generate_items_passes_all_entity_names(
         self, world_service, sample_story_state, mock_world_db, mock_services
     ):
-        """Test _generate_items passes only item names, not all entity names."""
+        """Test _generate_items passes all entity names for cross-type collision detection."""
         mock_world_db.add_entity("location", "Castle", "A castle")
         mock_world_db.add_entity("item", "Magic Sword", "A sword")
         mock_world_db.add_entity("concept", "Honor", "A concept")
@@ -1948,15 +1948,15 @@ class TestPerTypeNameFiltering:
         world_service._generate_items(sample_story_state, mock_world_db, mock_services)
 
         call_args = mock_services.world_quality.generate_items_with_quality.call_args
-        item_names_arg = call_args[0][1]  # Second positional arg
-        assert "Magic Sword" in item_names_arg
-        assert "Castle" not in item_names_arg
-        assert "Honor" not in item_names_arg
+        names_arg = call_args[0][1]  # Second positional arg
+        assert "Magic Sword" in names_arg
+        assert "Castle" in names_arg
+        assert "Honor" in names_arg
 
-    def test_generate_concepts_passes_concept_names_only(
+    def test_generate_concepts_passes_all_entity_names(
         self, world_service, sample_story_state, mock_world_db, mock_services
     ):
-        """Test _generate_concepts passes only concept names, not all entity names."""
+        """Test _generate_concepts passes all entity names for cross-type collision detection."""
         mock_world_db.add_entity("character", "Wizard", "A wizard")
         mock_world_db.add_entity("concept", "The Echo", "A concept about echoes")
         mock_world_db.add_entity("faction", "Mages Guild", "A faction")
@@ -1966,28 +1966,10 @@ class TestPerTypeNameFiltering:
         world_service._generate_concepts(sample_story_state, mock_world_db, mock_services)
 
         call_args = mock_services.world_quality.generate_concepts_with_quality.call_args
-        concept_names_arg = call_args[0][1]  # Second positional arg
-        assert "The Echo" in concept_names_arg
-        assert "Wizard" not in concept_names_arg
-        assert "Mages Guild" not in concept_names_arg
-
-    def test_generate_locations_passes_location_names_only(
-        self, world_service, sample_story_state, mock_world_db, mock_services
-    ):
-        """Test _generate_locations passes only location names, not all entity names."""
-        mock_world_db.add_entity("location", "Dark Forest", "A dark forest")
-        mock_world_db.add_entity("character", "Hero", "The hero")
-        mock_world_db.add_entity("item", "Magic Ring", "A ring")
-
-        mock_services.world_quality.generate_locations_with_quality.return_value = []
-
-        world_service._generate_locations(sample_story_state, mock_world_db, mock_services)
-
-        call_args = mock_services.world_quality.generate_locations_with_quality.call_args
-        location_names_arg = call_args[0][1]  # Second positional arg
-        assert "Dark Forest" in location_names_arg
-        assert "Hero" not in location_names_arg
-        assert "Magic Ring" not in location_names_arg
+        names_arg = call_args[0][1]  # Second positional arg
+        assert "The Echo" in names_arg
+        assert "Wizard" in names_arg
+        assert "Mages Guild" in names_arg
 
 
 class TestLocationQualityRefinement:

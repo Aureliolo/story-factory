@@ -567,11 +567,11 @@ def _generate_locations(
         loc_min, loc_max = loc_max, loc_min
     location_count = random.randint(loc_min, loc_max)
 
-    location_names = [e.name for e in world_db.list_entities() if e.type == "location"]
+    existing_names = [e.name for e in world_db.list_entities()]
 
     location_results = services.world_quality.generate_locations_with_quality(
         state,
-        location_names,
+        existing_names,
         location_count,
         cancel_check=cancel_check,
     )
@@ -613,7 +613,7 @@ def _generate_factions(
         Tuple of (factions_added, implicit_relationships_added).
     """
     all_entities = world_db.list_entities()
-    faction_names = [e.name for e in all_entities if e.type == "faction"]
+    existing_names = [e.name for e in all_entities]
     existing_locations = [e.name for e in all_entities if e.type == "location"]
 
     # Use project-level settings if available, otherwise fall back to global
@@ -634,7 +634,7 @@ def _generate_factions(
 
     faction_results = services.world_quality.generate_factions_with_quality(
         state,
-        faction_names,
+        existing_names,
         faction_count,
         existing_locations,
         cancel_check=cancel_check,
@@ -698,7 +698,7 @@ def _generate_items(
     cancel_check: Callable[[], bool] | None = None,
 ) -> int:
     """Generate and add items to world database."""
-    item_names = [e.name for e in world_db.list_entities() if e.type == "item"]
+    existing_names = [e.name for e in world_db.list_entities()]
 
     # Use project-level settings if available, otherwise fall back to global
     item_min = (
@@ -718,7 +718,7 @@ def _generate_items(
 
     item_results = services.world_quality.generate_items_with_quality(
         state,
-        item_names,
+        existing_names,
         item_count,
         cancel_check=cancel_check,
     )
@@ -753,7 +753,7 @@ def _generate_concepts(
     cancel_check: Callable[[], bool] | None = None,
 ) -> int:
     """Generate and add concepts to world database."""
-    concept_names = [e.name for e in world_db.list_entities() if e.type == "concept"]
+    existing_names = [e.name for e in world_db.list_entities()]
 
     # Use project-level settings if available, otherwise fall back to global
     concept_min = (
@@ -775,7 +775,7 @@ def _generate_concepts(
 
     concept_results = services.world_quality.generate_concepts_with_quality(
         state,
-        concept_names,
+        existing_names,
         concept_count,
         cancel_check=cancel_check,
     )
@@ -823,21 +823,21 @@ def _generate_relationships(
     all_entities = world_db.list_entities()
     entity_names = [e.name for e in all_entities]
 
-    # Map IDs to names so the quality service gets name pairs for duplicate detection
+    # Map IDs to entity objects so the quality service gets name pairs for duplicate detection
     # 3-tuples: (source_name, target_name, relation_type) for diversity analysis
-    entity_by_id = {e.id: e.name for e in all_entities}
+    entity_by_id = {e.id: e for e in all_entities}
     existing_rels: list[tuple[str, str, str]] = []
     for r in world_db.list_relationships():
-        source_name = entity_by_id.get(r.source_id)
-        target_name = entity_by_id.get(r.target_id)
-        if not source_name or not target_name:
+        source_entity_obj = entity_by_id.get(r.source_id)
+        target_entity_obj = entity_by_id.get(r.target_id)
+        if not source_entity_obj or not target_entity_obj:
             logger.warning(
                 "Skipping relationship %s -> %s: missing entity reference",
                 r.source_id,
                 r.target_id,
             )
             continue
-        existing_rels.append((source_name, target_name, r.relation_type))
+        existing_rels.append((source_entity_obj.name, target_entity_obj.name, r.relation_type))
 
     rel_count = random.randint(
         svc.settings.world_gen_relationships_min,
