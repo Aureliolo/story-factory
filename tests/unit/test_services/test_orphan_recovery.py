@@ -287,6 +287,51 @@ class TestRecoverOrphansAlreadyConnected:
         assert count == 1
 
 
+class TestRecoverOrphansMissingEntityReference:
+    """Test orphan recovery logs warning when relationship references missing entity."""
+
+    def test_skips_relationship_with_missing_entity_reference(
+        self, mock_svc, story_state, mock_world_db, mock_services
+    ):
+        """Test that relationships referencing deleted/missing entities are skipped with warning."""
+        mock_world_db.add_entity("character", "Hero", "A brave hero")
+        villain_id = mock_world_db.add_entity("character", "Villain", "Evil villain")
+        castle_id = mock_world_db.add_entity("location", "Castle", "Dark castle")
+
+        # Connect villain to castle so hero is an orphan
+        mock_world_db.add_relationship(villain_id, castle_id, "resides_in", "Lives in castle")
+
+        # Insert a stale relationship referencing a non-existent entity via raw SQL
+        # (bypasses validation to simulate corrupt data — e.g. entity deleted externally)
+        with mock_world_db._lock:
+            mock_world_db.conn.execute(
+                "INSERT INTO relationships"
+                " (id, source_id, target_id, relation_type, description, created_at)"
+                " VALUES (?, ?, ?, ?, ?, datetime('now'))",
+                ("stale-rel-id", villain_id, "non-existent-id", "guards", "Broken reference"),
+            )
+            mock_world_db.conn.commit()
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        mock_services.world_quality.generate_relationship_with_quality.return_value = (
+            {
+                "source": "Hero",
+                "target": "Villain",
+                "relation_type": "rivals",
+                "description": "They are rivals",
+            },
+            mock_quality_scores,
+            1,
+        )
+
+        count = _recover_orphans(mock_svc, story_state, mock_world_db, mock_services)
+
+        # Hero should still be recovered despite the broken relationship in the DB
+        assert count == 1
+
+
 class TestRecoverOrphansMissingRelationType:
     """Test orphan recovery defaults relation_type to 'related_to' when omitted."""
 
