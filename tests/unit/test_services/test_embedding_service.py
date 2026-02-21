@@ -205,11 +205,13 @@ class TestEmbedTextTruncation:
         response.__getitem__ = lambda self, key: FAKE_EMBEDDING if key == "embedding" else None
         mock_client.embeddings.return_value = response
 
-        long_text = "a" * 3000  # ~750 tokens, should exceed 512 limit
+        long_text = "a" * 3000  # ~1500 tokens at 2 chars/token, should exceed 512 limit
+        fake_prefix = "search_document: "
 
         with (
             patch.object(service, "_get_client", return_value=mock_client),
             patch("src.services.embedding_service.get_model_context_size", return_value=512),
+            patch("src.services.embedding_service.get_embedding_prefix", return_value=fake_prefix),
         ):
             result = service.embed_text(long_text)
 
@@ -219,10 +221,7 @@ class TestEmbedTextTruncation:
         actual_prompt = call_kwargs.kwargs["prompt"]
         assert len(actual_prompt) == (512 - 10) * 2
         # Verify prefix is preserved at start of truncated prompt
-        from src.settings._model_registry import get_embedding_prefix
-
-        expected_prefix = get_embedding_prefix("test-embed:latest")
-        assert actual_prompt.startswith(expected_prefix)
+        assert actual_prompt.startswith(fake_prefix)
 
     def test_text_not_truncated_when_within_limit(self, service):
         """Short text is passed through unchanged when within context limit."""
@@ -311,7 +310,7 @@ class TestEmbedTextTruncation:
         assert actual_prompt.startswith(fake_prefix)
 
     def test_tiny_context_limit_returns_empty(self, service, caplog):
-        """Returns empty list and logs warning when context_limit <= 10."""
+        """Returns empty list and logs error when context_limit <= 10."""
         mock_client = MagicMock()
 
         with (

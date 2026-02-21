@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # Embedding context-limit constants
 _MIN_USABLE_CONTEXT_TOKENS = 10  # Below this, context window is unusable
 _EMBEDDING_CONTEXT_MARGIN_TOKENS = 10  # Reserve tokens for model overhead
-_CHARS_PER_TOKEN_ESTIMATE = 2  # Conservative char-to-token ratio (safe for CJK/code)
+_CHARS_PER_TOKEN_ESTIMATE = 2  # Approximate chars/token for Latin scripts; may undercount CJK/emoji
 
 
 class EmbeddingService:
