@@ -285,3 +285,49 @@ class TestRecoverOrphansAlreadyConnected:
 
         # Only one relationship needed — connecting Hero to Sidekick resolves both orphans
         assert count == 1
+
+
+class TestRecoverOrphansEntityIdResolution:
+    """Test orphan recovery resolves entities by ID when names collide across types."""
+
+    def test_same_name_different_types_resolves_by_id(
+        self, mock_svc, story_state, mock_world_db, mock_services
+    ):
+        """Test that orphan with same name as another entity type is correctly identified by ID."""
+        # "The Feathered Dominion" exists as both a faction and a concept
+        faction_id = mock_world_db.add_entity(
+            "faction", "The Feathered Dominion", "A powerful bird faction"
+        )
+        concept_id = mock_world_db.add_entity(
+            "concept", "The Feathered Dominion", "Philosophical concept of avian rule"
+        )
+        hero_id = mock_world_db.add_entity("character", "Hero", "A brave hero")
+
+        # Connect hero and faction so concept is the orphan
+        mock_world_db.add_relationship(hero_id, faction_id, "member_of", "Belongs to faction")
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        # Quality service returns a relationship with the orphan's name as source
+        mock_services.world_quality.generate_relationship_with_quality.return_value = (
+            {
+                "source": "The Feathered Dominion",
+                "target": "Hero",
+                "relation_type": "inspires",
+                "description": "The concept inspires the hero",
+            },
+            mock_quality_scores,
+            1,
+        )
+
+        count = _recover_orphans(mock_svc, story_state, mock_world_db, mock_services)
+
+        assert count == 1
+        # Verify the relationship was created with the CONCEPT entity (the orphan),
+        # not the faction entity (which shares the same name)
+        relationships = mock_world_db.list_relationships()
+        orphan_rels = [r for r in relationships if r.source_id == concept_id]
+        assert len(orphan_rels) == 1
+        assert orphan_rels[0].relation_type == "inspires"
+        assert orphan_rels[0].target_id == hero_id

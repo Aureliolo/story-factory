@@ -98,3 +98,67 @@ class TestNormalizeRelationType:
         """Pipe-delimited with no recognized parts and no substring match returns normalized."""
         result = normalize_relation_type("xyz|abc")
         assert result == "xyz|abc"
+
+
+class TestConflictsWithMapping:
+    """Verify 'conflicts_with' maps to TENSION and normalizes from space-separated."""
+
+    def test_conflicts_with_is_tension(self):
+        """'conflicts_with' should map to TENSION."""
+        assert classify_relationship("conflicts_with") == ConflictCategory.TENSION
+
+    def test_conflicts_with_normalizes_from_spaces(self):
+        """'conflicts with' (space-separated) should normalize to 'conflicts_with'."""
+        assert normalize_relation_type("conflicts with") == "conflicts_with"
+
+    def test_challenges_is_tension(self):
+        """'challenges' should map to TENSION."""
+        assert classify_relationship("challenges") == ConflictCategory.TENSION
+
+    def test_betrays_is_rivalry(self):
+        """'betrays' should map to RIVALRY."""
+        assert classify_relationship("betrays") == ConflictCategory.RIVALRY
+
+
+class TestKeywordBasedFallback:
+    """Verify signal words resolve correctly through normalization + classification."""
+
+    def test_oppose_resolves_to_rivalry(self):
+        """Word 'oppose' in a compound type should resolve to a RIVALRY type."""
+        result = normalize_relation_type("deep_oppose_bond")
+        assert classify_relationship(result) == ConflictCategory.RIVALRY
+
+    def test_support_resolves_to_alliance(self):
+        """Word 'support' in a compound type should resolve to an ALLIANCE type."""
+        result = normalize_relation_type("mutual_support_pact")
+        assert classify_relationship(result) == ConflictCategory.ALLIANCE
+
+    def test_protect_resolves_to_alliance(self):
+        """Word 'protect' in a compound type should resolve to an ALLIANCE type."""
+        result = normalize_relation_type("sacred_protect_oath")
+        assert classify_relationship(result) == ConflictCategory.ALLIANCE
+
+    def test_challenge_resolves_to_tension(self):
+        """Word 'challenge' in a compound type should resolve to a TENSION type."""
+        result = normalize_relation_type("constant_challenge_dynamic")
+        assert classify_relationship(result) == ConflictCategory.TENSION
+
+    def test_betray_resolves_to_rivalry(self):
+        """Word 'betray' in a compound type should resolve to a RIVALRY type."""
+        result = normalize_relation_type("ultimate_betray_act")
+        assert classify_relationship(result) == ConflictCategory.RIVALRY
+
+    def test_conflict_resolves_to_rivalry(self):
+        """Word 'conflict' in a compound type should resolve to a RIVALRY type."""
+        result = normalize_relation_type("eternal_conflict_cycle")
+        assert classify_relationship(result) == ConflictCategory.RIVALRY
+
+    def test_threaten_resolves_to_tension(self):
+        """Word 'threaten' in a compound type should resolve to a TENSION type."""
+        result = normalize_relation_type("covert_threaten_dynamic")
+        assert classify_relationship(result) == ConflictCategory.TENSION
+
+    def test_cares_resolves_to_alliance(self):
+        """Word 'cares' in a compound type should resolve to an ALLIANCE type."""
+        result = normalize_relation_type("deeply_cares_bond")
+        assert classify_relationship(result) == ConflictCategory.ALLIANCE

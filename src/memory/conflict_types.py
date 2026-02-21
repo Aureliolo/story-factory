@@ -80,6 +80,7 @@ RELATION_CONFLICT_MAPPING: dict[str, ConflictCategory] = {
     "despises": ConflictCategory.RIVALRY,
     "undermines": ConflictCategory.RIVALRY,
     "seeks_revenge": ConflictCategory.RIVALRY,
+    "betrays": ConflictCategory.RIVALRY,
     # Tension - potential conflict, negative but not active hostility
     "distrusts": ConflictCategory.TENSION,
     "competes_with": ConflictCategory.TENSION,
@@ -104,6 +105,8 @@ RELATION_CONFLICT_MAPPING: dict[str, ConflictCategory] = {
     "haunted_by": ConflictCategory.TENSION,
     "dependent_on": ConflictCategory.TENSION,
     "bound_to": ConflictCategory.TENSION,
+    "conflicts_with": ConflictCategory.TENSION,
+    "challenges": ConflictCategory.TENSION,
     # Neutral - informational, no inherent conflict
     "knows": ConflictCategory.NEUTRAL,
     "works_with": ConflictCategory.NEUTRAL,
@@ -182,6 +185,11 @@ _WORD_TO_RELATION: dict[str, str] = {
     "sibling": "sibling_of",
     "bonded": "bonded_with",
     "inspires": "inspires",
+    "protect": "protects",
+    "support": "supports",
+    "supports": "supports",
+    "guide": "guided_by",
+    "cares": "cares_for",
     # Rivalry signals
     "enemy": "enemy_of",
     "enemies": "enemies_with",
@@ -192,6 +200,16 @@ _WORD_TO_RELATION: dict[str, str] = {
     "despises": "despises",
     "betrayed": "betrayed",
     "hates": "hates",
+    "conflict": "rivals",
+    "conflicts": "rivals",
+    "oppose": "opposes",
+    "opposes": "opposes",
+    "betray": "betrays",
+    "betrays": "betrays",
+    "attack": "attacks",
+    "attacks": "attacks",
+    "destroy": "destroys",
+    "fight": "fights",
     # Tension signals
     "fears": "fears",
     "fear": "fears",
@@ -206,6 +224,14 @@ _WORD_TO_RELATION: dict[str, str] = {
     "envies": "envies",
     "distrusts": "distrusts",
     "suspects": "suspects",
+    "challenge": "challenges",
+    "challenges": "challenges",
+    "manipulate": "manipulates",
+    "manipulates": "manipulates",
+    "resent": "resents",
+    "resents": "resents",
+    "threaten": "threatens",
+    "threatens": "threatens",
 }
 
 
