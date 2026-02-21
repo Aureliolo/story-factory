@@ -56,7 +56,9 @@ class TestExceptionHandler:
             handler(error)
 
         error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
         assert len(error_records) == 0
+        assert any("teardown" in r.message.lower() for r in debug_records)
 
     def test_other_runtime_error_logs_error(self, caplog):
         """Non-teardown RuntimeError is logged at ERROR level."""
@@ -69,6 +71,19 @@ class TestExceptionHandler:
         error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
         assert len(error_records) >= 1
         assert "Unhandled UI exception" in error_records[0].message
+
+    def test_mixed_case_teardown_error_logs_debug(self, caplog):
+        """Case-insensitive matching: mixed-case teardown message is logged at DEBUG."""
+        handler = self._get_handler()
+        error = RuntimeError("The Parent Slot was removed during teardown")
+
+        with caplog.at_level(logging.DEBUG):
+            handler(error)
+
+        error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+        assert len(error_records) == 0
+        assert any("teardown" in r.message.lower() for r in debug_records)
 
     def test_non_runtime_error_logs_error(self, caplog):
         """Non-RuntimeError exceptions are logged at ERROR level."""

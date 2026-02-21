@@ -114,6 +114,13 @@ class EmbeddingService:
                 client = self._get_client()
                 context_limit = get_model_context_size(client, model)
                 if context_limit is not None:
+                    if context_limit <= 10:
+                        logger.warning(
+                            "Invalid context size %d for model '%s'; skipping embedding",
+                            context_limit,
+                            model,
+                        )
+                        return []
                     max_chars = (context_limit - 10) * 4  # conservative margin
                     if len(prompt) > max_chars:
                         logger.warning(
