@@ -2309,3 +2309,76 @@ class TestZeroScoreAnomalyDetection:
                 svc=mock_svc,
                 story_id="test-story",
             )
+
+    def test_hail_mary_zero_scores_discarded(self, mock_svc, caplog):
+        """Hail-mary judge returning zero scores discards the fresh entity."""
+        config = RefinementConfig(
+            quality_threshold=9.0,
+            quality_thresholds=_all_thresholds(9.0),
+            max_iterations=2,
+            early_stopping_patience=10,
+            early_stopping_min_iterations=10,
+        )
+
+        entities = [{"name": "Original"}, {"name": "HailMary"}]
+        judge_call = 0
+
+        def judge_fn(entity):
+            """Return sub-threshold scores in loop, zero scores for hail-mary."""
+            nonlocal judge_call
+            judge_call += 1
+            if entity["name"] == "HailMary":
+                # Hail-mary judge returns zero — parse failure
+                return CharacterQualityScores(
+                    depth=0.0,
+                    goals=7.0,
+                    flaws=7.0,
+                    uniqueness=7.0,
+                    arc_potential=7.0,
+                    temporal_plausibility=7.0,
+                    feedback="Partial parse on hail-mary",
+                )
+            # Normal sub-threshold scores for the main loop
+            return CharacterQualityScores(
+                depth=6.0,
+                goals=6.0,
+                flaws=6.0,
+                uniqueness=6.0,
+                arc_potential=6.0,
+                temporal_plausibility=6.0,
+                feedback="Below threshold",
+            )
+
+        create_call = 0
+
+        def create_fn(retries):
+            """Return Original first, then HailMary for hail-mary attempt."""
+            nonlocal create_call
+            create_call += 1
+            if create_call <= 1:
+                return entities[0]
+            return entities[1]
+
+        with caplog.at_level(logging.WARNING):
+            result_entity, result_scores, scoring_rounds = quality_refinement_loop(
+                entity_type="character",
+                create_fn=create_fn,
+                judge_fn=judge_fn,
+                refine_fn=lambda e, s, i: e,
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
+
+        # Hail-mary zero scores should be discarded — original kept
+        assert result_entity["name"] == "Original"
+        assert result_scores.depth == 6.0
+        # Hail-mary scoring round NOT counted (zero scores discarded);
+        # main loop exits after 1 round due to unchanged-output detection
+        assert scoring_rounds == 1
+        # Warning logged about hail-mary zero scores
+        assert any("hail-mary judge returned 0.0" in msg for msg in caplog.messages)
