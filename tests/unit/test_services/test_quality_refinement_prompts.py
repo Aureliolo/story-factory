@@ -12,7 +12,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.memory.story_state import StoryBrief, StoryState
+from src.memory.story_state import (
+    Concept,
+    Faction,
+    Item,
+    Location,
+    StoryBrief,
+    StoryState,
+)
 from src.memory.world_quality import (
     CharacterQualityScores,
     ConceptQualityScores,
@@ -339,8 +346,6 @@ class TestRelationshipArrayDefense:
         svc._get_creator_model.return_value = "test-model:8b"
         svc.client.generate.return_value = {"response": "[]"}
 
-        from src.memory.story_state import StoryBrief, StoryState
-
         brief = StoryBrief(
             premise="Test",
             genre="fantasy",
@@ -551,6 +556,80 @@ class TestJudgePromptTemporalFields:
         assert "Dissolution Year: N/A" in prompt
         assert "Temporal Notes: N/A" in prompt
 
+    @patch("src.services.world_quality_service._item.generate_structured")
+    def test_item_judge_prompt_uses_na_for_missing_fields(self, mock_gen):
+        """Missing temporal fields on items should render as N/A, not empty."""
+        mock_gen.return_value = ItemQualityScores(
+            significance=8.0,
+            uniqueness=8.0,
+            narrative_potential=8.0,
+            integration=8.0,
+            temporal_plausibility=8.0,
+        )
+        svc = _make_mock_svc()
+        story_state = _make_story_state()
+        item = {
+            "name": "Plain Dagger",
+            "description": "Test",
+            "significance": "None",
+            "properties": [],
+        }
+
+        _item._judge_item_quality(svc, item, story_state, 0.1)
+
+        prompt = mock_gen.call_args.kwargs["prompt"]
+        assert "Creation Era: N/A" in prompt
+        assert "Temporal Notes: N/A" in prompt
+
+    @patch("src.services.world_quality_service._concept.generate_structured")
+    def test_concept_judge_prompt_uses_na_for_missing_fields(self, mock_gen):
+        """Missing temporal fields on concepts should render as N/A, not empty."""
+        mock_gen.return_value = ConceptQualityScores(
+            relevance=8.0,
+            depth=8.0,
+            manifestation=8.0,
+            resonance=8.0,
+            temporal_plausibility=8.0,
+        )
+        svc = _make_mock_svc()
+        story_state = _make_story_state()
+        concept = {
+            "name": "Bare Concept",
+            "description": "Test",
+            "manifestations": "None",
+        }
+
+        _concept._judge_concept_quality(svc, concept, story_state, 0.1)
+
+        prompt = mock_gen.call_args.kwargs["prompt"]
+        assert "Emergence Era: N/A" in prompt
+        assert "Temporal Notes: N/A" in prompt
+
+    @patch("src.services.world_quality_service._location.generate_structured")
+    def test_location_judge_prompt_uses_na_for_missing_fields(self, mock_gen):
+        """Missing temporal fields on locations should render as N/A, not empty."""
+        mock_gen.return_value = LocationQualityScores(
+            atmosphere=8.0,
+            significance=8.0,
+            story_relevance=8.0,
+            distinctiveness=8.0,
+            temporal_plausibility=8.0,
+        )
+        svc = _make_mock_svc()
+        story_state = _make_story_state()
+        location = {
+            "name": "Bare Ruins",
+            "description": "Test",
+            "significance": "None",
+        }
+
+        _location._judge_location_quality(svc, location, story_state, 0.1)
+
+        prompt = mock_gen.call_args.kwargs["prompt"]
+        assert "Founding Era: N/A" in prompt
+        assert "Destruction Year: N/A" in prompt
+        assert "Temporal Notes: N/A" in prompt
+
 
 class TestRefinePromptTemporalFields:
     """Verify refinement prompts include temporal fields and calendar context (#385)."""
@@ -558,8 +637,6 @@ class TestRefinePromptTemporalFields:
     @patch("src.services.world_quality_service._faction.generate_structured")
     def test_faction_refine_prompt_has_temporal_fields(self, mock_gen):
         """Faction refine prompt must contain temporal fields and calendar context."""
-        from src.memory.story_state import Faction
-
         mock_gen.return_value = Faction(name="Iron Covenant", description="Improved")
         svc = _make_mock_svc()
         story_state = _make_story_state()
@@ -593,8 +670,6 @@ class TestRefinePromptTemporalFields:
     @patch("src.services.world_quality_service._item.generate_structured")
     def test_item_refine_prompt_has_temporal_fields(self, mock_gen):
         """Item refine prompt must contain Creation Era, Temporal Notes, calendar context."""
-        from src.memory.story_state import Item
-
         mock_gen.return_value = Item(name="Flame Sword", description="Improved")
         svc = _make_mock_svc()
         story_state = _make_story_state()
@@ -625,8 +700,6 @@ class TestRefinePromptTemporalFields:
     @patch("src.services.world_quality_service._concept.generate_structured")
     def test_concept_refine_prompt_has_temporal_fields(self, mock_gen):
         """Concept refine prompt must contain Emergence Era, Temporal Notes, calendar context."""
-        from src.memory.story_state import Concept
-
         mock_gen.return_value = Concept(name="The Binding", description="Improved")
         svc = _make_mock_svc()
         story_state = _make_story_state()
@@ -656,8 +729,6 @@ class TestRefinePromptTemporalFields:
     @patch("src.services.world_quality_service._location.generate_structured")
     def test_location_refine_prompt_has_temporal_fields(self, mock_gen):
         """Location refine prompt must contain temporal fields and calendar context."""
-        from src.memory.story_state import Location
-
         mock_gen.return_value = Location(name="Ashhold Citadel", description="Improved")
         svc = _make_mock_svc()
         story_state = _make_story_state()

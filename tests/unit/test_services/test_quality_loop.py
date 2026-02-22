@@ -2083,8 +2083,6 @@ class TestHailMaryStructuralGating:
 
     def test_hail_mary_gating_logs_info(self, mock_svc, caplog):
         """Structural gating logs an info message when skipping hail-mary."""
-        import logging
-
         config = RefinementConfig(
             quality_threshold=8.0,
             quality_thresholds=_all_thresholds(8.0),

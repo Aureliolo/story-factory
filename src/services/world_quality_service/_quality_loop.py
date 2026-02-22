@@ -16,6 +16,18 @@ from src.utils.exceptions import WorldGenerationError
 
 logger = logging.getLogger(__name__)
 
+# Dimension name and score threshold for detecting structural deficits in the
+# hail-mary gating logic.  When the weakest dimension is temporal_plausibility
+# *and* its score is below this threshold, the hail-mary fresh-creation attempt
+# is skipped because the deficit is structural (e.g. missing calendar context)
+# and a fresh creation cannot fix it.
+_STRUCTURAL_DEFICIT_DIMENSION = "temporal_plausibility"
+_STRUCTURAL_DEFICIT_THRESHOLD = 4.0
+
+# Keys returned by BaseQualityScores.to_dict() that are metadata, not scoring
+# dimensions.  Excluded when searching for the weakest dimension.
+_SCORE_METADATA_KEYS = {"average", "feedback"}
+
 
 def quality_refinement_loop[T, S: BaseQualityScores](
     *,
@@ -358,19 +370,27 @@ def quality_refinement_loop[T, S: BaseQualityScores](
         skip_hail_mary = False
         if history.best_iteration:
             best_iter_scores = history.iterations[history.best_iteration - 1].scores
-            min_dim = min(
-                ((k, v) for k, v in best_iter_scores.items() if isinstance(v, (int, float))),
+            weakest_dim, weakest_score = min(
+                (
+                    (k, v)
+                    for k, v in best_iter_scores.items()
+                    if isinstance(v, (int, float)) and k not in _SCORE_METADATA_KEYS
+                ),
                 key=lambda x: x[1],
+                # Default ensures no gating when dict is unexpectedly empty
                 default=("", 10.0),
             )
-            if min_dim[0] == "temporal_plausibility" and min_dim[1] < 4.0:
+            if (
+                weakest_dim == _STRUCTURAL_DEFICIT_DIMENSION
+                and weakest_score < _STRUCTURAL_DEFICIT_THRESHOLD
+            ):
                 skip_hail_mary = True
                 logger.info(
                     "%s '%s': skipping hail-mary — structural deficit in %s (%.1f)",
                     entity_type.capitalize(),
                     history.entity_name,
-                    min_dim[0],
-                    min_dim[1],
+                    weakest_dim,
+                    weakest_score,
                 )
 
         if not skip_hail_mary:
@@ -421,8 +441,9 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                     )
             except (WorldGenerationError, ValueError, KeyError) as e:
                 logger.warning(
-                    "%s hail-mary failed: %s. Keeping original best.",
+                    "%s hail-mary failed (%s): %s. Keeping original best.",
                     entity_type.capitalize(),
+                    type(e).__name__,
                     str(e)[:200],
                 )
 
