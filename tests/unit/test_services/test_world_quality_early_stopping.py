@@ -489,13 +489,15 @@ class TestCharacterGenerationEarlyStopping:
     @patch.object(WorldQualityService, "_create_character")
     @patch.object(WorldQualityService, "_judge_character_quality")
     @patch.object(WorldQualityService, "_refine_character")
-    def test_zero_scores_fallback_path(
+    def test_near_zero_scores_fallback_path(
         self, mock_refine, mock_judge, mock_create, service, story_state
     ):
-        """Test character generation with zero scores falls back to last iteration.
+        """Test character generation with near-zero scores falls back to last iteration.
 
-        When all scores are 0, peak_score is never exceeded, so best_character
-        is never set. The function falls back to returning the last character.
+        When all scores are very low (0.1), peak_score is barely exceeded on iteration 1
+        but plateau early-stopping kicks in because scores never improve.  Uses 0.1
+        instead of 0.0 because exact-zero is now detected as a parse failure and
+        triggers re-judging (Fix 8: zero-score anomaly detection).
         """
         test_char = Character(name="ZeroChar", role="protagonist", description="Zero scores")
         mock_create.return_value = test_char
@@ -505,16 +507,17 @@ class TestCharacterGenerationEarlyStopping:
             )
         )
 
-        # All zero scores - peak_score (0.0) is never exceeded
-        zero_scores = CharacterQualityScores(
-            depth=0,
-            goals=0,
-            flaws=0,
-            uniqueness=0,
-            arc_potential=0,
-            temporal_plausibility=0,
+        # Near-zero scores — low enough to never meet threshold, but not exactly 0.0
+        # which would trigger zero-score anomaly detection
+        near_zero_scores = CharacterQualityScores(
+            depth=0.1,
+            goals=0.1,
+            flaws=0.1,
+            uniqueness=0.1,
+            arc_potential=0.1,
+            temporal_plausibility=0.1,
         )
-        mock_judge.return_value = zero_scores
+        mock_judge.return_value = near_zero_scores
 
         char, final_scores, _iterations = service.generate_character_with_quality(
             story_state, existing_names=[]
@@ -523,9 +526,9 @@ class TestCharacterGenerationEarlyStopping:
         # Score-plateau early-stop (#328) triggers after 2 consecutive identical scores
         # +1 for hail-mary fresh creation judge call (threshold not met)
         assert mock_judge.call_count == 3
-        # Returns last iteration since best_character was never set (peak_score never exceeded)
+        # Returns best character (first iteration, since scores never improve)
         assert char.name == "ZeroChar"
-        assert final_scores.average == 0
+        assert final_scores.average == pytest.approx(0.1)
 
     @patch.object(WorldQualityService, "_create_character")
     @patch.object(WorldQualityService, "_judge_character_quality")
@@ -652,24 +655,27 @@ class TestLocationGenerationEarlyStopping:
     @patch.object(WorldQualityService, "_create_location")
     @patch.object(WorldQualityService, "_judge_location_quality")
     @patch.object(WorldQualityService, "_refine_location")
-    def test_zero_scores_fallback_path(
+    def test_near_zero_scores_fallback_path(
         self, mock_refine, mock_judge, mock_create, service, story_state
     ):
-        """Test location generation with zero scores falls back to last iteration."""
+        """Test location generation with near-zero scores falls back via plateau.
+
+        Uses 0.1 instead of 0.0 because exact-zero triggers re-judging (Fix 8).
+        """
         test_loc = {"name": "ZeroLoc", "description": "Zero scores"}
         mock_create.return_value = test_loc
         mock_refine.side_effect = _make_unique_refine(
             lambda n: {"name": "ZeroLoc", "description": f"Zero scores v{n}"}
         )
 
-        zero_scores = LocationQualityScores(
-            atmosphere=0,
-            significance=0,
-            story_relevance=0,
-            distinctiveness=0,
-            temporal_plausibility=0,
+        near_zero_scores = LocationQualityScores(
+            atmosphere=0.1,
+            significance=0.1,
+            story_relevance=0.1,
+            distinctiveness=0.1,
+            temporal_plausibility=0.1,
         )
-        mock_judge.return_value = zero_scores
+        mock_judge.return_value = near_zero_scores
 
         loc, final_scores, _iterations = service.generate_location_with_quality(
             story_state, existing_names=[]
@@ -679,7 +685,7 @@ class TestLocationGenerationEarlyStopping:
         # +1 for hail-mary fresh creation judge call (threshold not met)
         assert mock_judge.call_count == 3
         assert loc["name"] == "ZeroLoc"
-        assert final_scores.average == 0
+        assert final_scores.average == pytest.approx(0.1)
 
     @patch.object(WorldQualityService, "_create_location")
     @patch.object(WorldQualityService, "_judge_location_quality")
@@ -746,10 +752,13 @@ class TestRelationshipGenerationEarlyStopping:
     @patch.object(WorldQualityService, "_create_relationship")
     @patch.object(WorldQualityService, "_judge_relationship_quality")
     @patch.object(WorldQualityService, "_refine_relationship")
-    def test_zero_scores_fallback_path(
+    def test_near_zero_scores_fallback_path(
         self, mock_refine, mock_judge, mock_create, service, story_state
     ):
-        """Test relationship generation with zero scores falls back to last iteration."""
+        """Test relationship generation with near-zero scores falls back via plateau.
+
+        Uses 0.1 instead of 0.0 because exact-zero triggers re-judging (Fix 8).
+        """
         test_rel = {
             "source": "Alice",
             "target": "Bob",
@@ -766,10 +775,10 @@ class TestRelationshipGenerationEarlyStopping:
             }
         )
 
-        zero_scores = RelationshipQualityScores(
-            tension=0, dynamics=0, story_potential=0, authenticity=0
+        near_zero_scores = RelationshipQualityScores(
+            tension=0.1, dynamics=0.1, story_potential=0.1, authenticity=0.1
         )
-        mock_judge.return_value = zero_scores
+        mock_judge.return_value = near_zero_scores
 
         rel, final_scores, _iterations = service.generate_relationship_with_quality(
             story_state, entity_names=["Alice", "Bob"], existing_rels=[]
@@ -779,7 +788,7 @@ class TestRelationshipGenerationEarlyStopping:
         # +1 for hail-mary fresh creation judge call (threshold not met)
         assert mock_judge.call_count == 3
         assert rel["source"] == "Alice"
-        assert final_scores.average == 0
+        assert final_scores.average == pytest.approx(0.1)
 
     @patch.object(WorldQualityService, "_create_relationship")
     @patch.object(WorldQualityService, "_judge_relationship_quality")
@@ -840,24 +849,27 @@ class TestItemGenerationEarlyStopping:
     @patch.object(WorldQualityService, "_create_item")
     @patch.object(WorldQualityService, "_judge_item_quality")
     @patch.object(WorldQualityService, "_refine_item")
-    def test_zero_scores_fallback_path(
+    def test_near_zero_scores_fallback_path(
         self, mock_refine, mock_judge, mock_create, service, story_state
     ):
-        """Test item generation with zero scores falls back to last iteration."""
+        """Test item generation with near-zero scores falls back via plateau.
+
+        Uses 0.1 instead of 0.0 because exact-zero triggers re-judging (Fix 8).
+        """
         test_item = {"name": "ZeroItem", "description": "Zero scores"}
         mock_create.return_value = test_item
         mock_refine.side_effect = _make_unique_refine(
             lambda n: {"name": "ZeroItem", "description": f"Zero scores v{n}"}
         )
 
-        zero_scores = ItemQualityScores(
-            significance=0,
-            uniqueness=0,
-            narrative_potential=0,
-            integration=0,
-            temporal_plausibility=0,
+        near_zero_scores = ItemQualityScores(
+            significance=0.1,
+            uniqueness=0.1,
+            narrative_potential=0.1,
+            integration=0.1,
+            temporal_plausibility=0.1,
         )
-        mock_judge.return_value = zero_scores
+        mock_judge.return_value = near_zero_scores
 
         item, final_scores, _iterations = service.generate_item_with_quality(
             story_state, existing_names=[]
@@ -867,7 +879,7 @@ class TestItemGenerationEarlyStopping:
         # +1 for hail-mary fresh creation judge call (threshold not met)
         assert mock_judge.call_count == 3
         assert item["name"] == "ZeroItem"
-        assert final_scores.average == 0
+        assert final_scores.average == pytest.approx(0.1)
 
     @patch.object(WorldQualityService, "_create_item")
     @patch.object(WorldQualityService, "_judge_item_quality")
@@ -934,24 +946,27 @@ class TestConceptGenerationEarlyStopping:
     @patch.object(WorldQualityService, "_create_concept")
     @patch.object(WorldQualityService, "_judge_concept_quality")
     @patch.object(WorldQualityService, "_refine_concept")
-    def test_zero_scores_fallback_path(
+    def test_near_zero_scores_fallback_path(
         self, mock_refine, mock_judge, mock_create, service, story_state
     ):
-        """Test concept generation with zero scores falls back to last iteration."""
+        """Test concept generation with near-zero scores falls back via plateau.
+
+        Uses 0.1 instead of 0.0 because exact-zero triggers re-judging (Fix 8).
+        """
         test_concept = {"name": "ZeroConcept", "description": "Zero scores"}
         mock_create.return_value = test_concept
         mock_refine.side_effect = _make_unique_refine(
             lambda n: {"name": "ZeroConcept", "description": f"Zero scores v{n}"}
         )
 
-        zero_scores = ConceptQualityScores(
-            relevance=0,
-            depth=0,
-            manifestation=0,
-            resonance=0,
-            temporal_plausibility=0,
+        near_zero_scores = ConceptQualityScores(
+            relevance=0.1,
+            depth=0.1,
+            manifestation=0.1,
+            resonance=0.1,
+            temporal_plausibility=0.1,
         )
-        mock_judge.return_value = zero_scores
+        mock_judge.return_value = near_zero_scores
 
         concept, final_scores, _iterations = service.generate_concept_with_quality(
             story_state, existing_names=[]
@@ -961,7 +976,7 @@ class TestConceptGenerationEarlyStopping:
         # +1 for hail-mary fresh creation judge call (threshold not met)
         assert mock_judge.call_count == 3
         assert concept["name"] == "ZeroConcept"
-        assert final_scores.average == 0
+        assert final_scores.average == pytest.approx(0.1)
 
     @patch.object(WorldQualityService, "_create_concept")
     @patch.object(WorldQualityService, "_judge_concept_quality")
@@ -1028,24 +1043,27 @@ class TestEventGenerationEarlyStopping:
     @patch.object(WorldQualityService, "_create_event")
     @patch.object(WorldQualityService, "_judge_event_quality")
     @patch.object(WorldQualityService, "_refine_event")
-    def test_zero_scores_fallback_path(
+    def test_near_zero_scores_fallback_path(
         self, mock_refine, mock_judge, mock_create, service, story_state
     ):
-        """Test event generation with zero scores falls back to last iteration."""
+        """Test event generation with near-zero scores falls back via plateau.
+
+        Uses 0.1 instead of 0.0 because exact-zero triggers re-judging (Fix 8).
+        """
         test_event = {"description": "ZeroEvent", "participants": []}
         mock_create.return_value = test_event
         mock_refine.side_effect = _make_unique_refine(
             lambda n: {"description": f"ZeroEvent v{n}", "participants": []}
         )
 
-        zero_scores = EventQualityScores(
-            significance=0,
-            temporal_plausibility=0,
-            causal_coherence=0,
-            narrative_potential=0,
-            entity_integration=0,
+        near_zero_scores = EventQualityScores(
+            significance=0.1,
+            temporal_plausibility=0.1,
+            causal_coherence=0.1,
+            narrative_potential=0.1,
+            entity_integration=0.1,
         )
-        mock_judge.return_value = zero_scores
+        mock_judge.return_value = near_zero_scores
 
         event, final_scores, _iterations = service.generate_event_with_quality(
             story_state, existing_descriptions=[], entity_context=""
@@ -1054,9 +1072,8 @@ class TestEventGenerationEarlyStopping:
         # Score-plateau early-stop triggers after 2 consecutive identical scores
         # +1 for hail-mary fresh creation judge call (threshold not met)
         assert mock_judge.call_count == 3
-        # Returns the best iteration entity since all scores are equal (0.0)
         assert event["description"] == "ZeroEvent"
-        assert final_scores.average == 0
+        assert final_scores.average == pytest.approx(0.1)
 
     @patch.object(WorldQualityService, "_create_event")
     @patch.object(WorldQualityService, "_judge_event_quality")

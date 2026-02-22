@@ -228,8 +228,8 @@ class WorldHealthMetrics(BaseModel):
         - Hierarchical circular penalty: -5 per chain (max -25)
         - Mutual circular penalty: -1 per chain (max -5)
         - Contradiction penalty: -5 per contradiction (max -25)
-        - Temporal error penalty: -3 per error (max -15)
-        - Temporal warning penalty: -1 per warning (max -5)
+        - Temporal error penalty: -5 per error (max -30)
+        - Temporal warning penalty: -2 per warning (max -20)
         - Density bonus: +10 if density >= 1.5, +5 if >= 1.0
 
         Quality scoring (0-100):
@@ -263,8 +263,8 @@ class WorldHealthMetrics(BaseModel):
         structural_score -= contradiction_penalty
 
         # Temporal consistency penalty
-        temporal_error_penalty = min(self.temporal_error_count * 3, 15)
-        temporal_warning_penalty = min(self.temporal_warning_count, 5)
+        temporal_error_penalty = min(self.temporal_error_count * 5, 30)
+        temporal_warning_penalty = min(self.temporal_warning_count * 2, 20)
         structural_score -= temporal_error_penalty
         structural_score -= temporal_warning_penalty
 

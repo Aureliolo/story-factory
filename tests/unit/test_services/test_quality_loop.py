@@ -2115,3 +2115,270 @@ class TestHailMaryStructuralGating:
 
         assert any("skipping hail-mary" in msg for msg in caplog.messages)
         assert any("structural deficit" in msg for msg in caplog.messages)
+
+
+class TestZeroScoreAnomalyDetection:
+    """Tests for zero-score anomaly detection in quality loop (#395 Fix 8)."""
+
+    def test_zero_dimension_triggers_rejudge(self, mock_svc):
+        """Zero on any dimension discards scores and re-judges."""
+        config = RefinementConfig(
+            quality_threshold=7.0,
+            quality_thresholds=_all_thresholds(7.0),
+            max_iterations=3,
+            early_stopping_patience=10,
+            early_stopping_min_iterations=10,
+        )
+
+        entity = {"name": "Hero"}
+        judge_call = 0
+
+        def judge_fn(e):
+            """Return zero-score on first call, valid scores on second."""
+            nonlocal judge_call
+            judge_call += 1
+            if judge_call == 1:
+                # First call: one dimension is 0.0 (parse failure)
+                return CharacterQualityScores(
+                    depth=0.0,  # Zero = likely parse failure
+                    goals=8.0,
+                    flaws=8.0,
+                    uniqueness=8.0,
+                    arc_potential=8.0,
+                    temporal_plausibility=8.0,
+                    feedback="Partial parse",
+                )
+            # Second call: all dimensions valid and above threshold
+            return CharacterQualityScores(
+                depth=8.0,
+                goals=8.0,
+                flaws=8.0,
+                uniqueness=8.0,
+                arc_potential=8.0,
+                temporal_plausibility=8.0,
+                feedback="Good character",
+            )
+
+        _result_entity, result_scores, _iterations = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entity,
+            judge_fn=judge_fn,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # The zero-score call should have been discarded, second call accepted
+        assert result_scores.depth == 8.0
+        assert judge_call == 2  # Called twice: once rejected, once accepted
+
+    def test_zero_on_multiple_dimensions_triggers_rejudge(self, mock_svc):
+        """Multiple zero dimensions also trigger re-judge."""
+        config = RefinementConfig(
+            quality_threshold=7.0,
+            quality_thresholds=_all_thresholds(7.0),
+            max_iterations=3,
+            early_stopping_patience=10,
+            early_stopping_min_iterations=10,
+        )
+
+        entity = {"name": "Hero"}
+        judge_call = 0
+
+        def judge_fn(e):
+            """Return multi-zero scores on first call, valid scores on second."""
+            nonlocal judge_call
+            judge_call += 1
+            if judge_call == 1:
+                # Multiple zeroes = definitely a parse failure
+                return CharacterQualityScores(
+                    depth=0.0,
+                    goals=0.0,
+                    flaws=0.0,
+                    uniqueness=8.0,
+                    arc_potential=8.0,
+                    temporal_plausibility=8.0,
+                    feedback="Mostly zeroes",
+                )
+            return _make_scores(8.0, "Good")
+
+        _result_entity, result_scores, _iterations = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entity,
+            judge_fn=judge_fn,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        assert result_scores.average == 8.0
+        assert judge_call == 2
+
+    def test_half_point_score_accepted_normally(self, mock_svc):
+        """Score of 0.5 (not 0.0) should be accepted without re-judging."""
+        # Threshold is set below the average (6.75) so the loop exits after one
+        # judge call — confirming 0.5 is NOT treated as a parse-failure anomaly.
+        config = RefinementConfig(
+            quality_threshold=5.0,
+            quality_thresholds=_all_thresholds(5.0),
+            max_iterations=3,
+            early_stopping_patience=10,
+            early_stopping_min_iterations=10,
+        )
+
+        entity = {"name": "Hero"}
+        judge_call = 0
+
+        def judge_fn(e):
+            """Return low-but-nonzero scores that should be accepted."""
+            nonlocal judge_call
+            judge_call += 1
+            return CharacterQualityScores(
+                depth=0.5,  # Low but not zero — legitimate score
+                goals=8.0,
+                flaws=8.0,
+                uniqueness=8.0,
+                arc_potential=8.0,
+                temporal_plausibility=8.0,
+                feedback="Shallow but valid",
+            )
+
+        _result_entity, result_scores, _iterations = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entity,
+            judge_fn=judge_fn,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # 0.5 should NOT be rejected — only exactly 0.0 is treated as parse failure
+        assert result_scores.depth == 0.5
+        assert judge_call == 1  # Only called once, accepted
+
+    def test_persistent_zero_scores_exhaust_max_iterations(self, mock_svc):
+        """When judge always returns zero scores, loop exhausts iterations and raises."""
+        config = RefinementConfig(
+            quality_threshold=7.0,
+            quality_thresholds=_all_thresholds(7.0),
+            max_iterations=3,
+            early_stopping_patience=10,
+            early_stopping_min_iterations=10,
+        )
+
+        entity = {"name": "Hero"}
+
+        def always_zero_judge(e):
+            """Always return zero scores (simulating persistent parse failures)."""
+            return CharacterQualityScores(
+                depth=0.0,
+                goals=0.0,
+                flaws=0.0,
+                uniqueness=0.0,
+                arc_potential=0.0,
+                temporal_plausibility=0.0,
+                feedback="All zeroes",
+            )
+
+        with pytest.raises(WorldGenerationError, match="Failed to generate character"):
+            quality_refinement_loop(
+                entity_type="character",
+                create_fn=lambda retries: entity,
+                judge_fn=always_zero_judge,
+                refine_fn=lambda e, s, i: e,
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
+
+    def test_hail_mary_zero_scores_discarded(self, mock_svc, caplog):
+        """Hail-mary judge returning zero scores discards the fresh entity."""
+        config = RefinementConfig(
+            quality_threshold=9.0,
+            quality_thresholds=_all_thresholds(9.0),
+            max_iterations=2,
+            early_stopping_patience=10,
+            early_stopping_min_iterations=10,
+        )
+
+        entities = [{"name": "Original"}, {"name": "HailMary"}]
+        judge_call = 0
+
+        def judge_fn(entity):
+            """Return sub-threshold scores in loop, zero scores for hail-mary."""
+            nonlocal judge_call
+            judge_call += 1
+            if entity["name"] == "HailMary":
+                # Hail-mary judge returns zero — parse failure
+                return CharacterQualityScores(
+                    depth=0.0,
+                    goals=7.0,
+                    flaws=7.0,
+                    uniqueness=7.0,
+                    arc_potential=7.0,
+                    temporal_plausibility=7.0,
+                    feedback="Partial parse on hail-mary",
+                )
+            # Normal sub-threshold scores for the main loop
+            return CharacterQualityScores(
+                depth=6.0,
+                goals=6.0,
+                flaws=6.0,
+                uniqueness=6.0,
+                arc_potential=6.0,
+                temporal_plausibility=6.0,
+                feedback="Below threshold",
+            )
+
+        create_call = 0
+
+        def create_fn(retries):
+            """Return Original first, then HailMary for hail-mary attempt."""
+            nonlocal create_call
+            create_call += 1
+            if create_call <= 1:
+                return entities[0]
+            return entities[1]
+
+        with caplog.at_level(logging.WARNING):
+            result_entity, result_scores, scoring_rounds = quality_refinement_loop(
+                entity_type="character",
+                create_fn=create_fn,
+                judge_fn=judge_fn,
+                refine_fn=lambda e, s, i: e,
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
+
+        # Hail-mary zero scores should be discarded — original kept
+        assert result_entity["name"] == "Original"
+        assert result_scores.depth == 6.0
+        # Hail-mary scoring round NOT counted (zero scores discarded);
+        # main loop exits after 1 round due to unchanged-output detection
+        assert scoring_rounds == 1
+        # Warning logged about hail-mary zero scores
+        assert any("hail-mary judge returned 0.0" in msg for msg in caplog.messages)

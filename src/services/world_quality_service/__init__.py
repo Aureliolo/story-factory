@@ -259,6 +259,8 @@ class WorldQualityService(EntityDelegatesMixin):
 
         Called by the build pipeline after calendar generation so that
         subsequent entity creation prompts include temporal context.
+        Appends a directive instructing the LLM to keep all temporal
+        attributes within the defined era boundaries.
         Thread-safe: guarded by ``_calendar_context_lock`` so concurrent
         builds on a singleton service cannot corrupt the context.
 
@@ -298,7 +300,14 @@ class WorldQualityService(EntityDelegatesMixin):
                 month_names = [m.get("name", f"Month {i + 1}") for i, m in enumerate(months)]
                 parts.append(f"Months: {', '.join(month_names)}")
 
-            self._calendar_context = "\n".join(parts) if parts else None
+            context_text = "\n".join(parts) if parts else None
+            if context_text:
+                context_text += (
+                    "\nIMPORTANT: ALL temporal attributes (birth years, founding years, "
+                    "event dates, etc.) MUST fall within the era boundaries listed above. "
+                    "Do NOT use real-world dates."
+                )
+            self._calendar_context = context_text
             if self._calendar_context is None:
                 logger.warning(
                     "Calendar dict provided but no context extracted — calendar may be malformed: %s",

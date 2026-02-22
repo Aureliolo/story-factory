@@ -220,6 +220,19 @@ class TestCreateCalendar:
         assert result["eras"][0]["start_year"] == 1
         assert result["eras"][0]["name"] == "First Era"
 
+    @patch("src.services.world_quality_service._calendar.generate_structured")
+    def test_create_calendar_prompt_contains_era_name_instruction(
+        self, mock_generate_structured, mock_svc, story_state, sample_generated_data
+    ):
+        """Test that creation prompt instructs LLM to use exact era name from eras list."""
+        mock_generate_structured.return_value = sample_generated_data
+        _create_calendar(mock_svc, story_state, 0.9)
+
+        call_args = mock_generate_structured.call_args
+        prompt = call_args.kwargs["prompt"]
+        assert "era_name field MUST be the EXACT name" in prompt
+        assert "Do not invent a new name" in prompt
+
 
 class TestJudgeCalendarQuality:
     """Tests for _judge_calendar_quality function."""
@@ -530,6 +543,18 @@ class TestCalendarContext:
         # Empty dict with no usable fields
         WorldQualityService.set_calendar_context(svc, {})
         assert svc._calendar_context is None
+
+    def test_set_calendar_context_includes_temporal_directive(self, sample_calendar_dict):
+        """Test that set_calendar_context appends temporal constraint directive."""
+        svc = MagicMock(spec=WorldQualityService)
+        svc._calendar_context = None
+        svc._calendar_context_lock = threading.RLock()
+        WorldQualityService.set_calendar_context(svc, sample_calendar_dict)
+        ctx = svc._calendar_context
+
+        assert "IMPORTANT:" in ctx
+        assert "MUST fall within the era boundaries" in ctx
+        assert "Do NOT use real-world dates" in ctx
 
 
 class TestServiceWrapperMethods:

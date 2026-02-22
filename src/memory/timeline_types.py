@@ -275,7 +275,7 @@ def _try_parse_json_timestamp(text: str) -> StoryTimestamp | None:
     """
     try:
         data = json.loads(text)
-    except json.JSONDecodeError, ValueError:
+    except ValueError:
         return None
 
     if not isinstance(data, dict):
@@ -484,11 +484,32 @@ def parse_timestamp(text: str) -> StoryTimestamp:
     return result
 
 
+SENTINEL_YEARS: frozenset[int] = frozenset({-1, 0, 9999})
+"""Year values that LLMs use as placeholders/sentinels and must be rejected."""
+
+
+def _check_sentinel(year: int, field_name: str) -> int | None:
+    """Reject sentinel year values that LLMs use as placeholders.
+
+    Parameters:
+        year: The parsed year value to check.
+        field_name: Field label for log messages.
+
+    Returns:
+        The year unchanged if valid, or None if it is a sentinel value.
+    """
+    if year in SENTINEL_YEARS:
+        logger.warning("Rejected sentinel %s value: %d (known placeholder)", field_name, year)
+        return None
+    return year
+
+
 def _parse_year(value: object, field_name: str) -> int | None:
     """Coerce a raw LLM year value to int, with type-aware logging.
 
     Handles: bool (rejected), int (pass-through), float (truncated to int),
     str (parsed via ``int()``), and anything else (logged and rejected).
+    Sentinel values (-1, 0, 9999) are rejected after conversion.
 
     Parameters:
         value: The raw value from LLM output (any type).
@@ -501,18 +522,36 @@ def _parse_year(value: object, field_name: str) -> int | None:
         logger.warning("Unexpected %s type: bool (%r)", field_name, value)
         return None
     if isinstance(value, int):
-        return value
+        return _check_sentinel(value, field_name)
     if isinstance(value, float):
         logger.debug("Converted float %s to int: %s", field_name, value)
-        return int(value)
+        return _check_sentinel(int(value), field_name)
     if isinstance(value, str):
         try:
-            return int(value)
+            return _check_sentinel(int(value), field_name)
         except ValueError as exc:
             logger.warning("Could not parse %s string: %r — %s", field_name, value, exc)
             return None
     logger.warning("Unexpected %s type: %s (%r)", field_name, type(value).__name__, value)
     return None
+
+
+def _filter_sentinel_year_in_dict(data: dict, field_prefix: str) -> dict:
+    """Return a copy of *data* with any sentinel year value parsed through ``_parse_year``.
+
+    Dict-constructed ``StoryTimestamp(**data)`` bypasses ``_parse_year``, so
+    sentinel values (-1, 0, 9999) would slip through.  This helper applies
+    the same sentinel rejection used by ``founding_year`` / ``destruction_year``
+    to the ``year`` key in timestamp dicts (birth, death, first/last appearance).
+
+    Always returns a new dict — the original is never mutated.
+    """
+    if "year" not in data or data["year"] is None:
+        logger.debug("No year to filter in %s dict (keys: %s)", field_prefix, list(data.keys()))
+        return {**data}
+    parsed = _parse_year(data["year"], f"{field_prefix}.year")
+    logger.debug("Filtered %s.year: %r -> %r", field_prefix, data["year"], parsed)
+    return {**data, "year": parsed}
 
 
 def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifecycle | None:
@@ -552,8 +591,9 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
 
     if birth_data := lifecycle_data.get("birth"):
         if isinstance(birth_data, dict):
+            filtered = _filter_sentinel_year_in_dict(birth_data, "birth")
             try:
-                result.birth = StoryTimestamp(**birth_data)
+                result.birth = StoryTimestamp(**filtered)
             except ValidationError as exc:
                 logger.warning("Malformed birth timestamp dict %r: %s", birth_data, exc)
         elif isinstance(birth_data, str):
@@ -561,8 +601,9 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
 
     if death_data := lifecycle_data.get("death"):
         if isinstance(death_data, dict):
+            filtered = _filter_sentinel_year_in_dict(death_data, "death")
             try:
-                result.death = StoryTimestamp(**death_data)
+                result.death = StoryTimestamp(**filtered)
             except ValidationError as exc:
                 logger.warning("Malformed death timestamp dict %r: %s", death_data, exc)
         elif isinstance(death_data, str):
@@ -570,8 +611,9 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
 
     if first_data := lifecycle_data.get("first_appearance"):
         if isinstance(first_data, dict):
+            filtered = _filter_sentinel_year_in_dict(first_data, "first_appearance")
             try:
-                result.first_appearance = StoryTimestamp(**first_data)
+                result.first_appearance = StoryTimestamp(**filtered)
             except ValidationError as exc:
                 logger.warning("Malformed first_appearance timestamp dict %r: %s", first_data, exc)
         elif isinstance(first_data, str):
@@ -579,8 +621,9 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
 
     if last_data := lifecycle_data.get("last_appearance"):
         if isinstance(last_data, dict):
+            filtered = _filter_sentinel_year_in_dict(last_data, "last_appearance")
             try:
-                result.last_appearance = StoryTimestamp(**last_data)
+                result.last_appearance = StoryTimestamp(**filtered)
             except ValidationError as exc:
                 logger.warning("Malformed last_appearance timestamp dict %r: %s", last_data, exc)
         elif isinstance(last_data, str):
@@ -590,7 +633,7 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
     if notes := lifecycle_data.get("temporal_notes"):
         result.temporal_notes = str(notes)
 
-    # Use 'is not None' to handle year 0 correctly
+    # Use 'is not None' so that sentinel values like 0 reach _parse_year for proper rejection
     founding = lifecycle_data.get("founding_year")
     if founding is not None:
         result.founding_year = _parse_year(founding, "founding_year")

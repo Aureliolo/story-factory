@@ -688,6 +688,7 @@ class TestSettingsSaveLoad:
         )._merge_with_defaults
 
         def bad_merge(data, cls):
+            """Inject invalid kwarg to trigger TypeError."""
             result = original_merge(data, cls)
             # Inject a value that causes TypeError when passed to dataclass
             data["unexpected_kwarg_xyz"] = "boom"
@@ -1189,6 +1190,9 @@ class TestDictStructureValidation:
 class TestAtomicWrite:
     """Tests for _atomic_write_json function."""
 
+    class _Unserializable:
+        """Object that cannot be JSON-serialized."""
+
     def test_writes_json_to_file(self, tmp_path):
         """Should write valid JSON to the target path."""
         from src.settings._settings import _atomic_write_json
@@ -1217,11 +1221,8 @@ class TestAtomicWrite:
 
         target = tmp_path / "test.json"
 
-        class Unserializable:
-            pass
-
         with pytest.raises(TypeError):
-            _atomic_write_json(target, {"bad": Unserializable()})
+            _atomic_write_json(target, {"bad": self._Unserializable()})
 
         assert not target.exists()
         tmp_files = list(tmp_path.glob("*.tmp"))
@@ -1233,12 +1234,9 @@ class TestAtomicWrite:
 
         target = tmp_path / "test.json"
 
-        class Unserializable:
-            pass
-
         with patch("src.settings._settings.os.unlink", side_effect=OSError("permission denied")):
             with pytest.raises(TypeError):
-                _atomic_write_json(target, {"bad": Unserializable()})
+                _atomic_write_json(target, {"bad": self._Unserializable()})
 
 
 class TestSettingsGetModelForAgent:

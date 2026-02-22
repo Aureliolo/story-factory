@@ -888,25 +888,25 @@ class TestValidateAndNormalizeAttributes:
 
     def test_deep_attributes_flattened(self, caplog):
         """Test deeply nested attributes are flattened with warning."""
-        # Create deeply nested attrs (more than MAX_ATTRIBUTES_DEPTH)
+        # Create deeply nested attrs (more than MAX_ATTRIBUTES_DEPTH=5)
         # validate_and_normalize_attributes calls with current_depth=1
-        # With max_depth=3, the value of 'l2' (at depth 3) gets JSON-serialized
-        attrs = {"l1": {"l2": {"l3": {"l4": {"l5": "too deep"}}}}}
+        # With max_depth=5, the value of 'l4' (at depth 5) gets JSON-serialized
+        attrs = {"l1": {"l2": {"l3": {"l4": {"l5": {"l6": {"l7": "too deep"}}}}}}}
 
         with caplog.at_level(logging.WARNING):
             result = validate_and_normalize_attributes(attrs)
 
         # Should not raise, but should flatten and log warning
         assert "l1" in result
-        # At depth 3, the value of l2 (the dict {"l3": ...}) should be JSON-serialized
-        assert isinstance(result["l1"]["l2"], str)
-        assert "l3" in result["l1"]["l2"]  # l3 should be in the string
+        # At depth 5, the value of l4 (the dict {"l5": ...}) should be JSON-serialized
+        assert isinstance(result["l1"]["l2"]["l3"]["l4"], str)
+        assert "l5" in result["l1"]["l2"]["l3"]["l4"]  # l5 should be in the string
         assert "flattening deep structures" in caplog.text
 
     def test_deep_list_flattened(self, caplog):
         """Test deeply nested lists are flattened with warning."""
-        # Lists at each level
-        attrs = {"l1": [{"l2": [{"l3": [{"l4": "too deep"}]}]}]}
+        # Lists at each level — deep enough to exceed MAX_ATTRIBUTES_DEPTH=5
+        attrs = {"l1": [{"l2": [{"l3": [{"l4": [{"l5": [{"l6": "too deep"}]}]}]}]}]}
 
         with caplog.at_level(logging.WARNING):
             validate_and_normalize_attributes(attrs)
@@ -916,7 +916,7 @@ class TestValidateAndNormalizeAttributes:
 
     def test_deep_attributes_warning_includes_key_names(self, caplog):
         """Test warning message includes the names of affected deep keys."""
-        attrs = {"shallow": "ok", "deep_one": {"l2": {"l3": {"l4": "too deep"}}}}
+        attrs = {"shallow": "ok", "deep_one": {"l2": {"l3": {"l4": {"l5": {"l6": "too deep"}}}}}}
 
         with caplog.at_level(logging.WARNING):
             validate_and_normalize_attributes(attrs)
@@ -938,6 +938,22 @@ class TestValidateAndNormalizeAttributes:
         path_records = [r for r in debug_records if "path:" in r.message]
         assert len(path_records) >= 1
         assert "outer.inner" in path_records[0].message
+
+    def test_lifecycle_shaped_dict_survives_at_depth_4(self):
+        """Test lifecycle-shaped attributes at depth 4 survive with MAX_ATTRIBUTES_DEPTH=5."""
+        attrs = {
+            "lifecycle": {
+                "birth": {"year": 500, "era_name": "Third Age"},
+                "death": {"year": 580},
+                "temporal_notes": "Lived through the Great War",
+            }
+        }
+        result = validate_and_normalize_attributes(attrs)
+        # At depth 5, lifecycle.birth.year (depth 4) should NOT be flattened
+        assert result["lifecycle"]["birth"]["year"] == 500
+        assert result["lifecycle"]["birth"]["era_name"] == "Third Age"
+        assert result["lifecycle"]["death"]["year"] == 580
+        assert result["lifecycle"]["temporal_notes"] == "Lived through the Great War"
 
 
 class TestWorldDatabaseDestructor:
@@ -975,8 +991,8 @@ class TestWorldDatabaseAddEntityValidation:
     def test_add_entity_deep_attributes_flattened(self, db, caplog):
         """Test add_entity flattens deeply nested attributes."""
         # Create deeply nested attributes that exceed depth limit
-        # With max_depth=3, the value of 'l2' (at depth 3) gets JSON-serialized
-        deep_attrs = {"l1": {"l2": {"l3": {"l4": {"l5": "too deep"}}}}}
+        # With max_depth=5 and current_depth=1, depth 6+ triggers flattening
+        deep_attrs = {"l1": {"l2": {"l3": {"l4": {"l5": {"l6": {"l7": "too deep"}}}}}}}
 
         with caplog.at_level(logging.WARNING):
             entity_id = db.add_entity("character", "Test", attributes=deep_attrs)
@@ -987,9 +1003,9 @@ class TestWorldDatabaseAddEntityValidation:
         # Verify flattening occurred
         entity = db.get_entity(entity_id)
         assert entity is not None
-        # The deep nesting should be flattened - l2's value becomes a JSON string
-        assert isinstance(entity.attributes["l1"]["l2"], str)
-        assert "l3" in entity.attributes["l1"]["l2"]
+        # The deep nesting should be flattened at depth 5 — l4's value becomes a JSON string
+        assert isinstance(entity.attributes["l1"]["l2"]["l3"]["l4"], str)
+        assert "l5" in entity.attributes["l1"]["l2"]["l3"]["l4"]
         assert "flattening deep structures" in caplog.text
 
 
@@ -1147,8 +1163,8 @@ class TestWorldDatabaseUpdateValidation:
         entity_id = db.add_entity("character", "Test")
 
         # Create deeply nested attributes that exceed depth limit
-        # With max_depth=3, the value of 'l2' (at depth 3) gets JSON-serialized
-        deep_attrs = {"l1": {"l2": {"l3": {"l4": {"l5": "too deep"}}}}}
+        # With max_depth=5 and current_depth=1, depth 6+ triggers flattening
+        deep_attrs = {"l1": {"l2": {"l3": {"l4": {"l5": {"l6": {"l7": "too deep"}}}}}}}
 
         with caplog.at_level(logging.WARNING):
             result = db.update_entity(entity_id, attributes=deep_attrs)
@@ -1159,9 +1175,9 @@ class TestWorldDatabaseUpdateValidation:
         # Verify flattening occurred
         entity = db.get_entity(entity_id)
         assert entity is not None
-        # The deep nesting should be flattened - l2's value becomes a JSON string
-        assert isinstance(entity.attributes["l1"]["l2"], str)
-        assert "l3" in entity.attributes["l1"]["l2"]
+        # The deep nesting should be flattened at depth 5 — l4's value becomes a JSON string
+        assert isinstance(entity.attributes["l1"]["l2"]["l3"]["l4"], str)
+        assert "l5" in entity.attributes["l1"]["l2"]["l3"]["l4"]
         assert "flattening deep structures" in caplog.text
 
 

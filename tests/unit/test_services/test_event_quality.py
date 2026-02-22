@@ -318,6 +318,47 @@ class TestJudgeEventQuality:
         scores = service._judge_event_quality(event, story_state, temperature=0.1)
         assert scores.entity_integration == 5.0
 
+    @patch("src.services.world_quality_service._event.generate_structured")
+    def test_judge_event_includes_calendar_context(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test that event judge prompt includes calendar context when available (#395 Fix 5)."""
+        mock_generate_structured.return_value = EventQualityScores(
+            significance=8.0,
+            temporal_plausibility=8.0,
+            causal_coherence=8.0,
+            narrative_potential=8.0,
+            entity_integration=8.0,
+            feedback="Good event",
+        )
+
+        # Set calendar context on the service
+        service.set_calendar_context(
+            {
+                "current_era_name": "Age of Legends",
+                "era_abbreviation": "AL",
+                "current_story_year": 342,
+                "months": [{"name": "Frostmoon", "days": 30}],
+                "eras": [{"name": "Age of Legends", "start_year": 1, "end_year": None}],
+            }
+        )
+
+        event = {
+            "description": "The Great Battle",
+            "year": 200,
+            "era_name": "Age of Legends",
+            "participants": [],
+            "consequences": [],
+        }
+
+        service._judge_event_quality(event, story_state, temperature=0.1)
+
+        # Verify the prompt includes calendar context
+        call_args = mock_generate_structured.call_args
+        prompt = call_args.kwargs["prompt"]
+        assert "CALENDAR & TIMELINE:" in prompt
+        assert "Frostmoon" in prompt
+
 
 class TestRefineEvent:
     """Tests for _refine_event function."""
@@ -659,3 +700,47 @@ class TestFormatHelpers:
         assert "Consequences:" in result
         assert "Peace restored" in result
         assert "Kingdom united" in result
+
+
+class TestCharacterJudgeCalendarContext:
+    """Test that character judge prompt includes calendar context (#395 Fix 4)."""
+
+    def test_build_character_judge_prompt_includes_calendar_context(self):
+        """Test _build_character_judge_prompt includes calendar context when provided."""
+        from src.memory.story_state import Character
+        from src.services.world_quality_service._character import _build_character_judge_prompt
+
+        character = Character(
+            name="Test Hero",
+            role="protagonist",
+            description="A brave warrior",
+            personality_traits=[{"trait": "brave", "category": "core"}],
+            goals=["Save the world"],
+            arc_notes="Grows from naive to wise",
+        )
+
+        calendar_ctx = "\nCALENDAR & TIMELINE:\nCurrent Era: Age of Legends (AL)\nYear: 342"
+        prompt = _build_character_judge_prompt(character, "fantasy", calendar_ctx)
+
+        assert "CALENDAR & TIMELINE:" in prompt
+        assert "Age of Legends" in prompt
+        assert "342" in prompt
+
+    def test_build_character_judge_prompt_works_without_calendar_context(self):
+        """Test _build_character_judge_prompt works with empty calendar context."""
+        from src.memory.story_state import Character
+        from src.services.world_quality_service._character import _build_character_judge_prompt
+
+        character = Character(
+            name="Test Hero",
+            role="protagonist",
+            description="A brave warrior",
+            personality_traits=[{"trait": "brave", "category": "core"}],
+            goals=["Save the world"],
+            arc_notes="Grows from naive to wise",
+        )
+
+        prompt = _build_character_judge_prompt(character, "fantasy")
+        # Should work without calendar context (default "")
+        assert "Test Hero" in prompt
+        assert "temporal_plausibility" in prompt

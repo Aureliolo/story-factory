@@ -11,7 +11,12 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Attributes constraints
-MAX_ATTRIBUTES_DEPTH = 3
+# flatten_deep_attributes starts at current_depth=0, so the lifecycle path
+# attrs(0) -> lifecycle(1) -> birth(2) -> {year, era_name}(3) reaches depth 3
+# for the birth dict itself.  Depth 5 (not 4) gives a +2 buffer so dict-valued
+# subkeys inside birth (e.g. year: {value, precision}) survive as live dicts
+# rather than being JSON-stringified by the depth >= max_depth guard.
+MAX_ATTRIBUTES_DEPTH = 5
 MAX_ATTRIBUTES_SIZE_BYTES = 10 * 1024  # 10KB
 
 
