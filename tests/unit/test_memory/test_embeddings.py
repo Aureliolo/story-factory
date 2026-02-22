@@ -914,6 +914,22 @@ class TestGetEmbeddedSourceIds:
         result = _embeddings.get_embedded_source_ids(db, "nonexistent-model:latest")
         assert result == set()
 
+    def test_get_embedded_source_ids_via_world_database(self, db):
+        """WorldDatabase.get_embedded_source_ids delegates to _embeddings correctly."""
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO embedding_metadata
+            (source_id, content_type, content_hash, embedding_model, embedded_at, embedding_dim)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            ("e1", "entity", "hash1", "fake-embed:latest", "2026-01-01", 384),
+        )
+        db.conn.commit()
+
+        result = db.get_embedded_source_ids("fake-embed:latest")
+        assert result == {"e1"}
+
 
 class TestContentHash:
     """Tests for the internal _content_hash helper."""

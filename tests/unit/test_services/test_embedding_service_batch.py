@@ -680,6 +680,103 @@ class TestEmbedAllWorldData:
         assert counts["entity"] == 0
         assert any("skipped" in msg.lower() for msg in caplog.messages)
 
+    def test_batch_skips_already_embedded_relationships(self, service, mock_db):
+        """Skips relationships that already have embeddings for the current model."""
+        rel = Relationship(
+            id="rel-001",
+            source_id="ent-001",
+            target_id="ent-002",
+            relation_type="allied_with",
+            description="Allies since childhood",
+        )
+        mock_db.list_entities.return_value = []
+        mock_db.list_relationships.return_value = [rel]
+        mock_db.list_events.return_value = []
+        mock_db.get_embedded_source_ids.return_value = {"rel-001"}
+
+        story_state = SimpleNamespace(
+            established_facts=[],
+            world_rules=[],
+            chapters=[],
+        )
+
+        with patch.object(service, "embed_text", return_value=FAKE_EMBEDDING):
+            counts = service.embed_all_world_data(mock_db, story_state)
+
+        assert counts["relationship"] == 0
+
+    def test_batch_skips_already_embedded_events(self, service, mock_db):
+        """Skips events that already have embeddings for the current model."""
+        event = WorldEvent(id="evt-001", description="The siege begins")
+        mock_db.list_entities.return_value = []
+        mock_db.list_relationships.return_value = []
+        mock_db.list_events.return_value = [event]
+        mock_db.get_embedded_source_ids.return_value = {"evt-001"}
+
+        story_state = SimpleNamespace(
+            established_facts=[],
+            world_rules=[],
+            chapters=[],
+        )
+
+        with patch.object(service, "embed_text", return_value=FAKE_EMBEDDING):
+            counts = service.embed_all_world_data(mock_db, story_state)
+
+        assert counts["event"] == 0
+
+    def test_batch_tracks_still_failed_relationships(self, service, mock_db, caplog):
+        """Relationships that fail embedding are tracked in still_failed."""
+        source = Entity(id="ent-001", type="character", name="Alice", description="Hero")
+        target = Entity(id="ent-002", type="character", name="Bob", description="Villain")
+        rel = Relationship(
+            id="rel-001",
+            source_id="ent-001",
+            target_id="ent-002",
+            relation_type="enemy_of",
+            description="They are enemies",
+        )
+        mock_db.list_entities.return_value = []
+        mock_db.list_relationships.return_value = [rel]
+        mock_db.list_events.return_value = []
+        mock_db.get_entity.side_effect = lambda eid: {"ent-001": source, "ent-002": target}.get(eid)
+
+        story_state = SimpleNamespace(
+            established_facts=[],
+            world_rules=[],
+            chapters=[],
+        )
+
+        with (
+            patch.object(service, "embed_text", return_value=[]),
+            caplog.at_level(logging.WARNING),
+        ):
+            counts = service.embed_all_world_data(mock_db, story_state)
+
+        assert counts["relationship"] == 0
+        assert any("still without embeddings" in msg.lower() for msg in caplog.messages)
+
+    def test_batch_tracks_still_failed_events(self, service, mock_db, caplog):
+        """Events that fail embedding are tracked in still_failed."""
+        event = WorldEvent(id="evt-001", description="The great event")
+        mock_db.list_entities.return_value = []
+        mock_db.list_relationships.return_value = []
+        mock_db.list_events.return_value = [event]
+
+        story_state = SimpleNamespace(
+            established_facts=[],
+            world_rules=[],
+            chapters=[],
+        )
+
+        with (
+            patch.object(service, "embed_text", return_value=[]),
+            caplog.at_level(logging.WARNING),
+        ):
+            counts = service.embed_all_world_data(mock_db, story_state)
+
+        assert counts["event"] == 0
+        assert any("still without embeddings" in msg.lower() for msg in caplog.messages)
+
     def test_batch_clears_failure_set_after_run(self, service, mock_db, sample_entity):
         """The failure set is emptied after embed_all_world_data completes."""
         service._record_failure("ent-999")

@@ -484,6 +484,20 @@ class TestEmbedTextContextRetry:
         retry_prompt = mock_client.embeddings.call_args_list[1].kwargs["prompt"]
         assert retry_prompt.startswith(fake_prefix)
 
+    def test_context_length_retry_returns_empty_embedding(self, service):
+        """When retry succeeds but returns empty embedding, returns empty list."""
+        mock_client = MagicMock()
+        context_error = ollama.ResponseError("input length exceeds context length", status_code=500)
+        response_empty = MagicMock()
+        response_empty.__getitem__ = lambda self, key: [] if key == "embedding" else None
+        mock_client.embeddings.side_effect = [context_error, response_empty]
+
+        with patch.object(service, "_get_client", return_value=mock_client):
+            result = service.embed_text("Some text")
+
+        assert result == []
+        assert mock_client.embeddings.call_count == 2
+
     def test_context_length_pattern_matching_case_insensitive(self, service):
         """Context-length error matching is case-insensitive on the error message."""
         mock_client = MagicMock()
