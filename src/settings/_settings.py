@@ -29,7 +29,6 @@ from src.settings._utils import get_installed_models_with_sizes
 logger = logging.getLogger(__name__)
 
 # Default per-entity quality thresholds — used by migration to populate empty dicts.
-# Items score consistently higher, so the bar is raised.
 # Primary types (character-concept) are displayed prominently in the Settings UI.
 # Secondary types (relationship, plot, chapter) use the same default as most primary
 # types and are shown in a separate "Secondary" row in the UI.
@@ -37,7 +36,7 @@ PER_ENTITY_QUALITY_DEFAULTS: dict[str, float] = {
     "character": 7.5,
     "location": 7.5,
     "faction": 7.5,
-    "item": 8.0,
+    "item": 7.5,
     "concept": 7.5,
     "calendar": 7.5,
     "event": 7.5,

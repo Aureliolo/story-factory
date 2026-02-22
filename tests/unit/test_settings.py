@@ -2061,7 +2061,7 @@ class TestMissingValidationCoverage:
         settings.validate()
         # Default factory is PER_ENTITY_QUALITY_DEFAULTS.copy, already populated
         assert settings.world_quality_thresholds["character"] == 7.5
-        assert settings.world_quality_thresholds["item"] == 8.0  # Items have higher default
+        assert settings.world_quality_thresholds["item"] == 7.5
         assert settings.world_quality_thresholds["calendar"] == 7.5
         assert len(settings.world_quality_thresholds) == 10
 

@@ -1913,3 +1913,210 @@ class TestFallbackWhenBestEntityNotFound:
         assert result["name"] == "Hero"
         assert result_scores.average == 5.0
         assert scoring_rounds == 1
+
+
+class TestHailMaryStructuralGating:
+    """Tests for hail-mary gating when temporal_plausibility is a structural blocker (#385)."""
+
+    def test_hail_mary_skipped_when_temporal_plausibility_below_4(self, mock_svc):
+        """Hail-mary is skipped when temporal_plausibility is the lowest dim below 4.0."""
+        config = RefinementConfig(
+            quality_threshold=8.0,
+            quality_thresholds=_all_thresholds(8.0),
+            max_iterations=2,
+            early_stopping_patience=10,
+            early_stopping_min_iterations=10,
+        )
+
+        # Scores where temporal_plausibility is the structural bottleneck
+        structural_scores = CharacterQualityScores(
+            depth=8.0,
+            goals=8.0,
+            flaws=8.0,
+            uniqueness=8.0,
+            arc_potential=8.0,
+            temporal_plausibility=2.0,  # Structural deficit — below 4.0
+            feedback="Temporal placement is completely wrong",
+        )
+
+        entities = [{"name": "v1"}, {"name": "v2"}]
+        create_calls = 0
+
+        def create_fn(retries):
+            """Track creation calls."""
+            nonlocal create_calls
+            create_calls += 1
+            return entities[0]
+
+        judge_count = 0
+
+        def judge_fn(entity):
+            """Return structural deficit scores consistently."""
+            nonlocal judge_count
+            judge_count += 1
+            return structural_scores
+
+        _entity, _scores, scoring_rounds = quality_refinement_loop(
+            entity_type="faction",
+            create_fn=create_fn,
+            judge_fn=judge_fn,
+            refine_fn=lambda e, s, i: entities[1],
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # With structural gating, hail-mary should be skipped:
+        # - 2 in-loop iterations (create+judge, refine+judge)
+        # - 0 hail-mary judge calls (skipped due to temporal_plausibility < 4.0)
+        assert scoring_rounds == 2
+        # create_fn called once for initial creation, NOT again for hail-mary
+        assert create_calls == 1
+
+    def test_hail_mary_proceeds_when_lowest_dim_is_not_temporal(self, mock_svc):
+        """Hail-mary proceeds normally when lowest dim is not temporal_plausibility."""
+        config = RefinementConfig(
+            quality_threshold=8.0,
+            quality_thresholds=_all_thresholds(8.0),
+            max_iterations=2,
+            early_stopping_patience=10,
+            early_stopping_min_iterations=10,
+        )
+
+        # Scores where a non-temporal dimension is the bottleneck
+        non_structural_scores = CharacterQualityScores(
+            depth=3.0,  # Lowest, but not temporal_plausibility
+            goals=8.0,
+            flaws=8.0,
+            uniqueness=8.0,
+            arc_potential=8.0,
+            temporal_plausibility=5.0,
+            feedback="Needs more depth",
+        )
+
+        entities = [{"name": "v1"}, {"name": "v2"}]
+        create_calls = 0
+
+        def create_fn(retries):
+            """Track creation calls."""
+            nonlocal create_calls
+            create_calls += 1
+            return entities[0]
+
+        judge_count = 0
+
+        def judge_fn(entity):
+            """Return non-structural deficit scores."""
+            nonlocal judge_count
+            judge_count += 1
+            return non_structural_scores
+
+        _entity, _scores, scoring_rounds = quality_refinement_loop(
+            entity_type="faction",
+            create_fn=create_fn,
+            judge_fn=judge_fn,
+            refine_fn=lambda e, s, i: entities[1],
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Hail-mary should proceed: 2 in-loop + 1 hail-mary = 3 scoring rounds
+        assert scoring_rounds == 3
+        # create_fn called once for initial + once for hail-mary
+        assert create_calls == 2
+
+    def test_hail_mary_proceeds_when_temporal_above_4(self, mock_svc):
+        """Hail-mary proceeds when temporal_plausibility is lowest but >= 4.0."""
+        config = RefinementConfig(
+            quality_threshold=8.0,
+            quality_thresholds=_all_thresholds(8.0),
+            max_iterations=2,
+            early_stopping_patience=10,
+            early_stopping_min_iterations=10,
+        )
+
+        # temporal_plausibility is lowest but at 4.0 (not below threshold)
+        borderline_scores = CharacterQualityScores(
+            depth=8.0,
+            goals=8.0,
+            flaws=8.0,
+            uniqueness=8.0,
+            arc_potential=8.0,
+            temporal_plausibility=4.0,  # At threshold, not below
+            feedback="Temporal placement could be better",
+        )
+
+        create_calls = 0
+
+        def create_fn(retries):
+            """Track creation calls."""
+            nonlocal create_calls
+            create_calls += 1
+            return {"name": "v1"}
+
+        _entity, _scores, scoring_rounds = quality_refinement_loop(
+            entity_type="faction",
+            create_fn=create_fn,
+            judge_fn=lambda e: borderline_scores,
+            refine_fn=lambda e, s, i: {"name": "v2"},
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Hail-mary should proceed: temporal_plausibility is 4.0 (not < 4.0)
+        assert scoring_rounds == 3
+        assert create_calls == 2
+
+    def test_hail_mary_gating_logs_info(self, mock_svc, caplog):
+        """Structural gating logs an info message when skipping hail-mary."""
+        import logging
+
+        config = RefinementConfig(
+            quality_threshold=8.0,
+            quality_thresholds=_all_thresholds(8.0),
+            max_iterations=2,
+            early_stopping_patience=10,
+            early_stopping_min_iterations=10,
+        )
+
+        structural_scores = CharacterQualityScores(
+            depth=8.0,
+            goals=8.0,
+            flaws=8.0,
+            uniqueness=8.0,
+            arc_potential=8.0,
+            temporal_plausibility=1.5,
+            feedback="No temporal context",
+        )
+
+        with caplog.at_level(logging.INFO):
+            quality_refinement_loop(
+                entity_type="faction",
+                create_fn=lambda retries: {"name": "v1"},
+                judge_fn=lambda e: structural_scores,
+                refine_fn=lambda e, s, i: {"name": "v2"},
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
+
+        assert any("skipping hail-mary" in msg for msg in caplog.messages)
+        assert any("structural deficit" in msg for msg in caplog.messages)

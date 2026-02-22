@@ -254,6 +254,8 @@ def _judge_faction_quality(
     brief = story_state.brief
     genre = brief.genre if brief else "fiction"
 
+    calendar_context = svc.get_calendar_context()
+
     prompt = f"""You are a strict quality judge evaluating a faction for a {genre} story.
 
 FACTION TO EVALUATE:
@@ -263,7 +265,10 @@ Leader: {faction.get("leader", "Unknown")}
 Goals: {", ".join(faction.get("goals", []))}
 Values: {", ".join(faction.get("values", []))}
 Founding Year: {faction.get("founding_year", "N/A")}
-
+Dissolution Year: {faction.get("dissolution_year", "N/A")}
+Founding Era: {faction.get("founding_era", "N/A")}
+Temporal Notes: {faction.get("temporal_notes", "N/A")}
+{calendar_context}
 {JUDGE_CALIBRATION_BLOCK}
 
 Rate each dimension 0-10:
@@ -341,6 +346,8 @@ def _refine_faction(
     if scores.temporal_plausibility < threshold:
         improvement_focus.append("Improve timeline placement and era consistency")
 
+    calendar_context = svc.get_calendar_context()
+
     prompt = f"""TASK: Improve this faction to score HIGHER on the weak dimensions.
 
 ORIGINAL FACTION:
@@ -350,7 +357,10 @@ Leader: {faction.get("leader", "Unknown")}
 Goals: {", ".join(faction.get("goals", []))}
 Values: {", ".join(faction.get("values", []))}
 Founding Year: {faction.get("founding_year", "N/A")}
-
+Dissolution Year: {faction.get("dissolution_year", "N/A")}
+Founding Era: {faction.get("founding_era", "N/A")}
+Temporal Notes: {faction.get("temporal_notes", "N/A")}
+{calendar_context}
 CURRENT SCORES (need {threshold}+ in all areas):
 - Coherence: {scores.coherence}/10
 - Influence: {scores.influence}/10
