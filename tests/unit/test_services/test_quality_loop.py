@@ -2273,8 +2273,6 @@ class TestZeroScoreAnomalyDetection:
 
     def test_persistent_zero_scores_exhaust_max_iterations(self, mock_svc):
         """When judge always returns zero scores, loop exhausts iterations and raises."""
-        from src.utils.exceptions import WorldGenerationError
-
         config = RefinementConfig(
             quality_threshold=7.0,
             quality_thresholds=_all_thresholds(7.0),

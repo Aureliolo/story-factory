@@ -544,11 +544,13 @@ def _filter_sentinel_year_in_dict(data: dict, field_prefix: str) -> dict:
     the same sentinel rejection used by ``founding_year`` / ``destruction_year``
     to the ``year`` key in timestamp dicts (birth, death, first/last appearance).
 
-    Returns a new dict — the original is never mutated.
+    Always returns a new dict — the original is never mutated.
     """
     if "year" not in data or data["year"] is None:
-        return data
+        logger.debug("No year to filter in %s dict (keys: %s)", field_prefix, list(data.keys()))
+        return {**data}
     parsed = _parse_year(data["year"], f"{field_prefix}.year")
+    logger.debug("Filtered %s.year: %r -> %r", field_prefix, data["year"], parsed)
     return {**data, "year": parsed}
 
 

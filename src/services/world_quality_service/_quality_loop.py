@@ -31,6 +31,19 @@ _STRUCTURAL_DEFICIT_THRESHOLD = 4.0
 _SCORE_METADATA_KEYS = {"average", "feedback"}
 
 
+def _detect_zero_score_dims(scores: BaseQualityScores) -> list[str]:
+    """Return dimension names that are exactly 0.0 (likely parse failures).
+
+    Only checks numeric scoring dimensions, excluding metadata keys like
+    ``average`` and ``feedback``.
+    """
+    return [
+        k
+        for k, v in scores.to_dict().items()
+        if isinstance(v, (int, float)) and k not in _SCORE_METADATA_KEYS and v == 0.0
+    ]
+
+
 def quality_refinement_loop[T, S: BaseQualityScores](
     *,
     entity_type: str,
@@ -94,6 +107,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     creation_retries = 0
     early_stopped = False
     needs_judging = False
+    zero_score_discarded = False  # True when previous judge was discarded for zero-score anomaly
     scoring_rounds = 0
     stage = ""  # Tracks current phase: "create", "judge", or "refine"
 
@@ -102,15 +116,20 @@ def quality_refinement_loop[T, S: BaseQualityScores](
             # Creation, refinement, or re-judge after previous judge error
             if needs_judging:
                 # Entity already exists and needs judging (e.g. judge failed
-                # on previous iteration). Skip creation/refinement and go
-                # straight to judging.
+                # or zero-score anomaly on previous iteration). Skip
+                # creation/refinement and go straight to judging.
                 stage = "judge"
+                reason = (
+                    "zero-score anomaly discard" if zero_score_discarded else "previous judge error"
+                )
                 logger.debug(
-                    "%s '%s' re-judging after previous judge error on iteration %d",
+                    "%s '%s' re-judging after %s on iteration %d",
                     entity_type.capitalize(),
                     get_name(entity) if entity is not None else "unknown",
+                    reason,
                     iteration + 1,
                 )
+                zero_score_discarded = False
             elif iteration == 0 and initial_entity is not None:
                 # Review mode: use the provided entity directly
                 stage = "create"
@@ -214,12 +233,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
             # and re-judge rather than recording corrupt scores.  Each
             # re-judge attempt consumes one iteration from max_iterations,
             # preventing infinite loops.
-            score_dict = scores.to_dict()
-            zero_dims = [
-                k
-                for k, v in score_dict.items()
-                if isinstance(v, (int, float)) and k not in _SCORE_METADATA_KEYS and v == 0.0
-            ]
+            zero_dims = _detect_zero_score_dims(scores)
             if zero_dims:
                 logger.error(
                     "%s '%s' judge returned 0.0 on dimension(s) %s — "
@@ -229,7 +243,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                     zero_dims,
                 )
                 scores = None
-                needs_judging = True
+                zero_score_discarded = True
                 iteration += 1
                 continue
 
@@ -434,14 +448,23 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                 fresh_entity = create_fn(creation_retries + 1)
                 if fresh_entity is not None and not is_empty(fresh_entity):
                     fresh_scores = judge_fn(fresh_entity)
-                    scoring_rounds += 1
-                    logger.info(
-                        "%s hail-mary scored %.1f (previous best: %.1f)",
-                        entity_type.capitalize(),
-                        fresh_scores.average,
-                        history.peak_score,
-                    )
-                    if fresh_scores.average > history.peak_score:
+                    hail_mary_zero = _detect_zero_score_dims(fresh_scores)
+                    if hail_mary_zero:
+                        logger.warning(
+                            "%s hail-mary judge returned 0.0 on dimension(s) %s — "
+                            "discarding as parse failure, keeping original",
+                            entity_type.capitalize(),
+                            hail_mary_zero,
+                        )
+                    else:
+                        scoring_rounds += 1
+                        logger.info(
+                            "%s hail-mary scored %.1f (previous best: %.1f)",
+                            entity_type.capitalize(),
+                            fresh_scores.average,
+                            history.peak_score,
+                        )
+                    if not hail_mary_zero and fresh_scores.average > history.peak_score:
                         logger.info(
                             "%s hail-mary beats previous best! Using fresh entity.",
                             entity_type.capitalize(),

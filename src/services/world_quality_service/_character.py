@@ -350,9 +350,8 @@ def _refine_character(
     if scores.temporal_plausibility < threshold:
         improvement_focus.append("Improve timeline placement and era consistency")
 
-    calendar_section = f"\nCALENDAR & TIMELINE:\n{calendar_context}\n" if calendar_context else ""
     prompt = f"""TASK: Improve this character to score HIGHER on the weak dimensions.
-{calendar_section}
+{calendar_context}
 ORIGINAL CHARACTER:
 Name: {character.name}
 Role: {character.role}
