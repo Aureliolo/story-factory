@@ -516,19 +516,19 @@ class TestExtractLifecycleFromAttributes:
         assert lifecycle is not None
         assert lifecycle.destruction_year is None
 
-    def test_extract_zero_founding_year_int(self):
-        """Test that founding_year=0 is preserved (not treated as falsy/absent)."""
+    def test_extract_zero_founding_year_rejected_as_sentinel(self):
+        """Test that founding_year=0 is rejected as a sentinel value."""
         attributes = {"lifecycle": {"founding_year": 0}}
         lifecycle = extract_lifecycle_from_attributes(attributes)
         assert lifecycle is not None
-        assert lifecycle.founding_year == 0
+        assert lifecycle.founding_year is None
 
-    def test_extract_zero_destruction_year_int(self):
-        """Test that destruction_year=0 is preserved (not treated as falsy/absent)."""
+    def test_extract_zero_destruction_year_rejected_as_sentinel(self):
+        """Test that destruction_year=0 is rejected as a sentinel value."""
         attributes = {"lifecycle": {"destruction_year": 0}}
         lifecycle = extract_lifecycle_from_attributes(attributes)
         assert lifecycle is not None
-        assert lifecycle.destruction_year == 0
+        assert lifecycle.destruction_year is None
 
     def test_extract_float_founding_year(self):
         """Test that float founding_year is truncated to int (LLM output pattern)."""
