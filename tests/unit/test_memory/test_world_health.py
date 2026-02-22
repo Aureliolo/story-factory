@@ -1,5 +1,7 @@
 """Tests for world health models and metrics."""
 
+import pytest
+
 from src.memory.world_health import (
     Contradiction,
     EntityClaim,
@@ -260,8 +262,8 @@ class TestWorldHealthMetrics:
 
         # structural = 100 - 15 - 4 = 81
         # quality = 100
-        # score = 81 * 0.6 + 100 * 0.4 = 48.6 + 40 = 88.6
-        assert score == 88.6
+        # score = 81 * 0.6 + 100 * 0.4 = 48.6 + 40 ≈ 88.6
+        assert score == pytest.approx(88.6)
 
     def test_calculate_health_score_density_bonus(self):
         """Test density bonus in health score calculation."""
@@ -344,6 +346,20 @@ class TestWorldHealthMetrics:
         # quality = 100
         # score = 95 * 0.6 + 100 * 0.4 = 57 + 40 = 97
         assert score == 97.0
+
+    def test_single_temporal_warning_penalty(self):
+        """Test a single temporal warning applies -2 penalty."""
+        metrics = WorldHealthMetrics(
+            total_entities=10,
+            temporal_warning_count=1,  # -2 * 1 = -2
+            average_quality=10.0,
+            relationship_density=0.5,
+        )
+        score = metrics.calculate_health_score()
+        # structural = 100 - 2 = 98
+        # quality = 100
+        # score = 98 * 0.6 + 100 * 0.4 = 58.8 + 40 ≈ 98.8
+        assert score == pytest.approx(98.8)
 
     def test_generate_recommendations_orphans(self):
         """Test recommendation generation for orphan entities."""

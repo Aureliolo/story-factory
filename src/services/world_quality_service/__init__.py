@@ -259,6 +259,8 @@ class WorldQualityService(EntityDelegatesMixin):
 
         Called by the build pipeline after calendar generation so that
         subsequent entity creation prompts include temporal context.
+        Appends a directive instructing the LLM to keep all temporal
+        attributes within the defined era boundaries.
         Thread-safe: guarded by ``_calendar_context_lock`` so concurrent
         builds on a singleton service cannot corrupt the context.
 

@@ -2226,7 +2226,7 @@ class TestZeroScoreAnomalyDetection:
 
     def test_half_point_score_accepted_normally(self, mock_svc):
         """Score of 0.5 (not 0.0) should be accepted without re-judging."""
-        # Threshold is set below the average (6.8) so the loop exits after one
+        # Threshold is set below the average (6.75) so the loop exits after one
         # judge call — confirming 0.5 is NOT treated as a parse-failure anomaly.
         config = RefinementConfig(
             quality_threshold=5.0,
@@ -2270,3 +2270,44 @@ class TestZeroScoreAnomalyDetection:
         # 0.5 should NOT be rejected — only exactly 0.0 is treated as parse failure
         assert result_scores.depth == 0.5
         assert judge_call == 1  # Only called once, accepted
+
+    def test_persistent_zero_scores_exhaust_max_iterations(self, mock_svc):
+        """When judge always returns zero scores, loop exhausts iterations and raises."""
+        from src.utils.exceptions import WorldGenerationError
+
+        config = RefinementConfig(
+            quality_threshold=7.0,
+            quality_thresholds=_all_thresholds(7.0),
+            max_iterations=3,
+            early_stopping_patience=10,
+            early_stopping_min_iterations=10,
+        )
+
+        entity = {"name": "Hero"}
+
+        def always_zero_judge(e):
+            """Always return zero scores (simulating persistent parse failures)."""
+            return CharacterQualityScores(
+                depth=0.0,
+                goals=0.0,
+                flaws=0.0,
+                uniqueness=0.0,
+                arc_potential=0.0,
+                temporal_plausibility=0.0,
+                feedback="All zeroes",
+            )
+
+        with pytest.raises(WorldGenerationError, match="Failed to generate character"):
+            quality_refinement_loop(
+                entity_type="character",
+                create_fn=lambda retries: entity,
+                judge_fn=always_zero_judge,
+                refine_fn=lambda e, s, i: e,
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )

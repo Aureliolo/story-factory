@@ -1115,8 +1115,10 @@ class TestTimelineService:
         assert "Wanderer: " in result
         assert " to " not in result
 
-    def test_build_temporal_context_year_zero_preserved(self, timeline_service, mock_world_db):
-        """Year 0 is preserved (not treated as falsy 'unknown')."""
+    def test_build_temporal_context_year_zero_rejected_as_sentinel(
+        self, timeline_service, mock_world_db
+    ):
+        """Year 0 is rejected as a sentinel — birth year is discarded."""
         entity = Entity(
             id="char-1",
             type="character",
@@ -1134,10 +1136,8 @@ class TestTimelineService:
 
         result = timeline_service.build_temporal_context(mock_world_db)
 
-        assert "AncientOne" in result
-        # Year 0 should display as "0", not "unknown"
-        assert "unknown" not in result.lower()
-        assert "- AncientOne: 0 to 100" in result
+        # Year 0 is a sentinel — the "0 to 100" range should NOT appear
+        assert "- AncientOne: 0 to 100" not in result
 
     def test_build_temporal_context_no_year_no_raw_text(self, timeline_service, mock_world_db):
         """Items with no temporal data at all (has_date=False) are excluded."""

@@ -309,7 +309,7 @@ class TestTemporalValidationService:
             description="A test character",
             attributes={
                 "lifecycle": {
-                    "birth": {"year": 0},  # Before era start
+                    "birth": {"year": -5},  # Before era start (year 1)
                 }
             },
         )
@@ -1018,7 +1018,7 @@ class TestDeathDateValidation:
             attributes={
                 "lifecycle": {
                     "birth": {"year": 100},
-                    "death": {"year": 0},  # Before era start
+                    "death": {"year": -5},  # Before era start (year 1)
                 }
             },
         )
@@ -1317,6 +1317,14 @@ class TestSentinelYearRejection:
     def test_sentinel_minus_one_as_float_rejected(self) -> None:
         """Test that -1.0 float is rejected as sentinel."""
         assert _parse_year(-1.0, "birth_year") is None
+
+    def test_sentinel_zero_as_float_rejected(self) -> None:
+        """Test that 0.0 float is rejected as sentinel."""
+        assert _parse_year(0.0, "birth_year") is None
+
+    def test_sentinel_9999_as_float_rejected(self) -> None:
+        """Test that 9999.0 float is rejected as sentinel."""
+        assert _parse_year(9999.0, "destruction_year") is None
 
     def test_valid_negative_year_accepted(self) -> None:
         """Test that valid negative years (not -1) are accepted."""

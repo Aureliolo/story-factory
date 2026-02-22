@@ -3,7 +3,8 @@
 Extracts the common create-judge-refine loop that was previously copy-pasted
 across entity modules (~60 lines each). Each entity module now provides
 entity-specific callables (create, judge, refine, serialize, get_name)
-and this module orchestrates the loop.
+and this module orchestrates the loop.  Includes zero-score anomaly detection
+to discard likely LLM parse failures (all-zero dimension scores).
 """
 
 import logging
@@ -25,7 +26,8 @@ _STRUCTURAL_DEFICIT_DIMENSION = "temporal_plausibility"
 _STRUCTURAL_DEFICIT_THRESHOLD = 4.0
 
 # Keys returned by BaseQualityScores.to_dict() that are metadata, not scoring
-# dimensions.  Excluded when searching for the weakest dimension.
+# dimensions.  Excluded from dimension-specific scoring checks: zero-score
+# anomaly detection and hail-mary weakest-dimension gating.
 _SCORE_METADATA_KEYS = {"average", "feedback"}
 
 
@@ -206,17 +208,12 @@ def quality_refinement_loop[T, S: BaseQualityScores](
             t_judge = time.perf_counter()
             scores = judge_fn(entity)
             judge_duration = time.perf_counter() - t_judge
-            scoring_rounds += 1
-            logger.info(
-                "%s judge call took %.2fs (scoring round %d)",
-                entity_type.capitalize(),
-                judge_duration,
-                scoring_rounds,
-            )
 
             # Zero-score anomaly detection: 0.0 on any dimension is almost
-            # certainly a parse failure, not a genuine assessment. Discard
-            # and re-judge rather than recording corrupt scores.
+            # certainly a parse failure, not a genuine assessment.  Discard
+            # and re-judge rather than recording corrupt scores.  Each
+            # re-judge attempt consumes one iteration from max_iterations,
+            # preventing infinite loops.
             score_dict = scores.to_dict()
             zero_dims = [
                 k
@@ -235,6 +232,14 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                 needs_judging = True
                 iteration += 1
                 continue
+
+            scoring_rounds += 1
+            logger.info(
+                "%s judge call took %.2fs (scoring round %d)",
+                entity_type.capitalize(),
+                judge_duration,
+                scoring_rounds,
+            )
 
             needs_judging = False
 

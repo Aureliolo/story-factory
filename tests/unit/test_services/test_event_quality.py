@@ -356,7 +356,8 @@ class TestJudgeEventQuality:
         # Verify the prompt includes calendar context
         call_args = mock_generate_structured.call_args
         prompt = call_args.kwargs["prompt"]
-        assert "CALENDAR & TIMELINE:" in prompt or "Age of Legends" in prompt
+        assert "CALENDAR & TIMELINE:" in prompt
+        assert "Frostmoon" in prompt
 
 
 class TestRefineEvent:

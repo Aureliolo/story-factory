@@ -11,6 +11,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Attributes constraints
+# Lifecycle dicts (entity -> lifecycle -> birth -> {year, era_name}) need depth 4
 MAX_ATTRIBUTES_DEPTH = 5
 MAX_ATTRIBUTES_SIZE_BYTES = 10 * 1024  # 10KB
 
