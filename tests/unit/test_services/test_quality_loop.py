@@ -20,6 +20,7 @@ import pytest
 
 from src.memory.world_quality import (
     CharacterQualityScores,
+    FactionQualityScores,
     RefinementConfig,
     RefinementHistory,
 )
@@ -1929,12 +1930,11 @@ class TestHailMaryStructuralGating:
         )
 
         # Scores where temporal_plausibility is the structural bottleneck
-        structural_scores = CharacterQualityScores(
-            depth=8.0,
-            goals=8.0,
-            flaws=8.0,
-            uniqueness=8.0,
-            arc_potential=8.0,
+        structural_scores = FactionQualityScores(
+            coherence=8.0,
+            influence=8.0,
+            conflict_potential=8.0,
+            distinctiveness=8.0,
             temporal_plausibility=2.0,  # Structural deficit — below 4.0
             feedback="Temporal placement is completely wrong",
         )
@@ -1964,7 +1964,7 @@ class TestHailMaryStructuralGating:
             get_name=lambda e: e["name"],
             serialize=lambda e: e.copy(),
             is_empty=lambda e: not e.get("name"),
-            score_cls=CharacterQualityScores,
+            score_cls=FactionQualityScores,
             config=config,
             svc=mock_svc,
             story_id="test-story",
@@ -1988,14 +1988,13 @@ class TestHailMaryStructuralGating:
         )
 
         # Scores where a non-temporal dimension is the bottleneck
-        non_structural_scores = CharacterQualityScores(
-            depth=3.0,  # Lowest, but not temporal_plausibility
-            goals=8.0,
-            flaws=8.0,
-            uniqueness=8.0,
-            arc_potential=8.0,
+        non_structural_scores = FactionQualityScores(
+            coherence=3.0,  # Lowest, but not temporal_plausibility
+            influence=8.0,
+            conflict_potential=8.0,
+            distinctiveness=8.0,
             temporal_plausibility=5.0,
-            feedback="Needs more depth",
+            feedback="Needs more coherence",
         )
 
         entities = [{"name": "v1"}, {"name": "v2"}]
@@ -2023,7 +2022,7 @@ class TestHailMaryStructuralGating:
             get_name=lambda e: e["name"],
             serialize=lambda e: e.copy(),
             is_empty=lambda e: not e.get("name"),
-            score_cls=CharacterQualityScores,
+            score_cls=FactionQualityScores,
             config=config,
             svc=mock_svc,
             story_id="test-story",
@@ -2045,12 +2044,11 @@ class TestHailMaryStructuralGating:
         )
 
         # temporal_plausibility is lowest but at 4.0 (not below threshold)
-        borderline_scores = CharacterQualityScores(
-            depth=8.0,
-            goals=8.0,
-            flaws=8.0,
-            uniqueness=8.0,
-            arc_potential=8.0,
+        borderline_scores = FactionQualityScores(
+            coherence=8.0,
+            influence=8.0,
+            conflict_potential=8.0,
+            distinctiveness=8.0,
             temporal_plausibility=4.0,  # At threshold, not below
             feedback="Temporal placement could be better",
         )
@@ -2071,7 +2069,7 @@ class TestHailMaryStructuralGating:
             get_name=lambda e: e["name"],
             serialize=lambda e: e.copy(),
             is_empty=lambda e: not e.get("name"),
-            score_cls=CharacterQualityScores,
+            score_cls=FactionQualityScores,
             config=config,
             svc=mock_svc,
             story_id="test-story",
@@ -2091,12 +2089,11 @@ class TestHailMaryStructuralGating:
             early_stopping_min_iterations=10,
         )
 
-        structural_scores = CharacterQualityScores(
-            depth=8.0,
-            goals=8.0,
-            flaws=8.0,
-            uniqueness=8.0,
-            arc_potential=8.0,
+        structural_scores = FactionQualityScores(
+            coherence=8.0,
+            influence=8.0,
+            conflict_potential=8.0,
+            distinctiveness=8.0,
             temporal_plausibility=1.5,
             feedback="No temporal context",
         )
@@ -2110,7 +2107,7 @@ class TestHailMaryStructuralGating:
                 get_name=lambda e: e["name"],
                 serialize=lambda e: e.copy(),
                 is_empty=lambda e: not e.get("name"),
-                score_cls=CharacterQualityScores,
+                score_cls=FactionQualityScores,
                 config=config,
                 svc=mock_svc,
                 story_id="test-story",

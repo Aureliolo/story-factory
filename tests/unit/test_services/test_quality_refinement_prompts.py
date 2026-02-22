@@ -366,33 +366,43 @@ class TestRelationshipArrayDefense:
         assert result["target"] == "Bob"
 
 
-def _make_mock_svc(calendar_text: str = "Era of Flames: 0-500 AF") -> MagicMock:
-    """Create a mock WorldQualityService with calendar context for prompt tests."""
-    svc = MagicMock()
-    svc.get_calendar_context.return_value = f"\nCALENDAR & TIMELINE:\n{calendar_text}\n"
-    svc._get_judge_model.return_value = "test-judge:8b"
-    svc.settings = MagicMock()
+@pytest.fixture
+def make_mock_svc():
+    """Factory fixture: build a mock WorldQualityService with calendar context.
 
-    # Judge config with multi-call disabled (simplest path)
-    judge_config = MagicMock()
-    judge_config.enabled = False
-    judge_config.multi_call_enabled = False
-    svc.get_judge_config.return_value = judge_config
+    Returns a callable that accepts an optional ``calendar_text`` override.
+    """
 
-    # Refinement config with threshold
-    config = MagicMock()
-    config.get_threshold.return_value = 7.5
-    svc.get_config.return_value = config
+    def _factory(calendar_text: str = "Era of Flames: 0-500 AF") -> MagicMock:
+        """Build a mock WorldQualityService with the given calendar text."""
+        svc = MagicMock()
+        svc.get_calendar_context.return_value = f"\nCALENDAR & TIMELINE:\n{calendar_text}\n"
+        svc._get_judge_model.return_value = "test-judge:8b"
+        svc.settings = MagicMock()
 
-    # Creator model for refine functions
-    svc._get_creator_model.return_value = "test-creator:8b"
-    svc._format_properties.return_value = "magical, ancient"
+        # Judge config with multi-call disabled (simplest path)
+        judge_config = MagicMock()
+        judge_config.enabled = False
+        judge_config.multi_call_enabled = False
+        svc.get_judge_config.return_value = judge_config
 
-    return svc
+        # Refinement config with threshold
+        config = MagicMock()
+        config.get_threshold.return_value = 7.5
+        svc.get_config.return_value = config
+
+        # Creator model for refine functions
+        svc._get_creator_model.return_value = "test-creator:8b"
+        svc._format_properties.return_value = "magical, ancient"
+
+        return svc
+
+    return _factory
 
 
-def _make_story_state() -> StoryState:
-    """Create a minimal StoryState for testing."""
+@pytest.fixture
+def story_state() -> StoryState:
+    """Minimal StoryState for testing."""
     brief = StoryBrief(
         premise="A kingdom falls",
         genre="fantasy",
@@ -411,7 +421,7 @@ class TestJudgePromptTemporalFields:
     """Verify judge prompts include temporal fields and calendar context (#385)."""
 
     @patch("src.services.world_quality_service._faction.generate_structured")
-    def test_faction_judge_prompt_has_temporal_fields(self, mock_gen):
+    def test_faction_judge_prompt_has_temporal_fields(self, mock_gen, make_mock_svc, story_state):
         """Faction judge prompt must contain Founding Era, Dissolution Year, Temporal Notes."""
         mock_gen.return_value = FactionQualityScores(
             coherence=8.0,
@@ -420,8 +430,8 @@ class TestJudgePromptTemporalFields:
             distinctiveness=8.0,
             temporal_plausibility=8.0,
         )
-        svc = _make_mock_svc()
-        story_state = _make_story_state()
+        svc = make_mock_svc()
+
         faction = {
             "name": "Iron Covenant",
             "description": "A secretive guild",
@@ -443,7 +453,7 @@ class TestJudgePromptTemporalFields:
         assert "CALENDAR & TIMELINE" in prompt
 
     @patch("src.services.world_quality_service._item.generate_structured")
-    def test_item_judge_prompt_has_temporal_fields(self, mock_gen):
+    def test_item_judge_prompt_has_temporal_fields(self, mock_gen, make_mock_svc, story_state):
         """Item judge prompt must contain Creation Era, Temporal Notes."""
         mock_gen.return_value = ItemQualityScores(
             significance=8.0,
@@ -452,8 +462,8 @@ class TestJudgePromptTemporalFields:
             integration=8.0,
             temporal_plausibility=8.0,
         )
-        svc = _make_mock_svc()
-        story_state = _make_story_state()
+        svc = make_mock_svc()
+
         item = {
             "name": "Flame Sword",
             "description": "A burning blade",
@@ -472,7 +482,7 @@ class TestJudgePromptTemporalFields:
         assert "CALENDAR & TIMELINE" in prompt
 
     @patch("src.services.world_quality_service._concept.generate_structured")
-    def test_concept_judge_prompt_has_temporal_fields(self, mock_gen):
+    def test_concept_judge_prompt_has_temporal_fields(self, mock_gen, make_mock_svc, story_state):
         """Concept judge prompt must contain Emergence Era, Temporal Notes."""
         mock_gen.return_value = ConceptQualityScores(
             relevance=8.0,
@@ -481,8 +491,8 @@ class TestJudgePromptTemporalFields:
             resonance=8.0,
             temporal_plausibility=8.0,
         )
-        svc = _make_mock_svc()
-        story_state = _make_story_state()
+        svc = make_mock_svc()
+
         concept = {
             "name": "The Binding",
             "description": "A cosmic force",
@@ -500,7 +510,7 @@ class TestJudgePromptTemporalFields:
         assert "CALENDAR & TIMELINE" in prompt
 
     @patch("src.services.world_quality_service._location.generate_structured")
-    def test_location_judge_prompt_has_temporal_fields(self, mock_gen):
+    def test_location_judge_prompt_has_temporal_fields(self, mock_gen, make_mock_svc, story_state):
         """Location judge prompt must contain Destruction Year, Founding Era, Temporal Notes."""
         mock_gen.return_value = LocationQualityScores(
             atmosphere=8.0,
@@ -509,8 +519,8 @@ class TestJudgePromptTemporalFields:
             distinctiveness=8.0,
             temporal_plausibility=8.0,
         )
-        svc = _make_mock_svc()
-        story_state = _make_story_state()
+        svc = make_mock_svc()
+
         location = {
             "name": "Ashhold Citadel",
             "description": "A fortress of black stone",
@@ -530,7 +540,9 @@ class TestJudgePromptTemporalFields:
         assert "CALENDAR & TIMELINE" in prompt
 
     @patch("src.services.world_quality_service._faction.generate_structured")
-    def test_faction_judge_prompt_uses_na_for_missing_fields(self, mock_gen):
+    def test_faction_judge_prompt_uses_na_for_missing_fields(
+        self, mock_gen, make_mock_svc, story_state
+    ):
         """Missing temporal fields should render as N/A, not empty."""
         mock_gen.return_value = FactionQualityScores(
             coherence=8.0,
@@ -539,8 +551,8 @@ class TestJudgePromptTemporalFields:
             distinctiveness=8.0,
             temporal_plausibility=8.0,
         )
-        svc = _make_mock_svc()
-        story_state = _make_story_state()
+        svc = make_mock_svc()
+
         faction = {
             "name": "Bare Guild",
             "description": "Test",
@@ -557,7 +569,9 @@ class TestJudgePromptTemporalFields:
         assert "Temporal Notes: N/A" in prompt
 
     @patch("src.services.world_quality_service._item.generate_structured")
-    def test_item_judge_prompt_uses_na_for_missing_fields(self, mock_gen):
+    def test_item_judge_prompt_uses_na_for_missing_fields(
+        self, mock_gen, make_mock_svc, story_state
+    ):
         """Missing temporal fields on items should render as N/A, not empty."""
         mock_gen.return_value = ItemQualityScores(
             significance=8.0,
@@ -566,8 +580,8 @@ class TestJudgePromptTemporalFields:
             integration=8.0,
             temporal_plausibility=8.0,
         )
-        svc = _make_mock_svc()
-        story_state = _make_story_state()
+        svc = make_mock_svc()
+
         item = {
             "name": "Plain Dagger",
             "description": "Test",
@@ -582,7 +596,9 @@ class TestJudgePromptTemporalFields:
         assert "Temporal Notes: N/A" in prompt
 
     @patch("src.services.world_quality_service._concept.generate_structured")
-    def test_concept_judge_prompt_uses_na_for_missing_fields(self, mock_gen):
+    def test_concept_judge_prompt_uses_na_for_missing_fields(
+        self, mock_gen, make_mock_svc, story_state
+    ):
         """Missing temporal fields on concepts should render as N/A, not empty."""
         mock_gen.return_value = ConceptQualityScores(
             relevance=8.0,
@@ -591,8 +607,8 @@ class TestJudgePromptTemporalFields:
             resonance=8.0,
             temporal_plausibility=8.0,
         )
-        svc = _make_mock_svc()
-        story_state = _make_story_state()
+        svc = make_mock_svc()
+
         concept = {
             "name": "Bare Concept",
             "description": "Test",
@@ -606,7 +622,9 @@ class TestJudgePromptTemporalFields:
         assert "Temporal Notes: N/A" in prompt
 
     @patch("src.services.world_quality_service._location.generate_structured")
-    def test_location_judge_prompt_uses_na_for_missing_fields(self, mock_gen):
+    def test_location_judge_prompt_uses_na_for_missing_fields(
+        self, mock_gen, make_mock_svc, story_state
+    ):
         """Missing temporal fields on locations should render as N/A, not empty."""
         mock_gen.return_value = LocationQualityScores(
             atmosphere=8.0,
@@ -615,8 +633,8 @@ class TestJudgePromptTemporalFields:
             distinctiveness=8.0,
             temporal_plausibility=8.0,
         )
-        svc = _make_mock_svc()
-        story_state = _make_story_state()
+        svc = make_mock_svc()
+
         location = {
             "name": "Bare Ruins",
             "description": "Test",
@@ -635,11 +653,11 @@ class TestRefinePromptTemporalFields:
     """Verify refinement prompts include temporal fields and calendar context (#385)."""
 
     @patch("src.services.world_quality_service._faction.generate_structured")
-    def test_faction_refine_prompt_has_temporal_fields(self, mock_gen):
+    def test_faction_refine_prompt_has_temporal_fields(self, mock_gen, make_mock_svc, story_state):
         """Faction refine prompt must contain temporal fields and calendar context."""
         mock_gen.return_value = Faction(name="Iron Covenant", description="Improved")
-        svc = _make_mock_svc()
-        story_state = _make_story_state()
+        svc = make_mock_svc()
+
         faction = {
             "name": "Iron Covenant",
             "description": "A secretive guild",
@@ -668,11 +686,11 @@ class TestRefinePromptTemporalFields:
         assert "CALENDAR & TIMELINE" in prompt
 
     @patch("src.services.world_quality_service._item.generate_structured")
-    def test_item_refine_prompt_has_temporal_fields(self, mock_gen):
+    def test_item_refine_prompt_has_temporal_fields(self, mock_gen, make_mock_svc, story_state):
         """Item refine prompt must contain Creation Era, Temporal Notes, calendar context."""
         mock_gen.return_value = Item(name="Flame Sword", description="Improved")
-        svc = _make_mock_svc()
-        story_state = _make_story_state()
+        svc = make_mock_svc()
+
         item = {
             "name": "Flame Sword",
             "description": "A burning blade",
@@ -698,11 +716,11 @@ class TestRefinePromptTemporalFields:
         assert "CALENDAR & TIMELINE" in prompt
 
     @patch("src.services.world_quality_service._concept.generate_structured")
-    def test_concept_refine_prompt_has_temporal_fields(self, mock_gen):
+    def test_concept_refine_prompt_has_temporal_fields(self, mock_gen, make_mock_svc, story_state):
         """Concept refine prompt must contain Emergence Era, Temporal Notes, calendar context."""
         mock_gen.return_value = Concept(name="The Binding", description="Improved")
-        svc = _make_mock_svc()
-        story_state = _make_story_state()
+        svc = make_mock_svc()
+
         concept = {
             "name": "The Binding",
             "description": "A cosmic force",
@@ -727,11 +745,11 @@ class TestRefinePromptTemporalFields:
         assert "CALENDAR & TIMELINE" in prompt
 
     @patch("src.services.world_quality_service._location.generate_structured")
-    def test_location_refine_prompt_has_temporal_fields(self, mock_gen):
+    def test_location_refine_prompt_has_temporal_fields(self, mock_gen, make_mock_svc, story_state):
         """Location refine prompt must contain temporal fields and calendar context."""
         mock_gen.return_value = Location(name="Ashhold Citadel", description="Improved")
-        svc = _make_mock_svc()
-        story_state = _make_story_state()
+        svc = make_mock_svc()
+
         location = {
             "name": "Ashhold Citadel",
             "description": "A fortress of black stone",

@@ -439,7 +439,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                         "%s hail-mary returned empty entity, keeping original",
                         entity_type.capitalize(),
                     )
-            except (WorldGenerationError, ValueError, KeyError) as e:
+            except (WorldGenerationError, ValueError) as e:
                 logger.warning(
                     "%s hail-mary failed (%s): %s. Keeping original best.",
                     entity_type.capitalize(),
@@ -474,12 +474,10 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                 history.best_iteration,
             )
 
-        # Reconstruct scores from best iteration
-        best_scores: S | None = None
-        for record in history.iterations:
-            if record.iteration == history.best_iteration:
-                best_scores = score_cls(**record.scores)
-                break
+        # Reconstruct scores from best iteration (direct index — add_iteration()
+        # guarantees 1-indexed sequential numbering).
+        best_record = history.iterations[history.best_iteration - 1]
+        best_scores: S | None = score_cls(**best_record.scores)
         if best_scores:
             history.final_iteration = history.best_iteration
             history.final_score = history.peak_score
