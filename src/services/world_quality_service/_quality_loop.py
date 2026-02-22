@@ -16,6 +16,18 @@ from src.utils.exceptions import WorldGenerationError
 
 logger = logging.getLogger(__name__)
 
+# Dimension name and score threshold for detecting structural deficits in the
+# hail-mary gating logic.  When the weakest dimension is temporal_plausibility
+# *and* its score is below this threshold, the hail-mary fresh-creation attempt
+# is skipped because the deficit is structural (e.g. missing calendar context)
+# and a fresh creation cannot fix it.
+_STRUCTURAL_DEFICIT_DIMENSION = "temporal_plausibility"
+_STRUCTURAL_DEFICIT_THRESHOLD = 4.0
+
+# Keys returned by BaseQualityScores.to_dict() that are metadata, not scoring
+# dimensions.  Excluded when searching for the weakest dimension.
+_SCORE_METADATA_KEYS = {"average", "feedback"}
+
 
 def quality_refinement_loop[T, S: BaseQualityScores](
     *,
@@ -351,56 +363,89 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     threshold_met_pre_hail_mary = round(history.peak_score, 1) >= entity_threshold
 
     if not threshold_met_pre_hail_mary and config.max_iterations > 1:
-        logger.info(
-            "%s '%s': threshold not met (best=%.1f < %.1f), attempting hail-mary fresh creation",
-            entity_type.capitalize(),
-            history.entity_name,
-            history.peak_score,
-            entity_threshold,
-        )
-        try:
-            fresh_entity = create_fn(creation_retries + 1)
-            if fresh_entity is not None and not is_empty(fresh_entity):
-                fresh_scores = judge_fn(fresh_entity)
-                scoring_rounds += 1
+        # Gate: skip hail-mary when failure is structural (temporal context deficit).
+        # After the judge prompt context gap is fixed, temporal_plausibility should
+        # rarely score below 4.0. But if it does (e.g., no calendar available),
+        # hail-mary is skipped rather than wasting tokens on the same problem.
+        skip_hail_mary = False
+        if history.best_iteration:
+            best_iter_scores = history.iterations[history.best_iteration - 1].scores
+            weakest_dim, weakest_score = min(
+                (
+                    (k, v)
+                    for k, v in best_iter_scores.items()
+                    if isinstance(v, (int, float)) and k not in _SCORE_METADATA_KEYS
+                ),
+                key=lambda x: x[1],
+                # Default ensures no gating when dict is unexpectedly empty
+                default=("", 10.0),
+            )
+            if (
+                weakest_dim == _STRUCTURAL_DEFICIT_DIMENSION
+                and weakest_score < _STRUCTURAL_DEFICIT_THRESHOLD
+            ):
+                skip_hail_mary = True
                 logger.info(
-                    "%s hail-mary scored %.1f (previous best: %.1f)",
+                    "%s '%s': skipping hail-mary — structural deficit in %s (%.1f)",
                     entity_type.capitalize(),
-                    fresh_scores.average,
-                    history.peak_score,
+                    history.entity_name,
+                    weakest_dim,
+                    weakest_score,
                 )
-                if fresh_scores.average > history.peak_score:
+
+        if not skip_hail_mary:
+            logger.info(
+                "%s '%s': threshold not met (best=%.1f < %.1f), "
+                "attempting hail-mary fresh creation",
+                entity_type.capitalize(),
+                history.entity_name,
+                history.peak_score,
+                entity_threshold,
+            )
+            try:
+                fresh_entity = create_fn(creation_retries + 1)
+                if fresh_entity is not None and not is_empty(fresh_entity):
+                    fresh_scores = judge_fn(fresh_entity)
+                    scoring_rounds += 1
                     logger.info(
-                        "%s hail-mary beats previous best! Using fresh entity.",
+                        "%s hail-mary scored %.1f (previous best: %.1f)",
                         entity_type.capitalize(),
+                        fresh_scores.average,
+                        history.peak_score,
                     )
-                    # Add to history and use as best
-                    history.add_iteration(
-                        entity_data=serialize(fresh_entity),
-                        scores=fresh_scores.to_dict(),
-                        average_score=fresh_scores.average,
-                        feedback=fresh_scores.feedback,
-                    )
-                    # Update best entity data
-                    best_entity_data = history.get_best_entity()
-                    entity = fresh_entity
-                    scores = fresh_scores
+                    if fresh_scores.average > history.peak_score:
+                        logger.info(
+                            "%s hail-mary beats previous best! Using fresh entity.",
+                            entity_type.capitalize(),
+                        )
+                        # Add to history and use as best
+                        history.add_iteration(
+                            entity_data=serialize(fresh_entity),
+                            scores=fresh_scores.to_dict(),
+                            average_score=fresh_scores.average,
+                            feedback=fresh_scores.feedback,
+                        )
+                        # Update best entity data
+                        best_entity_data = history.get_best_entity()
+                        entity = fresh_entity
+                        scores = fresh_scores
+                    else:
+                        logger.info(
+                            "%s hail-mary did not beat best score, keeping original",
+                            entity_type.capitalize(),
+                        )
                 else:
                     logger.info(
-                        "%s hail-mary did not beat best score, keeping original",
+                        "%s hail-mary returned empty entity, keeping original",
                         entity_type.capitalize(),
                     )
-            else:
-                logger.info(
-                    "%s hail-mary returned empty entity, keeping original",
+            except (WorldGenerationError, ValueError) as e:
+                logger.warning(
+                    "%s hail-mary failed (%s): %s. Keeping original best.",
                     entity_type.capitalize(),
+                    type(e).__name__,
+                    str(e)[:200],
                 )
-        except (WorldGenerationError, ValueError, KeyError) as e:
-            logger.warning(
-                "%s hail-mary failed: %s. Keeping original best.",
-                entity_type.capitalize(),
-                str(e)[:200],
-            )
 
     if best_entity_data and history.iterations[-1].average_score < history.peak_score:
         logger.warning(
@@ -429,12 +474,10 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                 history.best_iteration,
             )
 
-        # Reconstruct scores from best iteration
-        best_scores: S | None = None
-        for record in history.iterations:
-            if record.iteration == history.best_iteration:
-                best_scores = score_cls(**record.scores)
-                break
+        # Reconstruct scores from best iteration (direct index — add_iteration()
+        # guarantees 1-indexed sequential numbering).
+        best_record = history.iterations[history.best_iteration - 1]
+        best_scores: S | None = score_cls(**best_record.scores)
         if best_scores:
             history.final_iteration = history.best_iteration
             history.final_score = history.peak_score

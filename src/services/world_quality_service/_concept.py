@@ -175,6 +175,8 @@ def _judge_concept_quality(
     brief = story_state.brief
     genre = brief.genre if brief else "fiction"
 
+    calendar_context = svc.get_calendar_context()
+
     prompt = f"""You are evaluating a thematic concept for a {genre} story.
 
 CONCEPT TO EVALUATE:
@@ -182,7 +184,9 @@ Name: {concept.get("name", "Unknown")}
 Description: {concept.get("description", "")}
 Manifestations: {concept.get("manifestations", "")}
 Emergence Year: {concept.get("emergence_year", "N/A")}
-
+Emergence Era: {concept.get("emergence_era", "N/A")}
+Temporal Notes: {concept.get("temporal_notes", "N/A")}
+{calendar_context}
 {JUDGE_CALIBRATION_BLOCK}
 
 Rate each dimension 0-10:
@@ -260,6 +264,8 @@ def _refine_concept(
     if scores.temporal_plausibility < threshold:
         improvement_focus.append("Improve timeline placement and era consistency")
 
+    calendar_context = svc.get_calendar_context()
+
     prompt = f"""TASK: Improve this concept to score HIGHER on the weak dimensions.
 
 ORIGINAL CONCEPT:
@@ -267,7 +273,9 @@ Name: {concept.get("name", "Unknown")}
 Description: {concept.get("description", "")}
 Manifestations: {concept.get("manifestations", "")}
 Emergence Year: {concept.get("emergence_year", "N/A")}
-
+Emergence Era: {concept.get("emergence_era", "N/A")}
+Temporal Notes: {concept.get("temporal_notes", "N/A")}
+{calendar_context}
 CURRENT SCORES (need {threshold}+ in all areas):
 - Relevance: {scores.relevance}/10
 - Depth: {scores.depth}/10

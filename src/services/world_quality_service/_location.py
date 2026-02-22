@@ -176,6 +176,8 @@ def _judge_location_quality(
     brief = story_state.brief
     genre = brief.genre if brief else "fiction"
 
+    calendar_context = svc.get_calendar_context()
+
     prompt = f"""You are evaluating a location for a {genre} story.
 
 LOCATION TO EVALUATE:
@@ -183,7 +185,10 @@ Name: {location.get("name", "Unknown")}
 Description: {location.get("description", "")}
 Significance: {location.get("significance", "")}
 Founding Year: {location.get("founding_year", "N/A")}
-
+Destruction Year: {location.get("destruction_year", "N/A")}
+Founding Era: {location.get("founding_era", "N/A")}
+Temporal Notes: {location.get("temporal_notes", "N/A")}
+{calendar_context}
 {JUDGE_CALIBRATION_BLOCK}
 
 Rate each dimension 0-10:
@@ -261,6 +266,8 @@ def _refine_location(
     if scores.temporal_plausibility < threshold:
         improvement_focus.append("Improve timeline placement and era consistency")
 
+    calendar_context = svc.get_calendar_context()
+
     prompt = f"""TASK: Improve this location to score HIGHER on the weak dimensions.
 
 ORIGINAL LOCATION:
@@ -268,7 +275,10 @@ Name: {location.get("name", "Unknown")}
 Description: {location.get("description", "")}
 Significance: {location.get("significance", "")}
 Founding Year: {location.get("founding_year", "N/A")}
-
+Destruction Year: {location.get("destruction_year", "N/A")}
+Founding Era: {location.get("founding_era", "N/A")}
+Temporal Notes: {location.get("temporal_notes", "N/A")}
+{calendar_context}
 CURRENT SCORES (need {threshold}+ in all areas):
 - Atmosphere: {scores.atmosphere}/10
 - Narrative Significance: {scores.significance}/10

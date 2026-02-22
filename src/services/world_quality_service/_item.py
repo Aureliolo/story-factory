@@ -175,6 +175,7 @@ def _judge_item_quality(
     genre = brief.genre if brief else "fiction"
 
     formatted_properties = svc._format_properties(item.get("properties", []))
+    calendar_context = svc.get_calendar_context()
 
     prompt = f"""You are evaluating an item for a {genre} story.
 
@@ -184,7 +185,9 @@ Description: {item.get("description", "")}
 Significance: {item.get("significance", "")}
 Properties: {formatted_properties}
 Creation Year: {item.get("creation_year", "N/A")}
-
+Creation Era: {item.get("creation_era", "N/A")}
+Temporal Notes: {item.get("temporal_notes", "N/A")}
+{calendar_context}
 {JUDGE_CALIBRATION_BLOCK}
 
 Rate each dimension 0-10:
@@ -260,6 +263,8 @@ def _refine_item(
     if scores.temporal_plausibility < threshold:
         improvement_focus.append("Improve timeline placement and era consistency")
 
+    calendar_context = svc.get_calendar_context()
+
     prompt = f"""TASK: Improve this item to score HIGHER on the weak dimensions.
 
 ORIGINAL ITEM:
@@ -268,7 +273,9 @@ Description: {item.get("description", "")}
 Significance: {item.get("significance", "")}
 Properties: {svc._format_properties(item.get("properties", []))}
 Creation Year: {item.get("creation_year", "N/A")}
-
+Creation Era: {item.get("creation_era", "N/A")}
+Temporal Notes: {item.get("temporal_notes", "N/A")}
+{calendar_context}
 CURRENT SCORES (need {threshold}+ in all areas):
 - Story Significance: {scores.significance}/10
 - Uniqueness: {scores.uniqueness}/10

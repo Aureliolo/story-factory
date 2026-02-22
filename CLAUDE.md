@@ -26,6 +26,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Pre-existing issues are not exempt.** "Pre-existing" is never an excuse to skip fixing something. If you encounter a bug, code smell, or incorrect code while working on a task — fix it. This applies to review feedback too: if a reviewer flags a pre-existing issue, fix it in the same PR.
 
+**Never dismiss warnings.** If `ruff check`, `pytest`, or any other tool produces warnings — investigate and fix them, even if they appear unrelated to the current task. Never say "these are pre-existing" or "not from our changes" as justification for ignoring them. The only acceptable response to a warning is fixing it or explaining why it's a false positive with evidence.
+
 ## Project Overview
 
 Story Factory is a local AI-powered multi-agent system for generating stories using Ollama. Five specialized agents (Interviewer, Architect, Writer, Editor, Continuity Checker) collaborate through an iterative write-edit-check loop.
