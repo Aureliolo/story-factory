@@ -26,6 +26,12 @@ logger = logging.getLogger(__name__)
 _MIN_USABLE_CONTEXT_TOKENS = 10  # Below this, context window is unusable
 _EMBEDDING_CONTEXT_MARGIN_TOKENS = 10  # Reserve tokens for model overhead
 _CHARS_PER_TOKEN_ESTIMATE = 2  # Approximate chars/token for Latin scripts; may undercount CJK/emoji
+_FALLBACK_CONTEXT_TOKENS = 512  # Fallback when model context size is unavailable
+_CONTEXT_LENGTH_ERROR_PATTERNS = (
+    "context length",
+    "input length",
+)  # Ollama context overflow markers
+_MIN_CONTENT_LENGTH = 10  # Minimum content length to be worth embedding
 
 
 class EmbeddingService:
@@ -57,6 +63,8 @@ class EmbeddingService:
         self.settings = settings
         self._lock = threading.RLock()
         self._client: ollama.Client | None = None
+        self._failed_source_ids: set[str] = set()
+        self._failed_source_ids_lock = threading.Lock()
         logger.info(
             "EmbeddingService initialized with model '%s'",
             settings.embedding_model,
@@ -95,6 +103,25 @@ class EmbeddingService:
             )
         return model
 
+    def _record_failure(self, source_id: str) -> None:
+        """Record a source_id that failed to embed for later retry.
+
+        Args:
+            source_id: Identifier of the content that failed embedding.
+        """
+        with self._failed_source_ids_lock:
+            self._failed_source_ids.add(source_id)
+        logger.debug("Recorded embedding failure for %s", source_id)
+
+    def _clear_failure(self, source_id: str) -> None:
+        """Remove a source_id from the failure set after successful embedding.
+
+        Args:
+            source_id: Identifier of the content that succeeded embedding.
+        """
+        with self._failed_source_ids_lock:
+            self._failed_source_ids.discard(source_id)
+
     def embed_text(self, text: str) -> list[float]:
         """Generate an embedding vector for the given text.
 
@@ -121,38 +148,44 @@ class EmbeddingService:
             with self._lock:
                 client = self._get_client()
                 context_limit = get_model_context_size(client, model)
-                if context_limit is not None:
-                    if context_limit <= _MIN_USABLE_CONTEXT_TOKENS:
-                        logger.error(
-                            "Invalid context size %d for model '%s'; skipping embedding. "
-                            "Check 'ollama show %s' for model metadata issues.",
-                            context_limit,
-                            model,
-                            model,
-                        )
-                        return []
-                    max_chars = (
-                        context_limit - _EMBEDDING_CONTEXT_MARGIN_TOKENS
-                    ) * _CHARS_PER_TOKEN_ESTIMATE
-                    prefix_len = len(prefix)
-                    if max_chars <= prefix_len:
-                        logger.error(
-                            "Context limit %d too small to embed any content beyond "
-                            "prefix for model '%s'; skipping embedding",
-                            context_limit,
-                            model,
-                        )
-                        return []
-                    if len(prompt) > max_chars:
-                        logger.warning(
-                            "Embedding input truncated for model '%s' (est. %d tokens > "
-                            "limit %d). Preview: '%s...'",
-                            model,
-                            len(prompt) // _CHARS_PER_TOKEN_ESTIMATE,
-                            context_limit,
-                            text[:60],
-                        )
-                        prompt = prompt[:max_chars]
+                if context_limit is None:
+                    logger.warning(
+                        "Context size unavailable for model '%s'; using fallback %d tokens",
+                        model,
+                        _FALLBACK_CONTEXT_TOKENS,
+                    )
+                    context_limit = _FALLBACK_CONTEXT_TOKENS
+                if context_limit <= _MIN_USABLE_CONTEXT_TOKENS:
+                    logger.error(
+                        "Invalid context size %d for model '%s'; skipping embedding. "
+                        "Check 'ollama show %s' for model metadata issues.",
+                        context_limit,
+                        model,
+                        model,
+                    )
+                    return []
+                max_chars = (
+                    context_limit - _EMBEDDING_CONTEXT_MARGIN_TOKENS
+                ) * _CHARS_PER_TOKEN_ESTIMATE
+                prefix_len = len(prefix)
+                if max_chars <= prefix_len:
+                    logger.error(
+                        "Context limit %d too small to embed any content beyond "
+                        "prefix for model '%s'; skipping embedding",
+                        context_limit,
+                        model,
+                    )
+                    return []
+                if len(prompt) > max_chars:
+                    logger.warning(
+                        "Embedding input truncated for model '%s' (est. %d tokens > "
+                        "limit %d). Preview: '%s...'",
+                        model,
+                        len(prompt) // _CHARS_PER_TOKEN_ESTIMATE,
+                        context_limit,
+                        text[:60],
+                    )
+                    prompt = prompt[:max_chars]
                 response = client.embeddings(model=model, prompt=prompt)
 
             embedding: list[float] = response["embedding"]
@@ -168,6 +201,31 @@ class EmbeddingService:
             return embedding
 
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
+            if isinstance(e, ollama.ResponseError) and any(
+                pattern in str(e.error).lower() for pattern in _CONTEXT_LENGTH_ERROR_PATTERNS
+            ):
+                logger.warning(
+                    "Context length overflow for model '%s', retrying with halved input: %s",
+                    model,
+                    e,
+                )
+                try:
+                    halved_prompt = prompt[: len(prompt) // 2]
+                    with self._lock:
+                        client = self._get_client()
+                        response = client.embeddings(model=model, prompt=halved_prompt)
+                    embedding = response["embedding"]
+                    if embedding:
+                        logger.info(
+                            "Retry with halved input succeeded for '%s...' (%d dims)",
+                            text[:40],
+                            len(embedding),
+                        )
+                        return embedding
+                    return []
+                except Exception as retry_err:
+                    logger.warning("Retry with halved input also failed: %s", retry_err)
+                    return []
             logger.warning("Failed to generate embedding: %s", e)
             return []
         except ValueError as e:
@@ -191,9 +249,10 @@ class EmbeddingService:
         text = f"{entity.name}: {entity.description}"
         embedding = self.embed_text(text)
         if not embedding:
+            self._record_failure(entity.id)
             return False
 
-        return db.upsert_embedding(
+        result = db.upsert_embedding(
             source_id=entity.id,
             content_type="entity",
             text=text,
@@ -201,6 +260,9 @@ class EmbeddingService:
             model=model,
             entity_type=entity.type,
         )
+        if result:
+            self._clear_failure(entity.id)
+        return result
 
     def embed_relationship(
         self,
@@ -224,15 +286,19 @@ class EmbeddingService:
         text = f"{source_name} {rel.relation_type} {target_name}: {rel.description}"
         embedding = self.embed_text(text)
         if not embedding:
+            self._record_failure(rel.id)
             return False
 
-        return db.upsert_embedding(
+        result = db.upsert_embedding(
             source_id=rel.id,
             content_type="relationship",
             text=text,
             embedding=embedding,
             model=model,
         )
+        if result:
+            self._clear_failure(rel.id)
+        return result
 
     def embed_event(self, db: WorldDatabase, event: WorldEvent) -> bool:
         """Embed an event and store it in the database.
@@ -249,9 +315,10 @@ class EmbeddingService:
         text = f"Event: {event.description}{chapter_part}"
         embedding = self.embed_text(text)
         if not embedding:
+            self._record_failure(event.id)
             return False
 
-        return db.upsert_embedding(
+        result = db.upsert_embedding(
             source_id=event.id,
             content_type="event",
             text=text,
@@ -259,6 +326,9 @@ class EmbeddingService:
             model=model,
             chapter_number=event.chapter_number,
         )
+        if result:
+            self._clear_failure(event.id)
+        return result
 
     def embed_story_state_data(self, db: WorldDatabase, story_state: StoryState) -> int:
         """Embed established facts, world rules, chapter outlines, and scene outlines.
@@ -278,6 +348,13 @@ class EmbeddingService:
         # Embed established facts
         if story_state.established_facts:
             for fact in story_state.established_facts:
+                if len(fact.strip()) < _MIN_CONTENT_LENGTH:
+                    logger.warning(
+                        "Skipping fact with too-short content (%d chars): '%s'",
+                        len(fact.strip()),
+                        fact[:40],
+                    )
+                    continue
                 fact_hash = hashlib.sha256(fact.encode("utf-8")).hexdigest()[:12]
                 source_id = f"fact:{fact_hash}"
                 text = f"Established fact: {fact}"
@@ -295,6 +372,13 @@ class EmbeddingService:
         # Embed world rules
         if story_state.world_rules:
             for rule in story_state.world_rules:
+                if len(rule.strip()) < _MIN_CONTENT_LENGTH:
+                    logger.warning(
+                        "Skipping rule with too-short content (%d chars): '%s'",
+                        len(rule.strip()),
+                        rule[:40],
+                    )
+                    continue
                 rule_hash = hashlib.sha256(rule.encode("utf-8")).hexdigest()[:12]
                 source_id = f"rule:{rule_hash}"
                 text = f"World rule: {rule}"
@@ -313,25 +397,41 @@ class EmbeddingService:
         if story_state.chapters:
             for chapter in story_state.chapters:
                 if chapter.outline:
-                    source_id = f"chapter:{chapter.number}"
-                    title_part = f" '{chapter.title}'" if chapter.title else ""
-                    text = f"Chapter {chapter.number}{title_part}: {chapter.outline}"
-                    embedding = self.embed_text(text)
-                    if embedding:
-                        if db.upsert_embedding(
-                            source_id=source_id,
-                            content_type="chapter_outline",
-                            text=text,
-                            embedding=embedding,
-                            model=model,
-                            chapter_number=chapter.number,
-                        ):
-                            embedded_count += 1
+                    if len(chapter.outline.strip()) < _MIN_CONTENT_LENGTH:
+                        logger.warning(
+                            "Skipping chapter %d outline with too-short content (%d chars)",
+                            chapter.number,
+                            len(chapter.outline.strip()),
+                        )
+                    else:
+                        source_id = f"chapter:{chapter.number}"
+                        title_part = f" '{chapter.title}'" if chapter.title else ""
+                        text = f"Chapter {chapter.number}{title_part}: {chapter.outline}"
+                        embedding = self.embed_text(text)
+                        if embedding:
+                            if db.upsert_embedding(
+                                source_id=source_id,
+                                content_type="chapter_outline",
+                                text=text,
+                                embedding=embedding,
+                                model=model,
+                                chapter_number=chapter.number,
+                            ):
+                                embedded_count += 1
 
                 # Embed scene outlines if available
                 if chapter.scenes:
                     for scene_idx, scene in enumerate(chapter.scenes):
                         if scene.outline:
+                            if len(scene.outline.strip()) < _MIN_CONTENT_LENGTH:
+                                logger.warning(
+                                    "Skipping chapter %d scene %d outline with "
+                                    "too-short content (%d chars)",
+                                    chapter.number,
+                                    scene_idx + 1,
+                                    len(scene.outline.strip()),
+                                )
+                                continue
                             source_id = f"scene:{chapter.number}:{scene_idx}"
                             scene_title = f" '{scene.title}'" if scene.title else ""
                             text = (
@@ -369,7 +469,15 @@ class EmbeddingService:
         Returns:
             Dict mapping content_type to count of items embedded.
         """
+        model = self._get_model()
         counts: dict[str, int] = {}
+        skipped = 0
+        still_failed: list[str] = []
+
+        # Snapshot already-embedded IDs and the failure set
+        already_embedded = db.get_embedded_source_ids(model)
+        with self._failed_source_ids_lock:
+            failed_snapshot = frozenset(self._failed_source_ids)
 
         # Embed all entities
         entities = db.list_entities()
@@ -377,27 +485,42 @@ class EmbeddingService:
         for i, entity in enumerate(entities):
             if progress_callback:
                 progress_callback(i, len(entities), f"Embedding entity: {entity.name}")
+            if entity.id in already_embedded and entity.id not in failed_snapshot:
+                skipped += 1
+                continue
             if self.embed_entity(db, entity):
                 entity_count += 1
+            else:
+                still_failed.append(entity.id)
         counts["entity"] = entity_count
 
         # Embed all relationships
         relationships = db.list_relationships()
         rel_count = 0
         for rel in relationships:
+            if rel.id in already_embedded and rel.id not in failed_snapshot:
+                skipped += 1
+                continue
             source = db.get_entity(rel.source_id)
             target = db.get_entity(rel.target_id)
             if source and target:
                 if self.embed_relationship(db, rel, source.name, target.name):
                     rel_count += 1
+                else:
+                    still_failed.append(rel.id)
         counts["relationship"] = rel_count
 
         # Embed all events
         events = db.list_events()
         event_count = 0
         for event in events:
+            if event.id in already_embedded and event.id not in failed_snapshot:
+                skipped += 1
+                continue
             if self.embed_event(db, event):
                 event_count += 1
+            else:
+                still_failed.append(event.id)
         counts["event"] = event_count
 
         # Embed story state data (facts, rules, outlines)
@@ -405,7 +528,24 @@ class EmbeddingService:
         counts["story_state"] = state_count
 
         total = sum(counts.values())
-        logger.info("Batch embedding complete: %d items total (%s)", total, counts)
+        logger.info(
+            "Batch embedding complete: %d embedded, %d skipped (already embedded), "
+            "%d still failed (%s)",
+            total,
+            skipped,
+            len(still_failed),
+            counts,
+        )
+        if still_failed:
+            logger.warning(
+                "Items still without embeddings after retry: %s",
+                still_failed,
+            )
+
+        # Clear the failure set — all failed items have been retried
+        with self._failed_source_ids_lock:
+            self._failed_source_ids.clear()
+
         return counts
 
     def check_and_reembed_if_needed(
@@ -474,7 +614,11 @@ class EmbeddingService:
                         model=self._get_model(),
                         entity_type=entity_type,
                     )
+                    self._clear_failure(source_id)
+                else:
+                    self._record_failure(source_id)
             except Exception as e:
+                self._record_failure(source_id)
                 logger.warning("Failed to embed content change for %s: %s", source_id, e)
 
         def on_content_deleted(source_id: str) -> None:

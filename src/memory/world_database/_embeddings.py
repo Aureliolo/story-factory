@@ -315,6 +315,32 @@ def get_embedding_stats(db: WorldDatabase) -> dict[str, Any]:
     }
 
 
+def get_embedded_source_ids(db: WorldDatabase, model: str) -> set[str]:
+    """Return the set of source_ids that already have an embedding for the given model.
+
+    Used by the batch embedding step to skip items that already have a valid
+    embedding, while still retrying items that previously failed.
+
+    Args:
+        db: WorldDatabase instance.
+        model: The embedding model to filter by.
+
+    Returns:
+        Set of source_id strings with existing embeddings for the model.
+    """
+    with db._lock:
+        db._ensure_open()
+        cursor = db.conn.cursor()
+        cursor.execute(
+            "SELECT source_id FROM embedding_metadata WHERE embedding_model = ?",
+            (model,),
+        )
+        result = {row[0] for row in cursor.fetchall()}
+
+    logger.debug("Found %d embedded source IDs for model '%s'", len(result), model)
+    return result
+
+
 def needs_reembedding(db: WorldDatabase, current_model: str) -> bool:
     """Check if any embeddings use a different model than the current one.
 
