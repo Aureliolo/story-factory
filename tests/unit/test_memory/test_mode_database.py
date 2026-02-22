@@ -1900,6 +1900,7 @@ class TestModeDatabaseMigrations:
         mock_conn.commit = real_conn.commit
 
         def execute_side_effect(sql, *args, **kwargs):
+            """Raise OperationalError on ALTER TABLE, pass through otherwise."""
             if "ALTER TABLE" in str(sql):
                 raise sqlite3.OperationalError("database is locked")
             return real_conn.execute(sql, *args, **kwargs)

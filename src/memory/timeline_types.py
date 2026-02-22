@@ -484,11 +484,32 @@ def parse_timestamp(text: str) -> StoryTimestamp:
     return result
 
 
+SENTINEL_YEARS: frozenset[int] = frozenset({-1, 0, 9999})
+"""Year values that LLMs use as placeholders/sentinels and must be rejected."""
+
+
+def _check_sentinel(year: int, field_name: str) -> int | None:
+    """Reject sentinel year values that LLMs use as placeholders.
+
+    Parameters:
+        year: The parsed year value to check.
+        field_name: Field label for log messages.
+
+    Returns:
+        The year unchanged if valid, or None if it is a sentinel value.
+    """
+    if year in SENTINEL_YEARS:
+        logger.warning("Rejected sentinel %s value: %d (known placeholder)", field_name, year)
+        return None
+    return year
+
+
 def _parse_year(value: object, field_name: str) -> int | None:
     """Coerce a raw LLM year value to int, with type-aware logging.
 
     Handles: bool (rejected), int (pass-through), float (truncated to int),
     str (parsed via ``int()``), and anything else (logged and rejected).
+    Sentinel values (-1, 0, 9999) are rejected after conversion.
 
     Parameters:
         value: The raw value from LLM output (any type).
@@ -501,13 +522,13 @@ def _parse_year(value: object, field_name: str) -> int | None:
         logger.warning("Unexpected %s type: bool (%r)", field_name, value)
         return None
     if isinstance(value, int):
-        return value
+        return _check_sentinel(value, field_name)
     if isinstance(value, float):
         logger.debug("Converted float %s to int: %s", field_name, value)
-        return int(value)
+        return _check_sentinel(int(value), field_name)
     if isinstance(value, str):
         try:
-            return int(value)
+            return _check_sentinel(int(value), field_name)
         except ValueError as exc:
             logger.warning("Could not parse %s string: %r — %s", field_name, value, exc)
             return None

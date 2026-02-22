@@ -11,7 +11,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Attributes constraints
-MAX_ATTRIBUTES_DEPTH = 3
+MAX_ATTRIBUTES_DEPTH = 5
 MAX_ATTRIBUTES_SIZE_BYTES = 10 * 1024  # 10KB
 
 

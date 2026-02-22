@@ -206,6 +206,7 @@ def _judge_event_quality(
     brief = story_state.brief
     genre = brief.genre if brief else "fiction"
 
+    calendar_context = svc.get_calendar_context()
     participants_str = _format_participants(event.get("participants", []))
     consequences_str = _format_consequences(event.get("consequences", []))
 
@@ -217,7 +218,7 @@ Year: {event.get("year", "N/A")}
 Era: {event.get("era_name", "N/A")}
 {participants_str}
 {consequences_str}
-
+{calendar_context}
 {JUDGE_CALIBRATION_BLOCK}
 
 Rate each dimension 0-10:

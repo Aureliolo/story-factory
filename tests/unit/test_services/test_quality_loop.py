@@ -2115,3 +2115,158 @@ class TestHailMaryStructuralGating:
 
         assert any("skipping hail-mary" in msg for msg in caplog.messages)
         assert any("structural deficit" in msg for msg in caplog.messages)
+
+
+class TestZeroScoreAnomalyDetection:
+    """Tests for zero-score anomaly detection in quality loop (#395 Fix 8)."""
+
+    def test_zero_dimension_triggers_rejudge(self, mock_svc):
+        """Zero on any dimension discards scores and re-judges."""
+        config = RefinementConfig(
+            quality_threshold=7.0,
+            quality_thresholds=_all_thresholds(7.0),
+            max_iterations=3,
+            early_stopping_patience=10,
+            early_stopping_min_iterations=10,
+        )
+
+        entity = {"name": "Hero"}
+        judge_call = 0
+
+        def judge_fn(e):
+            """Return zero-score on first call, valid scores on second."""
+            nonlocal judge_call
+            judge_call += 1
+            if judge_call == 1:
+                # First call: one dimension is 0.0 (parse failure)
+                return CharacterQualityScores(
+                    depth=0.0,  # Zero = likely parse failure
+                    goals=8.0,
+                    flaws=8.0,
+                    uniqueness=8.0,
+                    arc_potential=8.0,
+                    temporal_plausibility=8.0,
+                    feedback="Partial parse",
+                )
+            # Second call: all dimensions valid and above threshold
+            return CharacterQualityScores(
+                depth=8.0,
+                goals=8.0,
+                flaws=8.0,
+                uniqueness=8.0,
+                arc_potential=8.0,
+                temporal_plausibility=8.0,
+                feedback="Good character",
+            )
+
+        _result_entity, result_scores, _iterations = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entity,
+            judge_fn=judge_fn,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # The zero-score call should have been discarded, second call accepted
+        assert result_scores.depth == 8.0
+        assert judge_call == 2  # Called twice: once rejected, once accepted
+
+    def test_zero_on_multiple_dimensions_triggers_rejudge(self, mock_svc):
+        """Multiple zero dimensions also trigger re-judge."""
+        config = RefinementConfig(
+            quality_threshold=7.0,
+            quality_thresholds=_all_thresholds(7.0),
+            max_iterations=3,
+            early_stopping_patience=10,
+            early_stopping_min_iterations=10,
+        )
+
+        entity = {"name": "Hero"}
+        judge_call = 0
+
+        def judge_fn(e):
+            """Return multi-zero scores on first call, valid scores on second."""
+            nonlocal judge_call
+            judge_call += 1
+            if judge_call == 1:
+                # Multiple zeroes = definitely a parse failure
+                return CharacterQualityScores(
+                    depth=0.0,
+                    goals=0.0,
+                    flaws=0.0,
+                    uniqueness=8.0,
+                    arc_potential=8.0,
+                    temporal_plausibility=8.0,
+                    feedback="Mostly zeroes",
+                )
+            return _make_scores(8.0, "Good")
+
+        _result_entity, result_scores, _iterations = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entity,
+            judge_fn=judge_fn,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        assert result_scores.average == 8.0
+        assert judge_call == 2
+
+    def test_half_point_score_accepted_normally(self, mock_svc):
+        """Score of 0.5 (not 0.0) should be accepted without re-judging."""
+        # Threshold is set below the average (6.8) so the loop exits after one
+        # judge call — confirming 0.5 is NOT treated as a parse-failure anomaly.
+        config = RefinementConfig(
+            quality_threshold=5.0,
+            quality_thresholds=_all_thresholds(5.0),
+            max_iterations=3,
+            early_stopping_patience=10,
+            early_stopping_min_iterations=10,
+        )
+
+        entity = {"name": "Hero"}
+        judge_call = 0
+
+        def judge_fn(e):
+            """Return low-but-nonzero scores that should be accepted."""
+            nonlocal judge_call
+            judge_call += 1
+            return CharacterQualityScores(
+                depth=0.5,  # Low but not zero — legitimate score
+                goals=8.0,
+                flaws=8.0,
+                uniqueness=8.0,
+                arc_potential=8.0,
+                temporal_plausibility=8.0,
+                feedback="Shallow but valid",
+            )
+
+        _result_entity, result_scores, _iterations = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entity,
+            judge_fn=judge_fn,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # 0.5 should NOT be rejected — only exactly 0.0 is treated as parse failure
+        assert result_scores.depth == 0.5
+        assert judge_call == 1  # Only called once, accepted

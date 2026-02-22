@@ -250,18 +250,18 @@ class TestWorldHealthMetrics:
             total_entities=10,
             orphan_count=0,
             circular_count=0,
-            temporal_error_count=3,  # -3 per error = -9
-            temporal_warning_count=2,  # -1 per warning = -2
+            temporal_error_count=3,  # -5 per error = -15
+            temporal_warning_count=2,  # -2 per warning = -4
             average_quality=10.0,
             relationship_density=0.5,
         )
 
         score = metrics.calculate_health_score()
 
-        # structural = 100 - 9 - 2 = 89
+        # structural = 100 - 15 - 4 = 81
         # quality = 100
-        # score = 89 * 0.6 + 100 * 0.4 = 53.4 + 40 = 93.4
-        assert score == 93.4
+        # score = 81 * 0.6 + 100 * 0.4 = 48.6 + 40 = 88.6
+        assert score == 88.6
 
     def test_calculate_health_score_density_bonus(self):
         """Test density bonus in health score calculation."""
@@ -287,6 +287,63 @@ class TestWorldHealthMetrics:
         score_med = metrics_med.calculate_health_score()
         # structural = min(100 + 5, 100) = 100, quality = 100
         assert score_med == 100.0
+
+    def test_temporal_error_penalty_caps_at_30(self):
+        """Test temporal error penalty is capped at -30."""
+        metrics = WorldHealthMetrics(
+            total_entities=10,
+            temporal_error_count=100,  # -5 per error, but capped at -30
+            average_quality=10.0,
+            relationship_density=0.5,
+        )
+        score = metrics.calculate_health_score()
+        # structural = 100 - 30 = 70
+        # quality = 100
+        # score = 70 * 0.6 + 100 * 0.4 = 42 + 40 = 82
+        assert score == 82.0
+
+    def test_temporal_warning_penalty_caps_at_20(self):
+        """Test temporal warning penalty is capped at -20."""
+        metrics = WorldHealthMetrics(
+            total_entities=10,
+            temporal_warning_count=100,  # -2 per warning, but capped at -20
+            average_quality=10.0,
+            relationship_density=0.5,
+        )
+        score = metrics.calculate_health_score()
+        # structural = 100 - 20 = 80
+        # quality = 100
+        # score = 80 * 0.6 + 100 * 0.4 = 48 + 40 = 88
+        assert score == 88.0
+
+    def test_temporal_error_and_warning_combined_penalties(self):
+        """Test combined temporal error and warning penalties."""
+        metrics = WorldHealthMetrics(
+            total_entities=10,
+            temporal_error_count=6,  # -5 * 6 = -30 (at cap)
+            temporal_warning_count=10,  # -2 * 10 = -20 (at cap)
+            average_quality=10.0,
+            relationship_density=0.5,
+        )
+        score = metrics.calculate_health_score()
+        # structural = 100 - 30 - 20 = 50
+        # quality = 100
+        # score = 50 * 0.6 + 100 * 0.4 = 30 + 40 = 70
+        assert score == 70.0
+
+    def test_single_temporal_error_penalty(self):
+        """Test a single temporal error applies -5 penalty."""
+        metrics = WorldHealthMetrics(
+            total_entities=10,
+            temporal_error_count=1,  # -5 * 1 = -5
+            average_quality=10.0,
+            relationship_density=0.5,
+        )
+        score = metrics.calculate_health_score()
+        # structural = 100 - 5 = 95
+        # quality = 100
+        # score = 95 * 0.6 + 100 * 0.4 = 57 + 40 = 97
+        assert score == 97.0
 
     def test_generate_recommendations_orphans(self):
         """Test recommendation generation for orphan entities."""

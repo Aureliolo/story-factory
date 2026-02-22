@@ -130,6 +130,8 @@ For historical eras, provide:
 
 Make the era_abbreviation 2-3 letters that could follow a year number.
 
+IMPORTANT: The era_name field MUST be the EXACT name of the current (most recent) era from your historical_eras list. Do not invent a new name — use one that appears in your eras.
+
 Write all text in {brief.language}."""
 
     try:

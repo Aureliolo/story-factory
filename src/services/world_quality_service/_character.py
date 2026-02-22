@@ -229,7 +229,8 @@ def _judge_character_quality(
     brief = story_state.brief
     genre = brief.genre if brief else "fiction"
 
-    prompt = _build_character_judge_prompt(character, genre)
+    calendar_context = svc.get_calendar_context()
+    prompt = _build_character_judge_prompt(character, genre, calendar_context)
 
     # Resolve judge model and config once to avoid repeated resolution
     judge_model = svc._get_judge_model(entity_type="character")
@@ -261,13 +262,16 @@ def _judge_character_quality(
     return judge_with_averaging(_single_judge_call, CharacterQualityScores, judge_config)
 
 
-def _build_character_judge_prompt(character: Character, genre: str) -> str:
+def _build_character_judge_prompt(
+    character: Character, genre: str, calendar_context: str = ""
+) -> str:
     """
     Constructs the textual prompt used by the judge model to evaluate a character's quality within a genre context.
 
     Parameters:
         character (Character): The character to be evaluated; the prompt will include name, role, description, traits, goals, arc notes, and temporal data.
         genre (str): The story genre used to frame evaluation criteria and tone.
+        calendar_context (str): Formatted calendar/timeline context block for temporal validation.
 
     Returns:
         str: A formatted prompt string instructing the judge model to rate multiple quality dimensions and return a flat JSON object with numeric scores and feedback.
@@ -286,7 +290,7 @@ Birth Year: {character.birth_year if character.birth_year is not None else "N/A"
 Death Year: {character.death_year if character.death_year is not None else "N/A"}
 Birth Era: {character.birth_era or "N/A"}
 Temporal Notes: {character.temporal_notes or "N/A"}
-
+{calendar_context}
 {JUDGE_CALIBRATION_BLOCK}
 
 Rate each dimension 0-10:

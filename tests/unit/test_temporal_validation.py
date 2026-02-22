@@ -6,8 +6,10 @@ import pytest
 
 from src.memory.entities import Entity
 from src.memory.timeline_types import (
+    SENTINEL_YEARS,
     EntityLifecycle,
     StoryTimestamp,
+    _parse_year,
     extract_lifecycle_from_attributes,
 )
 from src.memory.world_calendar import CalendarMonth, WorldCalendar
@@ -1283,3 +1285,51 @@ class TestCharacterValidationEdgeCases:
         # Should pass because faction has no founding year to compare
         assert result.is_valid is True
         assert result.error_count == 0
+
+
+class TestSentinelYearRejection:
+    """Tests for sentinel year rejection in _parse_year (#395)."""
+
+    def test_sentinel_minus_one_rejected(self) -> None:
+        """Test that -1 is rejected as a sentinel value."""
+        assert _parse_year(-1, "birth_year") is None
+
+    def test_sentinel_zero_rejected(self) -> None:
+        """Test that 0 is rejected as a sentinel value."""
+        assert _parse_year(0, "birth_year") is None
+
+    def test_sentinel_9999_rejected(self) -> None:
+        """Test that 9999 is rejected as a sentinel value."""
+        assert _parse_year(9999, "founding_year") is None
+
+    def test_sentinel_minus_one_as_string_rejected(self) -> None:
+        """Test that '-1' string is rejected as sentinel."""
+        assert _parse_year("-1", "death_year") is None
+
+    def test_sentinel_zero_as_string_rejected(self) -> None:
+        """Test that '0' string is rejected as sentinel."""
+        assert _parse_year("0", "birth_year") is None
+
+    def test_sentinel_9999_as_string_rejected(self) -> None:
+        """Test that '9999' string is rejected as sentinel."""
+        assert _parse_year("9999", "destruction_year") is None
+
+    def test_sentinel_minus_one_as_float_rejected(self) -> None:
+        """Test that -1.0 float is rejected as sentinel."""
+        assert _parse_year(-1.0, "birth_year") is None
+
+    def test_valid_negative_year_accepted(self) -> None:
+        """Test that valid negative years (not -1) are accepted."""
+        assert _parse_year(-500, "birth_year") == -500
+
+    def test_valid_positive_year_accepted(self) -> None:
+        """Test that normal positive years are accepted."""
+        assert _parse_year(500, "birth_year") == 500
+
+    def test_valid_year_one_accepted(self) -> None:
+        """Test that year 1 is accepted (not a sentinel)."""
+        assert _parse_year(1, "founding_year") == 1
+
+    def test_sentinel_years_frozenset_contents(self) -> None:
+        """Test SENTINEL_YEARS contains exactly the expected values."""
+        assert SENTINEL_YEARS == frozenset({-1, 0, 9999})

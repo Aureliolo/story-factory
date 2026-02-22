@@ -207,13 +207,36 @@ def quality_refinement_loop[T, S: BaseQualityScores](
             scores = judge_fn(entity)
             judge_duration = time.perf_counter() - t_judge
             scoring_rounds += 1
-            needs_judging = False
             logger.info(
                 "%s judge call took %.2fs (scoring round %d)",
                 entity_type.capitalize(),
                 judge_duration,
                 scoring_rounds,
             )
+
+            # Zero-score anomaly detection: 0.0 on any dimension is almost
+            # certainly a parse failure, not a genuine assessment. Discard
+            # and re-judge rather than recording corrupt scores.
+            score_dict = scores.to_dict()
+            zero_dims = [
+                k
+                for k, v in score_dict.items()
+                if isinstance(v, (int, float)) and k not in _SCORE_METADATA_KEYS and v == 0.0
+            ]
+            if zero_dims:
+                logger.error(
+                    "%s '%s' judge returned 0.0 on dimension(s) %s — "
+                    "likely parse failure, discarding scores and re-judging",
+                    entity_type.capitalize(),
+                    get_name(entity),
+                    zero_dims,
+                )
+                scores = None
+                needs_judging = True
+                iteration += 1
+                continue
+
+            needs_judging = False
 
             # Track in history
             history.add_iteration(
