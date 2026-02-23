@@ -65,13 +65,13 @@ test = [
     "pytest-playwright==0.7.2",
 ]
 dev = [
-    "ruff==0.15.1",
+    "ruff==0.15.2",
     "mypy==1.19.1",
     "pre-commit==4.5.1",
     "interrogate==1.7.0",
     "types-networkx==3.6.1.20260210",
     "types-Pillow==10.2.0.20240822",
-    "types-reportlab==4.4.10.20260216",
+    "types-reportlab==4.4.10.20260223",
 ]
 all = [
     "story-factory[test,dev]",
