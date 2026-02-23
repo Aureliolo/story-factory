@@ -8,7 +8,7 @@
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/Aureliolo/story-factory?utm_source=oss&utm_medium=github&utm_campaign=Aureliolo%2Fstory-factory&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
-> **DISCLAIMER**: This is a personal holiday/hobby project created primarily as an experimentation playground for testing AI coding assistants (Claude Code, GitHub Copilot, Cursor, etc.) and exploring local LLM capabilities with Ollama. It's built for my own learning and enjoyment. Feel free to explore, but note that this is not production-grade software and comes with no guarantees. Use at your own risk!
+> **DISCLAIMER**: This is a personal long-running project focused on exploring multi-agent systems, local LLM capabilities with Ollama, and practical experimentation with AI-assisted development. It is actively evolving and is not production-grade software. Not every feature path is fully tested yet. Expect occasional rough edges and breaking changes.
 
 A local AI-powered multi-agent system for generating short stories, novellas, and novels with iterative refinement, self-critique, and plot-hole detection. Everything runs locally on your machine using Ollama.
 
@@ -31,7 +31,7 @@ A local AI-powered multi-agent system for generating short stories, novellas, an
 
 ## Screenshots
 
-> **Note:** Screenshots show the application interface as of February 2026. The UI may have been updated since these were captured. The actual interface will reflect the latest features and design improvements.
+> **Note:** Screenshots show the interface from a recent development snapshot. Some labels, layouts, and workflows may differ in newer commits while features are being iterated.
 
 ### Main Interface
 ![Home Screen](https://github.com/user-attachments/assets/9056d5cb-b696-4510-89ba-3fbfd2fe067e)
@@ -63,16 +63,18 @@ A local AI-powered multi-agent system for generating short stories, novellas, an
 
 | Feature | Description | Status |
 |---------|-------------|--------|
-| 🤖 **Multi-Agent System** | 5 specialized AI agents working together | ✅ Stable |
-| 🌐 **World Building** | Graph-based entity/relationship tracking with visualization | ✅ Stable |
-| 🎨 **Modern Web UI** | NiceGUI-powered interface with dark mode | ✅ Stable |
-| 📚 **Story Templates** | Pre-built genre templates (Fantasy, Sci-Fi, Romance, etc.) | ✅ Stable |
-| 📊 **Analytics Dashboard** | Model performance tracking and recommendations | ✅ Stable |
-| 💾 **Multiple Export Formats** | Markdown, Text, HTML, EPUB, PDF | ✅ Stable |
-| ⚡ **Background Generation** | Non-blocking UI during story creation | ✅ Stable |
-| 🔄 **Version Control** | Chapter history with rollback support | ✅ Stable |
-| 🎯 **Adaptive Learning** | Auto-improves based on your preferences | ✅ Stable |
-| 🔒 **100% Local & Private** | No cloud, no tracking, complete privacy | ✅ Always |
+| 🤖 **Multi-Agent System** | 5 specialized AI agents working together | ✅ Core-tested |
+| 🌐 **World Building** | Graph-based entity/relationship tracking with visualization | ⚠️ Evolving |
+| 🎨 **Modern Web UI** | NiceGUI-powered interface with dark mode | ⚠️ Evolving |
+| 📚 **Story Templates** | Pre-built genre templates (Fantasy, Sci-Fi, Romance, etc.) | ✅ Core-tested |
+| 📊 **Analytics Dashboard** | Model performance tracking and recommendations | 🧪 Experimental |
+| 💾 **Multiple Export Formats** | Markdown, Text, HTML, EPUB, PDF | ✅ Core-tested |
+| ⚡ **Background Generation** | Non-blocking UI during story creation | ⚠️ Beta |
+| 🔄 **Version Control** | Chapter history with rollback support | ⚠️ Beta |
+| 🎯 **Adaptive Learning** | Auto-improves based on your preferences | 🧪 Experimental |
+| 🔒 **100% Local & Private** | No cloud, no tracking, complete privacy | ✅ Core behavior |
+
+**Status key:** ✅ Core-tested — covered by CI suite | ✅ Core behavior — architectural guarantee | ⚠️ Evolving — functional but API/design still changing | ⚠️ Beta — feature-complete, still being hardened | 🧪 Experimental — early-stage, may change significantly
 
 ### AI Agent Production Team
 
@@ -227,7 +229,7 @@ ollama --version
 
 ### 2. Pull Recommended Models
 
-Start with one of these tested model combinations (updated February 2026):
+Start with one of these starter model combinations:
 
 #### For 8GB VRAM (Entry Level)
 ```bash
@@ -634,7 +636,7 @@ mypy .
 
 - **Ruff**: Fast Python formatter and linter
 - **MyPy**: Type checking
-- **Pytest**: 2000+ tests with 100% coverage on core modules
+- **Pytest**: 2000+ tests; CI enforces 100% coverage on core modules (newer feature modules outside that set are still being validated)
 - **CI/CD**: GitHub Actions with coverage enforcement
 - **GitHub Copilot**: Custom instructions configured (see [docs/COPILOT_INSTRUCTIONS.md](docs/COPILOT_INSTRUCTIONS.md))
 
@@ -914,7 +916,7 @@ See the [Troubleshooting](#troubleshooting) section for detailed solutions.
 
 ## Contributing
 
-Contributions are welcome! This is a hobby project, but I appreciate:
+Contributions are welcome! This is a personal experimentation project, and I appreciate:
 
 - **Bug Reports**: [Open an issue](https://github.com/Aureliolo/story-factory/issues) with details
 - **Feature Requests**: Share your ideas in discussions
@@ -941,7 +943,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architectural guidelines.
 - **[SQLite](https://sqlite.org/)** - Lightweight entity storage with ACID guarantees
 - **[vis.js](https://visjs.org/)** - Interactive graph visualization for world explorer
 - **[Pydantic](https://pydantic.dev/)** - Runtime data validation and settings management
-- **[Pytest](https://pytest.org/)** - Comprehensive testing framework with 2000+ tests
+- **[Pytest](https://pytest.org/)** - Comprehensive testing framework with 2000+ tests and CI-enforced 100% coverage on core modules
 - **[Ruff](https://github.com/astral-sh/ruff)** - Ultra-fast Python linter and formatter
 
 ## License
@@ -1008,7 +1010,7 @@ Special thanks to all the model creators, AI researchers, and open-source contri
 
 ### Current Status (v1.0 - February 2026)
 
-✅ **Stable Features**:
+✅ **Core features in regular use**:
 - Multi-agent story generation with 5 specialized AI agents
 - Modern web UI with NiceGUI 3.x and full dark mode support
 - World building system with SQLite + NetworkX graph database
@@ -1026,7 +1028,7 @@ Special thanks to all the model creators, AI researchers, and open-source contri
 🆕 **Latest Improvements**:
 - **MoE Model Support**: Qwen3-30B-A3B for 70B-level reasoning at half the VRAM
 - **Enhanced World Quality**: AI-powered entity refinement with early stopping detection
-- **Improved Testing**: 2000+ tests with 100% coverage on core modules
+- **Improved Testing**: 2000+ tests with CI-enforced 100% coverage on core modules
 - **Performance Optimizations**: LRU caching, incremental graph updates, thread-safe operations
 - **Better Error Handling**: Comprehensive exception hierarchy and retry logic
 - **Keyboard Shortcuts**: Power-user navigation (`Ctrl+/`)
@@ -1063,9 +1065,9 @@ See [GitHub Issues](https://github.com/Aureliolo/story-factory/issues) for activ
 
 This project serves multiple purposes:
 
-1. **AI Assistant Testing**: Experimenting with different AI coding assistants to see how they handle complex, multi-file Python projects
-2. **Local LLM Exploration**: Testing various Ollama models for creative writing tasks
-3. **Multi-Agent Architecture**: Learning about coordinating multiple AI agents
-4. **Personal Entertainment**: Actually generating stories for fun!
+1. **Multi-Agent System Exploration**: Iterating on how specialized agents can collaborate effectively
+2. **Local LLM Exploration**: Experimenting with Ollama models for creative writing workflows
+3. **AI-Assisted Development**: Evaluating assistant-driven development on a real, evolving codebase
+4. **Personal Creative Tooling**: Building something genuinely useful for story ideation and writing experiments
 
-Remember: This is a hobby project. Have fun with it!
+Remember: This is an experimental personal project. Feedback and ideas are welcome.
