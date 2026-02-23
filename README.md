@@ -8,7 +8,7 @@
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/Aureliolo/story-factory?utm_source=oss&utm_medium=github&utm_campaign=Aureliolo%2Fstory-factory&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
-> **DISCLAIMER**: This is a personal long-running project focused on exploring multi-agent systems, local LLM capabilities with Ollama, and practical experimentation with AI-assisted development. It is actively evolving, not production-grade software, and not every feature path is fully tested yet. Expect occasional rough edges and breaking changes.
+> **DISCLAIMER**: This is a personal long-running project focused on exploring multi-agent systems, local LLM capabilities with Ollama, and practical experimentation with AI-assisted development. It is actively evolving and is not production-grade software. Not every feature path is fully tested yet. Expect occasional rough edges and breaking changes.
 
 A local AI-powered multi-agent system for generating short stories, novellas, and novels with iterative refinement, self-critique, and plot-hole detection. Everything runs locally on your machine using Ollama.
 
@@ -31,7 +31,7 @@ A local AI-powered multi-agent system for generating short stories, novellas, an
 
 ## Screenshots
 
-> **Note:** Screenshots show the interface from recent development snapshots (February 2026). Some labels, layouts, and workflows may differ in newer commits while features are being iterated.
+> **Note:** Screenshots show the interface from a recent development snapshot. Some labels, layouts, and workflows may differ in newer commits while features are being iterated.
 
 ### Main Interface
 ![Home Screen](https://github.com/user-attachments/assets/9056d5cb-b696-4510-89ba-3fbfd2fe067e)
@@ -73,6 +73,8 @@ A local AI-powered multi-agent system for generating short stories, novellas, an
 | 🔄 **Version Control** | Chapter history with rollback support | ⚠️ Beta |
 | 🎯 **Adaptive Learning** | Auto-improves based on your preferences | 🧪 Experimental |
 | 🔒 **100% Local & Private** | No cloud, no tracking, complete privacy | ✅ Core behavior |
+
+**Status key:** ✅ Core-tested — covered by CI suite | ✅ Core behavior — architectural guarantee | ⚠️ Evolving — functional but API/design still changing | ⚠️ Beta — feature-complete, still being hardened | 🧪 Experimental — early-stage, may change significantly
 
 ### AI Agent Production Team
 
@@ -227,7 +229,7 @@ ollama --version
 
 ### 2. Pull Recommended Models
 
-Start with one of these starter model combinations (updated February 2026):
+Start with one of these starter model combinations:
 
 #### For 8GB VRAM (Entry Level)
 ```bash
@@ -634,7 +636,7 @@ mypy .
 
 - **Ruff**: Fast Python formatter and linter
 - **MyPy**: Type checking
-- **Pytest**: 2000+ tests with 100% coverage target on core modules (some newer features are still being validated)
+- **Pytest**: 2000+ tests; CI enforces 100% coverage on core modules (newer feature modules outside that set are still being validated)
 - **CI/CD**: GitHub Actions with coverage enforcement
 - **GitHub Copilot**: Custom instructions configured (see [docs/COPILOT_INSTRUCTIONS.md](docs/COPILOT_INSTRUCTIONS.md))
 
@@ -941,7 +943,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architectural guidelines.
 - **[SQLite](https://sqlite.org/)** - Lightweight entity storage with ACID guarantees
 - **[vis.js](https://visjs.org/)** - Interactive graph visualization for world explorer
 - **[Pydantic](https://pydantic.dev/)** - Runtime data validation and settings management
-- **[Pytest](https://pytest.org/)** - Comprehensive testing framework with 2000+ tests (core-module coverage focused)
+- **[Pytest](https://pytest.org/)** - Comprehensive testing framework with 2000+ tests and CI-enforced 100% coverage on core modules
 - **[Ruff](https://github.com/astral-sh/ruff)** - Ultra-fast Python linter and formatter
 
 ## License
@@ -1026,7 +1028,7 @@ Special thanks to all the model creators, AI researchers, and open-source contri
 🆕 **Latest Improvements**:
 - **MoE Model Support**: Qwen3-30B-A3B for 70B-level reasoning at half the VRAM
 - **Enhanced World Quality**: AI-powered entity refinement with early stopping detection
-- **Improved Testing**: 2000+ tests with 100% coverage focus on core modules
+- **Improved Testing**: 2000+ tests with CI-enforced 100% coverage on core modules
 - **Performance Optimizations**: LRU caching, incremental graph updates, thread-safe operations
 - **Better Error Handling**: Comprehensive exception hierarchy and retry logic
 - **Keyboard Shortcuts**: Power-user navigation (`Ctrl+/`)
