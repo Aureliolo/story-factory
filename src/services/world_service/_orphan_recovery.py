@@ -32,6 +32,8 @@ def _recover_orphans(
     cancel_check: Callable[[], bool] | None = None,
 ) -> int:
     """Connect orphan entities by generating relationships (up to MAX_RETRIES_PER_ORPHAN+1 attempts each)."""
+    threshold = svc.settings.fuzzy_match_threshold
+
     orphans = world_db.find_orphans()
     if not orphans:
         logger.debug("No orphan entities found, skipping recovery")
@@ -128,7 +130,9 @@ def _recover_orphans(
                 target_entity: Entity | None
                 if source_name_norm == orphan_name_norm:
                     source_entity = orphan
-                    target_entity = _find_entity_by_name(all_entities, rel["target"])
+                    target_entity = _find_entity_by_name(
+                        all_entities, rel["target"], threshold=threshold
+                    )
                     logger.debug(
                         "Orphan '%s' matched source '%s' (normalized: '%s'),"
                         " using direct reference; target '%s' via fuzzy lookup",
@@ -138,7 +142,9 @@ def _recover_orphans(
                         rel["target"],
                     )
                 elif target_name_norm == orphan_name_norm:
-                    source_entity = _find_entity_by_name(all_entities, rel["source"])
+                    source_entity = _find_entity_by_name(
+                        all_entities, rel["source"], threshold=threshold
+                    )
                     target_entity = orphan
                     logger.debug(
                         "Orphan '%s' matched target '%s' (normalized: '%s'),"
@@ -149,8 +155,12 @@ def _recover_orphans(
                         rel["source"],
                     )
                 else:
-                    source_entity = _find_entity_by_name(all_entities, rel["source"])
-                    target_entity = _find_entity_by_name(all_entities, rel["target"])
+                    source_entity = _find_entity_by_name(
+                        all_entities, rel["source"], threshold=threshold
+                    )
+                    target_entity = _find_entity_by_name(
+                        all_entities, rel["target"], threshold=threshold
+                    )
                     logger.debug(
                         "Orphan '%s' (normalized: '%s') matched neither source '%s'"
                         " (normalized: '%s') nor target '%s' (normalized: '%s'),"

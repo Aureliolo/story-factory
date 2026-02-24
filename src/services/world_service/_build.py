@@ -869,8 +869,9 @@ def _generate_relationships(
             break
         if isinstance(rel, dict) and "source" in rel and "target" in rel:
             # Find source and target entities (fuzzy match for LLM name variations)
-            source_entity = _find_entity_by_name(all_entities, rel["source"])
-            target_entity = _find_entity_by_name(all_entities, rel["target"])
+            threshold = svc.settings.fuzzy_match_threshold
+            source_entity = _find_entity_by_name(all_entities, rel["source"], threshold=threshold)
+            target_entity = _find_entity_by_name(all_entities, rel["target"], threshold=threshold)
 
             if source_entity and target_entity:
                 # relation_type may be absent if the LLM omits it;

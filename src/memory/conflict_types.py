@@ -180,6 +180,7 @@ _WORD_TO_RELATION: dict[str, str] = {
     "trusts": "trusts",
     "love": "loves",
     "loves": "loves",
+    "admire": "admires",
     "admires": "admires",
     "respects": "respects",
     "sibling": "sibling_of",
@@ -190,9 +191,12 @@ _WORD_TO_RELATION: dict[str, str] = {
     "supports": "supports",
     "guide": "guided_by",
     "cares": "cares_for",
+    "colleague": "works_with",
+    "follows": "follows",
     # Rivalry signals
     "enemy": "enemy_of",
     "enemies": "enemies_with",
+    "rival": "rivals",
     "rivalry": "rivals",
     "rivals": "rivals",
     "nemesis": "nemesis_of",
@@ -286,20 +290,38 @@ def normalize_relation_type(raw_type: str) -> str:
             )
             return key
 
-    # Word-level match: split on underscores and check individual words against
-    # a priority lookup. This catches novel compound types like "deep_rivalry_bond"
-    # where no full key appears as a substring but a single word signals the category.
+    # Word-level match: split on underscores and check ALL words against
+    # the lookup. Picks the highest-conflict-priority match so that word
+    # ordering doesn't affect classification (e.g., "colleague_and_occasional_rival"
+    # matches RIVALRY via "rival" even though "colleague" appears first).
+    # Priority: RIVALRY > TENSION > ALLIANCE > NEUTRAL
+    _CONFLICT_PRIORITY = {
+        ConflictCategory.RIVALRY: 3,
+        ConflictCategory.TENSION: 2,
+        ConflictCategory.ALLIANCE: 1,
+        ConflictCategory.NEUTRAL: 0,
+    }
     words = normalized.split("_")
+    best_type: str | None = None
+    best_priority = -1
+    best_word = ""
     for word in words:
         if word in _WORD_TO_RELATION:
-            matched_type = _WORD_TO_RELATION[word]
-            logger.debug(
-                "Normalized novel type '%s' -> '%s' (word-level match on '%s')",
-                raw_type,
-                matched_type,
-                word,
-            )
-            return matched_type
+            candidate = _WORD_TO_RELATION[word]
+            category = RELATION_CONFLICT_MAPPING.get(candidate, ConflictCategory.NEUTRAL)
+            priority = _CONFLICT_PRIORITY[category]
+            if priority > best_priority:
+                best_priority = priority
+                best_type = candidate
+                best_word = word
+    if best_type is not None:
+        logger.debug(
+            "Normalized novel type '%s' -> '%s' (word-level match on '%s')",
+            raw_type,
+            best_type,
+            best_word,
+        )
+        return best_type
 
     logger.debug("No normalization match for '%s', returning as-is: '%s'", raw_type, normalized)
     return normalized
@@ -357,8 +379,11 @@ def classify_relationship(relation_type: str) -> ConflictCategory:
             logger.debug("Compound type '%s': all parts are NEUTRAL", relation_type)
             return ConflictCategory.NEUTRAL
 
-    # Normalize to lowercase for matching
-    normalized = relation_type.lower().replace("-", "_").replace(" ", "_")
+    # Apply the full 4-tier normalization chain (direct match, pipe-delimited,
+    # substring, word-level) before looking up the conflict category. This
+    # ensures compound types like "colleague_and_occasional_rival" are resolved
+    # to a known type before classification.
+    normalized = normalize_relation_type(relation_type)
     category = RELATION_CONFLICT_MAPPING.get(normalized)
 
     if category is None:

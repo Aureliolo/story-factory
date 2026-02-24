@@ -51,7 +51,9 @@ def mock_services():
 @pytest.fixture
 def mock_svc():
     """Create mock WorldService."""
-    return MagicMock()
+    svc = MagicMock()
+    svc.settings.fuzzy_match_threshold = 0.8
+    return svc
 
 
 class TestMaxRetriesConstant:

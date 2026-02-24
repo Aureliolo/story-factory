@@ -162,3 +162,84 @@ class TestKeywordBasedFallback:
         """Word 'cares' in a compound type should resolve to an ALLIANCE type."""
         result = normalize_relation_type("deeply_cares_bond")
         assert classify_relationship(result) == ConflictCategory.ALLIANCE
+
+
+class TestCompoundTypeClassification:
+    """Issue #397: compound types from LLM should NOT fall through to NEUTRAL."""
+
+    def test_colleague_and_occasional_rival_is_rivalry(self):
+        """'colleague_and_occasional_rival' should classify as RIVALRY, not NEUTRAL."""
+        assert classify_relationship("colleague_and_occasional_rival") == ConflictCategory.RIVALRY
+
+    def test_protective_rival_is_rivalry(self):
+        """'protective_rival' should classify as RIVALRY (rival > protect)."""
+        assert classify_relationship("protective_rival") == ConflictCategory.RIVALRY
+
+    def test_reluctant_enemy_is_rivalry(self):
+        """'reluctant_enemy' should classify as RIVALRY."""
+        assert classify_relationship("reluctant_enemy") == ConflictCategory.RIVALRY
+
+    def test_rival_singular_maps_via_word_lookup(self):
+        """'rival' singular should be recognized through _WORD_TO_RELATION."""
+        result = normalize_relation_type("occasional_rival")
+        assert result == "rivals"
+        assert classify_relationship(result) == ConflictCategory.RIVALRY
+
+    def test_admire_maps_via_word_lookup(self):
+        """'admire' (verb stem without 's') should map through _WORD_TO_RELATION."""
+        result = normalize_relation_type("deep_admire_bond")
+        assert result == "admires"
+        assert classify_relationship(result) == ConflictCategory.ALLIANCE
+
+    def test_colleague_maps_to_neutral(self):
+        """'colleague' should map to 'works_with' -> NEUTRAL."""
+        result = normalize_relation_type("mere_colleague_tie")
+        assert result == "works_with"
+        assert classify_relationship(result) == ConflictCategory.NEUTRAL
+
+
+class TestPriorityBasedWordMatching:
+    """Verify that RIVALRY beats NEUTRAL in same compound (priority-based)."""
+
+    def test_rivalry_beats_neutral_in_compound(self):
+        """When compound contains both neutral and rivalry words, RIVALRY wins."""
+        # "colleague" -> works_with (NEUTRAL), "rival" -> rivals (RIVALRY)
+        result = normalize_relation_type("colleague_rival")
+        assert classify_relationship(result) == ConflictCategory.RIVALRY
+
+    def test_rivalry_beats_alliance_in_compound(self):
+        """When compound contains both alliance and rivalry words, RIVALRY wins."""
+        # "friend" -> friends (ALLIANCE), "enemy" -> enemy_of (RIVALRY)
+        result = normalize_relation_type("friend_enemy_dynamic")
+        assert classify_relationship(result) == ConflictCategory.RIVALRY
+
+    def test_tension_beats_alliance_in_compound(self):
+        """When compound contains both alliance and tension words, TENSION wins."""
+        # "loyal" -> loyal_to (ALLIANCE), "fear" -> fears (TENSION)
+        result = normalize_relation_type("loyal_fear_bond")
+        assert classify_relationship(result) == ConflictCategory.TENSION
+
+    def test_tension_beats_neutral_in_compound(self):
+        """When compound contains both neutral and tension words, TENSION wins."""
+        # "colleague" -> works_with (NEUTRAL), "wary" -> wary_of (TENSION)
+        result = normalize_relation_type("colleague_wary_dynamic")
+        assert classify_relationship(result) == ConflictCategory.TENSION
+
+
+class TestClassifyRelationshipUsesNormalization:
+    """classify_relationship() should use normalize_relation_type() internally."""
+
+    def test_classify_normalizes_compound_type(self):
+        """classify_relationship should normalize before lookup, not just direct-match."""
+        # "colleague_and_occasional_rival" is not a direct key in RELATION_CONFLICT_MAPPING.
+        # Without normalization, classify_relationship would return NEUTRAL.
+        # With normalization wired in, it resolves via word-level match.
+        assert classify_relationship("colleague_and_occasional_rival") != ConflictCategory.NEUTRAL
+
+    def test_classify_handles_hyphenated_input(self):
+        """classify_relationship should handle hyphens via normalization."""
+        assert classify_relationship("bitter-rivals") == ConflictCategory.RIVALRY
+
+    def test_classify_handles_spaced_input(self):
+        """classify_relationship should handle spaces via normalization."""
+        assert classify_relationship("allies with") == ConflictCategory.ALLIANCE

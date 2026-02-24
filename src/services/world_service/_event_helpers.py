@@ -133,6 +133,11 @@ def build_event_entity_context(world_db: WorldDatabase) -> str:
             "Events will be generated without entity context."
         )
         return "No entities yet."
+
+    context_parts.append(
+        "IMPORTANT: Use entity names EXACTLY as listed above. "
+        "Do not abbreviate, modify, or invent new names."
+    )
     return "\n\n".join(context_parts)
 
 
@@ -164,7 +169,9 @@ def build_event_timestamp(event: dict[str, Any]) -> str:
 
 
 def resolve_event_participants(
-    event: dict[str, Any], all_entities: list[Entity]
+    event: dict[str, Any],
+    all_entities: list[Entity],
+    threshold: float = 0.8,
 ) -> list[tuple[str, str]]:
     """Resolve event participant names to entity IDs.
 
@@ -174,6 +181,7 @@ def resolve_event_participants(
     Args:
         event: Event dict with an optional 'participants' list.
         all_entities: List of entities to match names against.
+        threshold: Minimum similarity score for fuzzy name matching fallback.
 
     Returns:
         List of (entity_id, role) tuples for successfully resolved participants.
@@ -192,7 +200,7 @@ def resolve_event_participants(
                 p,
             )
         if entity_name:
-            matched = _find_entity_by_name(all_entities, entity_name)
+            matched = _find_entity_by_name(all_entities, entity_name, threshold=threshold)
             if matched:
                 participants.append((matched.id, role))
             else:
@@ -260,6 +268,7 @@ def _generate_events(
     )
 
     all_entities = world_db.list_entities()
+    threshold = svc.settings.fuzzy_match_threshold
     added_count = 0
     for event, event_scores in event_results:
         if cancel_check and cancel_check():
@@ -273,7 +282,7 @@ def _generate_events(
                 continue
 
             timestamp_in_story = build_event_timestamp(event)
-            participants = resolve_event_participants(event, all_entities)
+            participants = resolve_event_participants(event, all_entities, threshold=threshold)
 
             consequences = event.get("consequences", [])
 

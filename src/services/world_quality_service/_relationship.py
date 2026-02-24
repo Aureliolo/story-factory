@@ -1,5 +1,6 @@
 """Relationship generation, judgment, and refinement functions."""
 
+import json
 import logging
 import threading
 from collections import Counter
@@ -25,12 +26,10 @@ from src.services.world_quality_service._common import (
     judge_with_averaging,
 )
 from src.services.world_quality_service._quality_loop import quality_refinement_loop
+from src.services.world_service._name_matching import _normalize_name
 from src.utils.exceptions import WorldGenerationError, summarize_llm_error
-from src.utils.json_parser import extract_json, unwrap_single_json
 
 logger = logging.getLogger(__name__)
-
-_LEADING_ARTICLES = ("the ", "a ", "an ")
 
 # Module-level cache for LLM-based relationship type classification.
 # Maps free-form description -> classified valid type. Thread-safe via lock.
@@ -153,20 +152,6 @@ def _normalize_with_llm_fallback(svc: WorldQualityService, raw_type: str) -> str
     return normalized
 
 
-def _normalize_entity_name(name: str) -> str:
-    """Normalize an entity name for fuzzy comparison.
-
-    Collapses whitespace, lowercases, and strips common English articles
-    ("The", "A", "An") that LLMs frequently prepend, causing mismatches.
-    """
-    normalized = " ".join(name.split()).lower()
-    for article in _LEADING_ARTICLES:
-        if normalized.startswith(article):
-            normalized = normalized[len(article) :]
-            break
-    return normalized
-
-
 def generate_relationship_with_quality(
     svc,
     story_state: StoryState,
@@ -232,9 +217,9 @@ def generate_relationship_with_quality(
             return True
         # Reject immediately if required_entity constraint is violated
         if required_entity:
-            source_norm = _normalize_entity_name(rel.get("source", ""))
-            target_norm = _normalize_entity_name(rel.get("target", ""))
-            required_norm = _normalize_entity_name(required_entity)
+            source_norm = _normalize_name(rel.get("source", ""))
+            target_norm = _normalize_name(rel.get("target", ""))
+            required_norm = _normalize_name(required_entity)
             if source_norm != required_norm and target_norm != required_norm:
                 logger.warning(
                     "Required entity '%s' not in relationship %s -> %s, rejecting",
@@ -499,11 +484,11 @@ def _create_relationship(
         ]
         # When a required_entity is set, only show pairs involving that entity
         if required_entity:
-            req_norm = _normalize_entity_name(required_entity)
+            req_norm = _normalize_name(required_entity)
             raw_unused = [
                 (a, b)
                 for a, b in raw_unused
-                if _normalize_entity_name(a) == req_norm or _normalize_entity_name(b) == req_norm
+                if _normalize_name(a) == req_norm or _normalize_name(b) == req_norm
             ]
         raw_unused.sort(key=lambda pair: entity_freq[pair[0]] + entity_freq[pair[1]])
         unused_pairs = [f"- {a} -> {b}" for a, b in raw_unused[:30]]
@@ -556,41 +541,44 @@ Output ONLY valid JSON (all text in {brief.language}):
     try:
         model = svc._get_creator_model(entity_type="relationship")
 
+        # Grammar-constrained schema: source/target pinned to exact entity names,
+        # relation_type pinned to the controlled vocabulary. Eliminates name
+        # variants, novel compound types, and invalid JSON at the source.
+        schema = {
+            "type": "object",
+            "properties": {
+                "source": {"type": "string", "enum": entity_names},
+                "target": {"type": "string", "enum": entity_names},
+                "relation_type": {"type": "string", "enum": list(VALID_RELATIONSHIP_TYPES)},
+                "description": {"type": "string"},
+            },
+            "required": ["source", "target", "relation_type", "description"],
+        }
+
         response = svc.client.generate(
             model=model,
             prompt=prompt,
+            format=schema,
             options={
                 "temperature": temperature,
             },
         )
 
-        raw_response = response["response"]
-        data = extract_json(raw_response, strict=False)
-        data = unwrap_single_json(data)
+        data = json.loads(response["response"])
         if data and isinstance(data, dict):
-            # Normalize relation_type to controlled vocabulary, with LLM fallback
+            # Schema constrains relation_type to VALID_RELATIONSHIP_TYPES,
+            # but normalize as safety net in case of unexpected values
             raw_type = data.get("relation_type", "related_to")
             data["relation_type"] = _normalize_with_llm_fallback(svc, raw_type)
             result: dict[str, Any] = data
             return result
         else:
-            # Detect likely truncation: unbalanced braces suggest output was cut off
-            open_braces = raw_response.count("{") - raw_response.count("}")
-            if open_braces > 0:
-                logger.warning(
-                    "Relationship creation JSON appears truncated "
-                    "(unbalanced braces: %d unclosed). "
-                    "Raw response tail: ...%s",
-                    open_braces,
-                    raw_response[-100:],
-                )
-            else:
-                logger.error(f"Relationship creation returned invalid JSON structure: {data}")
+            logger.error("Relationship creation returned invalid JSON structure: %s", data)
             raise WorldGenerationError(f"Invalid relationship JSON structure: {data}")
     except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
         logger.error("Relationship creation LLM error for story %s: %s", story_state.id, e)
         raise WorldGenerationError(f"LLM error during relationship creation: {e}") from e
-    except (ValueError, KeyError, TypeError) as e:
+    except (json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
         logger.error("Relationship creation JSON parsing error for story %s: %s", story_state.id, e)
         raise WorldGenerationError(f"Invalid relationship response format: {e}") from e
     except WorldGenerationError:
@@ -757,23 +745,46 @@ Output ONLY valid JSON:
     try:
         model = svc._get_creator_model(entity_type="relationship")
 
+        # Pinned schema: only the description can change during refinement.
+        # Source, target, and relation_type are locked to single-element enums.
+        refine_schema = {
+            "type": "object",
+            "properties": {
+                "source": {
+                    "type": "string",
+                    "enum": [relationship.get("source", "Unknown")],
+                },
+                "target": {
+                    "type": "string",
+                    "enum": [relationship.get("target", "Unknown")],
+                },
+                "relation_type": {
+                    "type": "string",
+                    "enum": [relationship.get("relation_type", "knows")],
+                },
+                "description": {"type": "string"},
+            },
+            "required": ["source", "target", "relation_type", "description"],
+        }
+
         response = svc.client.generate(
             model=model,
             prompt=prompt,
-            format="json",
+            format=refine_schema,
             options={
                 "temperature": temperature,
             },
         )
 
-        data = extract_json(response["response"], strict=False)
+        data = json.loads(response["response"])
         if data and isinstance(data, dict):
+            # Safety net: normalize even though schema pins the type
             raw_type = data.get("relation_type", "related_to")
             data["relation_type"] = _normalize_with_llm_fallback(svc, raw_type)
             result: dict[str, Any] = data
             return result
         else:
-            logger.error(f"Relationship refinement returned invalid JSON structure: {data}")
+            logger.error("Relationship refinement returned invalid JSON structure: %s", data)
             raise WorldGenerationError(f"Invalid relationship refinement JSON structure: {data}")
     except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
         logger.error(
@@ -783,7 +794,7 @@ Output ONLY valid JSON:
             e,
         )
         raise WorldGenerationError(f"LLM error during relationship refinement: {e}") from e
-    except (ValueError, KeyError, TypeError) as e:
+    except (json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
         logger.error(
             "Relationship refinement JSON parsing error for %s->%s: %s",
             relationship.get("source") or "Unknown",
