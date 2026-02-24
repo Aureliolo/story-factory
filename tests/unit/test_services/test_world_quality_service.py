@@ -3605,16 +3605,25 @@ class TestExceptionHandlingPaths:
 
     def test_create_relationship_json_parsing_error(self, service, story_state, mock_ollama_client):
         """Test relationship creation handles JSON parsing errors."""
-        mock_ollama_client.generate.return_value = {"response": "{}"}
+        mock_ollama_client.generate.return_value = {"response": "not valid json!!!"}
         service._client = mock_ollama_client
 
-        with patch("src.services.world_quality_service._relationship.extract_json") as mock_extract:
-            mock_extract.side_effect = TypeError("type error")
+        with pytest.raises(WorldGenerationError, match="Invalid relationship response format"):
+            service._create_relationship(
+                story_state, entity_names=["A", "B"], existing_rels=[], temperature=0.9
+            )
 
-            with pytest.raises(WorldGenerationError, match="Invalid relationship response format"):
-                service._create_relationship(
-                    story_state, entity_names=["A", "B"], existing_rels=[], temperature=0.9
-                )
+    def test_create_relationship_non_dict_json_response(
+        self, service, story_state, mock_ollama_client
+    ):
+        """Test relationship creation rejects non-dict JSON responses (e.g., lists)."""
+        mock_ollama_client.generate.return_value = {"response": "[]"}
+        service._client = mock_ollama_client
+
+        with pytest.raises(WorldGenerationError, match="Invalid relationship JSON structure"):
+            service._create_relationship(
+                story_state, entity_names=["A", "B"], existing_rels=[], temperature=0.9
+            )
 
     def test_create_relationship_unexpected_error(self, service, story_state, mock_ollama_client):
         """Test relationship creation handles unexpected errors."""
@@ -3817,7 +3826,7 @@ class TestExceptionHandlingPaths:
 
     def test_refine_relationship_json_parsing_error(self, service, story_state, mock_ollama_client):
         """Test relationship refinement handles JSON parsing errors."""
-        mock_ollama_client.generate.return_value = {"response": "{}"}
+        mock_ollama_client.generate.return_value = {"response": "not valid json!!!"}
         service._client = mock_ollama_client
 
         original = {"source": "A", "target": "B", "relation_type": "knows", "description": "X"}
@@ -3825,11 +3834,23 @@ class TestExceptionHandlingPaths:
             tension=6.0, dynamics=6.0, story_potential=6.0, authenticity=6.0
         )
 
-        with patch("src.services.world_quality_service._relationship.extract_json") as mock_extract:
-            mock_extract.side_effect = ValueError("parse error")
+        with pytest.raises(WorldGenerationError, match="Invalid relationship refinement"):
+            service._refine_relationship(original, scores, story_state, temperature=0.7)
 
-            with pytest.raises(WorldGenerationError, match="Invalid relationship refinement"):
-                service._refine_relationship(original, scores, story_state, temperature=0.7)
+    def test_refine_relationship_non_dict_json_response(
+        self, service, story_state, mock_ollama_client
+    ):
+        """Test relationship refinement rejects non-dict JSON responses."""
+        mock_ollama_client.generate.return_value = {"response": "[]"}
+        service._client = mock_ollama_client
+
+        original = {"source": "A", "target": "B", "relation_type": "knows", "description": "X"}
+        scores = RelationshipQualityScores(
+            tension=6.0, dynamics=6.0, story_potential=6.0, authenticity=6.0
+        )
+
+        with pytest.raises(WorldGenerationError, match="Invalid relationship refinement JSON"):
+            service._refine_relationship(original, scores, story_state, temperature=0.7)
 
     def test_refine_relationship_unexpected_error(self, service, story_state, mock_ollama_client):
         """Test relationship refinement handles unexpected errors."""
