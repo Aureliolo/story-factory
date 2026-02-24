@@ -5,6 +5,7 @@ internal methods, context-length retry, and failure tracking.
 """
 
 import logging
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import ollama
@@ -824,3 +825,42 @@ class TestFailureTracking:
         """Verify new constants are accessible."""
         assert _FALLBACK_CONTEXT_TOKENS == 512
         assert _MIN_CONTENT_LENGTH == 10
+
+
+class TestStoryStateFailureTracking:
+    """Tests for failure tracking in embed_story_state_data edge cases."""
+
+    def test_rule_embed_text_failure_records_failure(self, service, mock_db):
+        """Records failure when embed_text returns empty for a world rule."""
+        story_state = SimpleNamespace(
+            established_facts=[],
+            world_rules=["A valid world rule for testing."],
+            chapters=[],
+        )
+        with patch.object(service, "embed_text", return_value=[]):
+            service.embed_story_state_data(mock_db, story_state)
+        assert len(service._failed_source_ids) == 1
+
+    def test_chapter_outline_embed_text_failure_records_failure(self, service, mock_db):
+        """Records failure when embed_text returns empty for a chapter outline."""
+        chapter = SimpleNamespace(
+            number=1, title="Ch1", outline="A sufficiently long chapter outline.", scenes=[]
+        )
+        story_state = SimpleNamespace(established_facts=[], world_rules=[], chapters=[chapter])
+        with patch.object(service, "embed_text", return_value=[]):
+            service.embed_story_state_data(mock_db, story_state)
+        assert "chapter:1" in service._failed_source_ids
+
+    def test_scene_outline_embed_text_failure_records_failure(self, service, mock_db):
+        """Records failure when embed_text returns empty for a scene outline."""
+        scene = SimpleNamespace(title="S1", outline="A sufficiently long scene outline.")
+        chapter = SimpleNamespace(
+            number=1,
+            title="Ch1",
+            outline="A sufficiently long chapter outline.",
+            scenes=[scene],
+        )
+        story_state = SimpleNamespace(established_facts=[], world_rules=[], chapters=[chapter])
+        with patch.object(service, "embed_text", return_value=[]):
+            service.embed_story_state_data(mock_db, story_state)
+        assert "scene:1:0" in service._failed_source_ids
