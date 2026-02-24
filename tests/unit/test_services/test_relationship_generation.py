@@ -238,6 +238,7 @@ class TestDynamicScaling:
         settings = MagicMock()
         settings.world_gen_relationships_min = 10
         settings.world_gen_relationships_max = 25
+        settings.fuzzy_match_threshold = 0.8
         svc = WorldService(settings)
 
         # Set up world_db with only 5 entities
@@ -276,6 +277,7 @@ class TestDynamicScaling:
         settings = MagicMock()
         settings.world_gen_relationships_min = 15
         settings.world_gen_relationships_max = 15
+        settings.fuzzy_match_threshold = 0.8
         svc = WorldService(settings)
 
         world_db = WorldDatabase(tmp_path / "test_no_cap.db")
@@ -367,6 +369,7 @@ class TestRelationTypeNormalizedBeforeStorage:
         settings = MagicMock()
         settings.world_gen_relationships_min = 1
         settings.world_gen_relationships_max = 1
+        settings.fuzzy_match_threshold = 0.8
         svc = WorldService(settings)
 
         world_db = WorldDatabase(tmp_path / "test_normalize.db")
@@ -416,6 +419,7 @@ class TestRelationTypeNormalizedInBuild:
         settings = MagicMock()
         settings.world_gen_relationships_min = 1
         settings.world_gen_relationships_max = 1
+        settings.fuzzy_match_threshold = 0.8
         svc = WorldService(settings)
 
         world_db = WorldDatabase(tmp_path / "test_build_norm.db")
@@ -460,6 +464,7 @@ class TestRelationTypeNormalizedInBuild:
         settings = MagicMock()
         settings.world_gen_relationships_min = 1
         settings.world_gen_relationships_max = 1
+        settings.fuzzy_match_threshold = 0.8
         svc = WorldService(settings)
 
         world_db = WorldDatabase(tmp_path / "test_missing_type.db")
@@ -511,6 +516,7 @@ class TestRelationTypeNormalizedInBuild:
         settings = MagicMock()
         settings.world_gen_relationships_min = 1
         settings.world_gen_relationships_max = 1
+        settings.fuzzy_match_threshold = 0.8
         svc = WorldService(settings)
 
         world_db = WorldDatabase(tmp_path / "test_orphan.db")
@@ -1451,23 +1457,26 @@ class TestNormalizationConsolidation:
 
         # The relationship contains "The Castle" which normalizes to "castle"
         # Required entity is "Castle" which also normalizes to "castle"
-        response_json = json.dumps(
-            {
-                "source": "The Castle",
-                "target": "Alice",
-                "relation_type": "contains",
-                "description": "Castle contains Alice",
-            }
-        )
-        svc.client.generate.return_value = {"response": response_json}
+        # Mock _create_relationship (which is what generate_relationship_with_quality
+        # actually calls — it's a method on svc, not svc.client.generate)
+        svc._create_relationship.return_value = {
+            "source": "The Castle",
+            "target": "Alice",
+            "relation_type": "contains",
+            "description": "Castle contains Alice",
+        }
 
         # This should NOT reject the relationship because _normalize_name
         # strips "The " and matches "castle" == "castle"
-        # (The function should proceed without error)
-        # We just verify the generate call was made (relationship not rejected as empty)
-        with pytest.raises((WorldGenerationError, Exception)):
-            # May raise because judge mock isn't fully set up,
-            # but the key test is that _create_ succeeds (not rejected by _is_empty)
+        try:
             generate_relationship_with_quality(
                 svc, story_state, ["The Castle", "Alice"], [], required_entity="Castle"
             )
+        except WorldGenerationError, Exception:
+            # May raise because judge mock isn't fully set up,
+            # but the key test is that _create_ succeeded (not rejected by _is_empty)
+            pass
+
+        # Ensure the creator was actually invoked, proving the relationship was not
+        # rejected by the _is_empty check due to normalization failure.
+        svc._create_relationship.assert_called()

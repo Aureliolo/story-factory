@@ -862,6 +862,7 @@ def _generate_relationships(
         state, entity_names, existing_rels, rel_count, cancel_check=cancel_check
     )
     added_count = 0
+    threshold = svc.settings.fuzzy_match_threshold
 
     for rel, scores in relationship_results:
         if cancel_check and cancel_check():
@@ -869,7 +870,6 @@ def _generate_relationships(
             break
         if isinstance(rel, dict) and "source" in rel and "target" in rel:
             # Find source and target entities (fuzzy match for LLM name variations)
-            threshold = svc.settings.fuzzy_match_threshold
             source_entity = _find_entity_by_name(all_entities, rel["source"], threshold=threshold)
             target_entity = _find_entity_by_name(all_entities, rel["target"], threshold=threshold)
 

@@ -304,7 +304,7 @@ class TestResolveEventParticipants:
             ],
         }
 
-        result = resolve_event_participants(event, [entity])
+        result = resolve_event_participants(event, [entity], threshold=0.8)
 
         assert result == [("e1", "instigator")]
 
@@ -317,7 +317,7 @@ class TestResolveEventParticipants:
         event = {"participants": ["Gandalf"]}
 
         with caplog.at_level(logging.WARNING, logger="src.services.world_service._event_helpers"):
-            result = resolve_event_participants(event, [entity])
+            result = resolve_event_participants(event, [entity], threshold=0.8)
 
         assert "Unexpected participant format" in caplog.text
         assert result == [("e1", "affected")]
@@ -329,14 +329,14 @@ class TestResolveEventParticipants:
         }
 
         with caplog.at_level(logging.WARNING, logger="src.services.world_service._event_helpers"):
-            result = resolve_event_participants(event, [])
+            result = resolve_event_participants(event, [], threshold=0.8)
 
         assert result == []
         assert "Could not resolve event participant 'Nobody'" in caplog.text
 
     def test_no_participants_key(self):
         """Test event with no participants key."""
-        result = resolve_event_participants({}, [])
+        result = resolve_event_participants({}, [], threshold=0.8)
 
         assert result == []
 

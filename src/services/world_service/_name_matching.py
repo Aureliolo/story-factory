@@ -67,13 +67,15 @@ def _deep_normalize(name: str) -> str:
     result = result.rstrip(".,;:!?-")
     # Collapse whitespace again after transformations
     result = " ".join(result.split())
+    if result != name.strip().lower():
+        logger.debug("Deep-normalized entity name from %r to %r", name, result)
     return result
 
 
 def _find_entity_by_name(
     entities: list[Entity],
     name: str,
-    threshold: float = 0.8,
+    threshold: float,
 ) -> Entity | None:
     """Find an entity by name with fuzzy matching and similarity fallback.
 
@@ -88,10 +90,17 @@ def _find_entity_by_name(
         entities: List of entity objects with .name attribute.
         name: Name to search for.
         threshold: Minimum similarity score for the fallback (0.0 to 1.0).
+            Must be explicitly provided from settings.
 
     Returns:
         Matching entity, or None if not found or ambiguous.
+
+    Raises:
+        ValueError: If threshold is outside [0.0, 1.0].
     """
+    if not (0.0 <= threshold <= 1.0):
+        raise ValueError(f"threshold must be between 0.0 and 1.0, got {threshold}")
+
     # Exact match first (fast path)
     for e in entities:
         if e.name == name:
@@ -114,6 +123,14 @@ def _find_entity_by_name(
     from src.services.world_service._entities import calculate_name_similarity
 
     deep_target = _deep_normalize(name)
+    if not deep_target:
+        logger.warning(
+            "Deep normalization of %r produced empty string, "
+            "cannot perform similarity matching. Returning None.",
+            name,
+        )
+        return None
+
     similarity_matches: list[tuple[Entity, float]] = []
     for e in entities:
         deep_candidate = _deep_normalize(e.name)
@@ -141,4 +158,11 @@ def _find_entity_by_name(
         )
         return None
 
+    logger.debug(
+        "No match found for entity name %r after exact, normalized, "
+        "and similarity search (%d entities, threshold=%.2f)",
+        name,
+        len(entities),
+        threshold,
+    )
     return None

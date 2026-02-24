@@ -163,6 +163,17 @@ HIERARCHICAL_RELATIONSHIP_TYPES: frozenset[str] = frozenset(
 # Keys sorted by length descending for substring matching (prefer longer matches first)
 _SORTED_KEYS_BY_LENGTH: list[str] = sorted(RELATION_CONFLICT_MAPPING.keys(), key=len, reverse=True)
 
+# Priority ordering for word-level conflict classification.
+# Higher values win when multiple signal words appear in a compound type.
+_CONFLICT_PRIORITY: dict[ConflictCategory, int] = {
+    ConflictCategory.RIVALRY: 3,
+    ConflictCategory.TENSION: 2,
+    ConflictCategory.ALLIANCE: 1,
+    ConflictCategory.NEUTRAL: 0,
+}
+_missing_priorities = set(ConflictCategory) - set(_CONFLICT_PRIORITY)
+assert not _missing_priorities, f"_CONFLICT_PRIORITY missing categories: {_missing_priorities}"
+
 # Word-level lookup: individual words that strongly signal a known relationship type.
 # Used as a last-resort fallback when substring matching fails on novel compound types.
 # Maps a single word (found after splitting on underscores) to the canonical relation type.
@@ -295,12 +306,6 @@ def normalize_relation_type(raw_type: str) -> str:
     # ordering doesn't affect classification (e.g., "colleague_and_occasional_rival"
     # matches RIVALRY via "rival" even though "colleague" appears first).
     # Priority: RIVALRY > TENSION > ALLIANCE > NEUTRAL
-    _CONFLICT_PRIORITY = {
-        ConflictCategory.RIVALRY: 3,
-        ConflictCategory.TENSION: 2,
-        ConflictCategory.ALLIANCE: 1,
-        ConflictCategory.NEUTRAL: 0,
-    }
     words = normalized.split("_")
     best_type: str | None = None
     best_priority = -1

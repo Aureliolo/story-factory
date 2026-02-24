@@ -171,7 +171,7 @@ def build_event_timestamp(event: dict[str, Any]) -> str:
 def resolve_event_participants(
     event: dict[str, Any],
     all_entities: list[Entity],
-    threshold: float = 0.8,
+    threshold: float,
 ) -> list[tuple[str, str]]:
     """Resolve event participant names to entity IDs.
 
@@ -181,7 +181,7 @@ def resolve_event_participants(
     Args:
         event: Event dict with an optional 'participants' list.
         all_entities: List of entities to match names against.
-        threshold: Minimum similarity score for fuzzy name matching fallback.
+        threshold: Minimum similarity score for fuzzy name matching fallback (required).
 
     Returns:
         List of (entity_id, role) tuples for successfully resolved participants.

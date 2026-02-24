@@ -58,6 +58,10 @@ class TestDeepNormalize:
         assert _deep_normalize("A Dark Tower") == "dark tower"
         assert _deep_normalize("An Ancient Relic") == "ancient relic"
 
+    def test_strips_curly_apostrophe_possessive(self):
+        """Should strip Unicode curly apostrophe possessive (\u2019s)."""
+        assert _deep_normalize("Glacier\u2019s Whisper") == "glacier whisper"
+
     def test_combined_transformations(self):
         """Should apply all transformations together."""
         # Leading article + possessive + trailing punctuation
@@ -83,14 +87,14 @@ class TestSimilarityFallback:
     def test_exact_match_still_works(self):
         """Exact name match should return immediately without fallback."""
         entities = [_make_entity("Glacial Whisper"), _make_entity("Northern Wind")]
-        result = _find_entity_by_name(entities, "Glacial Whisper")
+        result = _find_entity_by_name(entities, "Glacial Whisper", threshold=0.8)
         assert result is not None
         assert result.name == "Glacial Whisper"
 
     def test_normalized_match_still_works(self):
         """Article-stripped normalized match should still work."""
         entities = [_make_entity("Echoes of the Network")]
-        result = _find_entity_by_name(entities, "The Echoes of the Network")
+        result = _find_entity_by_name(entities, "The Echoes of the Network", threshold=0.8)
         assert result is not None
         assert result.name == "Echoes of the Network"
 
@@ -207,7 +211,7 @@ class TestFindEntityByNameExisting:
     def test_exact_match_preferred_over_fuzzy(self):
         """Exact match should be preferred over normalized match."""
         entities = [_make_entity("the castle"), _make_entity("Castle")]
-        result = _find_entity_by_name(entities, "the castle")
+        result = _find_entity_by_name(entities, "the castle", threshold=0.8)
         assert result is not None
         assert result.name == "the castle"
 
@@ -215,12 +219,15 @@ class TestFindEntityByNameExisting:
         """Multiple entities with same normalized name should return None."""
         # Both normalize to "castle"
         entities = [_make_entity("The Castle"), _make_entity("A Castle")]
-        result = _find_entity_by_name(entities, "castle")
+        result = _find_entity_by_name(entities, "castle", threshold=0.8)
         assert result is None
 
-    def test_default_threshold_is_0_8(self):
-        """Default threshold should be 0.8 when not specified."""
+    def test_threshold_is_required(self):
+        """threshold parameter must be explicitly provided (no default)."""
+        # Verify by calling without threshold — should raise TypeError
         entities = [_make_entity("Glacial Whisper")]
-        # Call without threshold param to verify default works
-        result = _find_entity_by_name(entities, "Glacial Whisper")
-        assert result is not None
+        try:
+            _find_entity_by_name(entities, "Glacial Whisper")  # type: ignore[call-arg]
+            raise AssertionError("Expected TypeError for missing threshold parameter")
+        except TypeError as e:
+            assert "threshold" in str(e)
