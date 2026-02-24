@@ -157,11 +157,13 @@ class TestEmbedText:
 
         assert result == []
 
-    def test_embed_text_no_model_configured(self, service):
+    def test_embed_text_no_model_configured(self, service, caplog):
         """Returns empty list when embedding model is cleared after construction (ValueError path)."""
         service.settings.embedding_model = ""
-        result = service.embed_text("Some text")
+        with caplog.at_level(logging.WARNING):
+            result = service.embed_text("Some text")
         assert result == []
+        assert any("configuration error" in msg.lower() for msg in caplog.messages)
 
     def test_embed_text_timeout_error(self, service):
         """Returns empty list when Ollama request times out."""
@@ -183,15 +185,26 @@ class TestEmbedText:
 
         assert result == []
 
-    def test_embed_text_unexpected_exception(self, service):
-        """Returns empty list on unexpected errors (generic Exception path)."""
+    def test_embed_text_malformed_response_key_error(self, service):
+        """Returns empty list when Ollama response is missing 'embedding' key."""
         mock_client = MagicMock()
-        mock_client.embeddings.side_effect = RuntimeError("Unexpected failure")
+        mock_client.embeddings.return_value = {}  # Missing 'embedding' key
 
         with patch.object(service, "_get_client", return_value=mock_client):
             result = service.embed_text("Some text")
 
         assert result == []
+
+    def test_embed_text_unexpected_exception_propagates(self, service):
+        """Unexpected errors (programming bugs) propagate to caller instead of being swallowed."""
+        mock_client = MagicMock()
+        mock_client.embeddings.side_effect = RuntimeError("Unexpected failure")
+
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            pytest.raises(RuntimeError, match="Unexpected failure"),
+        ):
+            service.embed_text("Some text")
 
 
 # ---------------------------------------------------------------------------
@@ -346,8 +359,8 @@ class TestEmbedTextTruncation:
         mock_client.embeddings.assert_not_called()
         assert any("invalid context size" in msg.lower() for msg in caplog.messages)
 
-    def test_get_model_context_size_exception_returns_empty(self, service):
-        """Falls back to empty list when get_model_context_size raises an unexpected exception."""
+    def test_get_model_context_size_exception_propagates(self, service):
+        """Unexpected exceptions from get_model_context_size propagate to caller."""
         mock_client = MagicMock()
 
         with (
@@ -356,11 +369,9 @@ class TestEmbedTextTruncation:
                 "src.services.embedding_service.get_model_context_size",
                 side_effect=RuntimeError("API exploded"),
             ),
+            pytest.raises(RuntimeError, match="API exploded"),
         ):
-            result = service.embed_text("Some text")
-
-        # Should be caught by the generic except Exception handler
-        assert result == []
+            service.embed_text("Some text")
 
     def test_context_limit_too_small_for_prefix_returns_empty(self, service, caplog):
         """Returns empty list when max_chars is smaller than the prefix length."""
@@ -498,6 +509,18 @@ class TestEmbedTextContextRetry:
         assert result == []
         assert mock_client.embeddings.call_count == 2
 
+    def test_context_length_retry_unexpected_error_propagates(self, service):
+        """Unexpected errors during retry propagate instead of being swallowed."""
+        mock_client = MagicMock()
+        context_error = ollama.ResponseError("input length exceeds context length", status_code=500)
+        mock_client.embeddings.side_effect = [context_error, TypeError("bad type")]
+
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            pytest.raises(TypeError, match="bad type"),
+        ):
+            service.embed_text("Some text that triggers retry")
+
     def test_context_length_pattern_matching_case_insensitive(self, service):
         """Context-length error matching is case-insensitive on the error message."""
         mock_client = MagicMock()
@@ -538,7 +561,8 @@ class TestEmbedEntity:
 
     def test_embed_entity_not_available(self, disabled_service, mock_db, sample_entity):
         """Returns False when the embedding service is not available."""
-        result = disabled_service.embed_entity(mock_db, sample_entity)
+        with patch.object(disabled_service, "embed_text", return_value=[]):
+            result = disabled_service.embed_entity(mock_db, sample_entity)
 
         assert result is False
         mock_db.upsert_embedding.assert_not_called()
@@ -576,7 +600,10 @@ class TestEmbedRelationship:
 
     def test_embed_relationship_not_available(self, disabled_service, mock_db, sample_relationship):
         """Returns False when the embedding service is not available."""
-        result = disabled_service.embed_relationship(mock_db, sample_relationship, "Alice", "Bob")
+        with patch.object(disabled_service, "embed_text", return_value=[]):
+            result = disabled_service.embed_relationship(
+                mock_db, sample_relationship, "Alice", "Bob"
+            )
 
         assert result is False
         mock_db.upsert_embedding.assert_not_called()
@@ -630,7 +657,8 @@ class TestEmbedEvent:
 
     def test_embed_event_not_available(self, disabled_service, mock_db, sample_event):
         """Returns False when the embedding service is not available."""
-        result = disabled_service.embed_event(mock_db, sample_event)
+        with patch.object(disabled_service, "embed_text", return_value=[]):
+            result = disabled_service.embed_event(mock_db, sample_event)
 
         assert result is False
         mock_db.upsert_embedding.assert_not_called()
@@ -738,6 +766,59 @@ class TestFailureTracking:
             service.embed_event(mock_db, sample_event)
 
         assert sample_event.id in service._failed_source_ids
+
+    def test_embed_relationship_success_clears_failure(self, service, mock_db, sample_relationship):
+        """embed_relationship clears the rel ID from the failure set on success."""
+        service._record_failure(sample_relationship.id)
+        with patch.object(service, "embed_text", return_value=FAKE_EMBEDDING):
+            service.embed_relationship(mock_db, sample_relationship, "Alice", "Bob")
+
+        assert sample_relationship.id not in service._failed_source_ids
+
+    def test_embed_event_success_clears_failure(self, service, mock_db, sample_event):
+        """embed_event clears the event ID from the failure set on success."""
+        service._record_failure(sample_event.id)
+        with patch.object(service, "embed_text", return_value=FAKE_EMBEDDING):
+            service.embed_event(mock_db, sample_event)
+
+        assert sample_event.id not in service._failed_source_ids
+
+    def test_embed_entity_upsert_false_clears_failure(self, service, mock_db, sample_entity):
+        """embed_entity clears failure even when upsert returns False (unchanged content)."""
+        service._record_failure(sample_entity.id)
+        mock_db.upsert_embedding.return_value = False
+        with patch.object(service, "embed_text", return_value=FAKE_EMBEDDING):
+            service.embed_entity(mock_db, sample_entity)
+
+        assert sample_entity.id not in service._failed_source_ids
+
+    def test_embed_relationship_upsert_false_clears_failure(
+        self, service, mock_db, sample_relationship
+    ):
+        """embed_relationship clears failure even when upsert returns False."""
+        service._record_failure(sample_relationship.id)
+        mock_db.upsert_embedding.return_value = False
+        with patch.object(service, "embed_text", return_value=FAKE_EMBEDDING):
+            service.embed_relationship(mock_db, sample_relationship, "Alice", "Bob")
+
+        assert sample_relationship.id not in service._failed_source_ids
+
+    def test_embed_event_upsert_false_clears_failure(self, service, mock_db, sample_event):
+        """embed_event clears failure even when upsert returns False."""
+        service._record_failure(sample_event.id)
+        mock_db.upsert_embedding.return_value = False
+        with patch.object(service, "embed_text", return_value=FAKE_EMBEDDING):
+            service.embed_event(mock_db, sample_event)
+
+        assert sample_event.id not in service._failed_source_ids
+
+    def test_clear_failure_logs_debug(self, service, caplog):
+        """_clear_failure emits a debug log when removing a source_id."""
+        service._record_failure("ent-001")
+        with caplog.at_level(logging.DEBUG):
+            service._clear_failure("ent-001")
+
+        assert any("cleared failure marker" in msg.lower() for msg in caplog.messages)
 
     def test_constants_exported(self):
         """Verify new constants are accessible."""

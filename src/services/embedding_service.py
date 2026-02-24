@@ -121,6 +121,7 @@ class EmbeddingService:
         """
         with self._failed_source_ids_lock:
             self._failed_source_ids.discard(source_id)
+        logger.debug("Cleared failure marker for %s", source_id)
 
     def embed_text(self, text: str) -> list[float]:
         """Generate an embedding vector for the given text.
@@ -223,16 +224,16 @@ class EmbeddingService:
                         )
                         return embedding
                     return []
-                except Exception as retry_err:
+                except (ollama.ResponseError, ConnectionError, TimeoutError) as retry_err:
                     logger.warning("Retry with halved input also failed: %s", retry_err)
                     return []
             logger.warning("Failed to generate embedding: %s", e)
             return []
         except ValueError as e:
-            logger.debug("Embedding skipped: %s", e)
+            logger.warning("Embedding skipped due to configuration error: %s", e)
             return []
-        except Exception as e:
-            logger.exception("Unexpected error generating embedding: %s", e)
+        except KeyError as e:
+            logger.exception("Malformed embedding response (missing key): %s", e)
             return []
 
     def embed_entity(self, db: WorldDatabase, entity: Entity) -> bool:
@@ -260,8 +261,8 @@ class EmbeddingService:
             model=model,
             entity_type=entity.type,
         )
-        if result:
-            self._clear_failure(entity.id)
+        # Clear failure regardless — embed_text succeeded, embedding exists in DB
+        self._clear_failure(entity.id)
         return result
 
     def embed_relationship(
@@ -296,8 +297,8 @@ class EmbeddingService:
             embedding=embedding,
             model=model,
         )
-        if result:
-            self._clear_failure(rel.id)
+        # Clear failure regardless — embed_text succeeded, embedding exists in DB
+        self._clear_failure(rel.id)
         return result
 
     def embed_event(self, db: WorldDatabase, event: WorldEvent) -> bool:
@@ -326,8 +327,8 @@ class EmbeddingService:
             model=model,
             chapter_number=event.chapter_number,
         )
-        if result:
-            self._clear_failure(event.id)
+        # Clear failure regardless — embed_text succeeded, embedding exists in DB
+        self._clear_failure(event.id)
         return result
 
     def embed_story_state_data(self, db: WorldDatabase, story_state: StoryState) -> int:
@@ -368,6 +369,8 @@ class EmbeddingService:
                         model=model,
                     ):
                         embedded_count += 1
+                else:
+                    self._record_failure(source_id)
 
         # Embed world rules
         if story_state.world_rules:
@@ -392,19 +395,22 @@ class EmbeddingService:
                         model=model,
                     ):
                         embedded_count += 1
+                else:
+                    self._record_failure(source_id)
 
         # Embed chapter outlines
         if story_state.chapters:
             for chapter in story_state.chapters:
                 if chapter.outline:
+                    source_id = f"chapter:{chapter.number}"
                     if len(chapter.outline.strip()) < _MIN_CONTENT_LENGTH:
                         logger.warning(
                             "Skipping chapter %d outline with too-short content (%d chars)",
                             chapter.number,
                             len(chapter.outline.strip()),
                         )
+                        db.delete_embedding(source_id)
                     else:
-                        source_id = f"chapter:{chapter.number}"
                         title_part = f" '{chapter.title}'" if chapter.title else ""
                         text = f"Chapter {chapter.number}{title_part}: {chapter.outline}"
                         embedding = self.embed_text(text)
@@ -418,11 +424,14 @@ class EmbeddingService:
                                 chapter_number=chapter.number,
                             ):
                                 embedded_count += 1
+                        else:
+                            self._record_failure(source_id)
 
                 # Embed scene outlines if available
                 if chapter.scenes:
                     for scene_idx, scene in enumerate(chapter.scenes):
                         if scene.outline:
+                            source_id = f"scene:{chapter.number}:{scene_idx}"
                             if len(scene.outline.strip()) < _MIN_CONTENT_LENGTH:
                                 logger.warning(
                                     "Skipping chapter %d scene %d outline with "
@@ -431,8 +440,8 @@ class EmbeddingService:
                                     scene_idx + 1,
                                     len(scene.outline.strip()),
                                 )
+                                db.delete_embedding(source_id)
                                 continue
-                            source_id = f"scene:{chapter.number}:{scene_idx}"
                             scene_title = f" '{scene.title}'" if scene.title else ""
                             text = (
                                 f"Chapter {chapter.number} Scene {scene_idx + 1}"
@@ -449,6 +458,8 @@ class EmbeddingService:
                                     chapter_number=chapter.number,
                                 ):
                                     embedded_count += 1
+                            else:
+                                self._record_failure(source_id)
 
         logger.info("Embedded %d story state items", embedded_count)
         return embedded_count
@@ -508,6 +519,17 @@ class EmbeddingService:
                     rel_count += 1
                 else:
                     still_failed.append(rel.id)
+            else:
+                logger.warning(
+                    "Skipping relationship %s: source entity %s (%s) or "
+                    "target entity %s (%s) not found",
+                    rel.id,
+                    rel.source_id,
+                    "found" if source else "missing",
+                    rel.target_id,
+                    "found" if target else "missing",
+                )
+                still_failed.append(rel.id)
         counts["relationship"] = rel_count
 
         # Embed all events
@@ -542,9 +564,12 @@ class EmbeddingService:
                 still_failed,
             )
 
-        # Clear the failure set — all failed items have been retried
+        # Update failure set: remove previously-failed items that succeeded,
+        # keep items that are still failing
         with self._failed_source_ids_lock:
-            self._failed_source_ids.clear()
+            succeeded = failed_snapshot - frozenset(still_failed)
+            self._failed_source_ids -= succeeded
+            self._failed_source_ids.update(still_failed)
 
         return counts
 
@@ -581,7 +606,13 @@ class EmbeddingService:
                 return False
 
             db.recreate_vec_table(len(sample))
-            self.embed_all_world_data(db, story_state)
+            counts = self.embed_all_world_data(db, story_state)
+            total = sum(counts.values())
+            if total == 0:
+                logger.warning(
+                    "Re-embedding completed but zero items were embedded. "
+                    "Check Ollama connectivity and model availability.",
+                )
             return True
 
         return False
@@ -619,14 +650,14 @@ class EmbeddingService:
                     self._record_failure(source_id)
             except Exception as e:
                 self._record_failure(source_id)
-                logger.warning("Failed to embed content change for %s: %s", source_id, e)
+                logger.exception("Failed to embed content change for %s: %s", source_id, e)
 
         def on_content_deleted(source_id: str) -> None:
             """Handle content deletions by removing the embedding."""
             try:
                 db.delete_embedding(source_id)
             except Exception as e:
-                logger.warning("Failed to delete embedding for %s: %s", source_id, e)
+                logger.exception("Failed to delete embedding for %s: %s", source_id, e)
 
         db.attach_content_changed_callback(on_content_changed)
         db.attach_content_deleted_callback(on_content_deleted)

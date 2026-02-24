@@ -15,10 +15,6 @@ from src.memory.entities import Entity, Relationship, WorldEvent
 from src.services.embedding_service import EmbeddingService
 from src.settings import Settings
 
-# ---------------------------------------------------------------------------
-# Fixtures (duplicated from test_embedding_service.py for independence)
-# ---------------------------------------------------------------------------
-
 
 @pytest.fixture
 def embedding_settings():
@@ -114,11 +110,6 @@ def sample_event_with_chapter():
 
 
 FAKE_EMBEDDING = [0.1, 0.2, 0.3, 0.4, 0.5]
-
-
-# ---------------------------------------------------------------------------
-# embed_story_state_data tests
-# ---------------------------------------------------------------------------
 
 
 class TestEmbedStoryStateData:
@@ -303,7 +294,7 @@ class TestEmbedStoryStateData:
         assert count == 1
 
     def test_embed_story_state_data_embed_text_fails(self, service, mock_db):
-        """Returns 0 when embed_text always returns empty vectors."""
+        """Returns 0 and records failure when embed_text returns empty vectors."""
         story_state = SimpleNamespace(
             established_facts=["A fact that fails to embed."],
             world_rules=[],
@@ -315,6 +306,7 @@ class TestEmbedStoryStateData:
 
         assert count == 0
         mock_db.upsert_embedding.assert_not_called()
+        assert len(service._failed_source_ids) == 1
 
     def test_embed_story_state_data_not_available(self, disabled_service, mock_db):
         """Returns 0 when the embedding service is not available."""
@@ -324,7 +316,8 @@ class TestEmbedStoryStateData:
             chapters=[],
         )
 
-        count = disabled_service.embed_story_state_data(mock_db, story_state)
+        with patch.object(disabled_service, "embed_text", return_value=[]):
+            count = disabled_service.embed_story_state_data(mock_db, story_state)
 
         assert count == 0
         mock_db.upsert_embedding.assert_not_called()
@@ -355,8 +348,6 @@ class TestEmbedStoryStateData:
             count = service.embed_story_state_data(mock_db, story_state)
 
         assert count == 0
-
-    # --- Bug 3: minimum content length validation ---
 
     def test_empty_fact_skipped(self, service, mock_db, caplog):
         """Empty string fact is not embedded."""
@@ -411,8 +402,8 @@ class TestEmbedStoryStateData:
         mock_db.upsert_embedding.assert_not_called()
         assert any("too-short" in msg.lower() for msg in caplog.messages)
 
-    def test_short_chapter_outline_skipped(self, service, mock_db, caplog):
-        """Short chapter outline is skipped with warning."""
+    def test_short_chapter_outline_skipped_and_stale_deleted(self, service, mock_db, caplog):
+        """Short chapter outline is skipped and stale embedding is deleted."""
         chapter = SimpleNamespace(
             number=1,
             title="Ch1",
@@ -433,10 +424,11 @@ class TestEmbedStoryStateData:
 
         assert count == 0
         mock_db.upsert_embedding.assert_not_called()
+        mock_db.delete_embedding.assert_called_once_with("chapter:1")
         assert any("too-short" in msg.lower() for msg in caplog.messages)
 
-    def test_short_scene_outline_skipped(self, service, mock_db, caplog):
-        """Short scene outline is skipped with warning."""
+    def test_short_scene_outline_skipped_and_stale_deleted(self, service, mock_db, caplog):
+        """Short scene outline is skipped and stale embedding is deleted."""
         scene = SimpleNamespace(
             title="S1",
             outline="Tiny",
@@ -461,6 +453,7 @@ class TestEmbedStoryStateData:
 
         # Only the chapter outline is embedded, scene is skipped
         assert count == 1
+        mock_db.delete_embedding.assert_called_once_with("scene:1:0")
         assert any("too-short" in msg.lower() for msg in caplog.messages)
 
     def test_minimum_length_content_passes(self, service, mock_db):
@@ -496,11 +489,6 @@ class TestEmbedStoryStateData:
 
         assert count == 2
         assert mock_db.upsert_embedding.call_count == 2
-
-
-# ---------------------------------------------------------------------------
-# embed_all_world_data tests
-# ---------------------------------------------------------------------------
 
 
 class TestEmbedAllWorldData:
@@ -572,9 +560,9 @@ class TestEmbedAllWorldData:
         progress_cb.assert_called_once_with(0, 1, "Embedding entity: Alice")
 
     def test_embed_all_world_data_relationship_missing_entity(
-        self, service, mock_db, sample_relationship
+        self, service, mock_db, sample_relationship, caplog
     ):
-        """Skips relationships where source or target entity is not found."""
+        """Logs warning and tracks failure for relationships with missing entities."""
         mock_db.list_entities.return_value = []
         mock_db.list_relationships.return_value = [sample_relationship]
         mock_db.list_events.return_value = []
@@ -586,12 +574,15 @@ class TestEmbedAllWorldData:
             chapters=[],
         )
 
-        with patch.object(service, "embed_text", return_value=FAKE_EMBEDDING):
+        with (
+            patch.object(service, "embed_text", return_value=FAKE_EMBEDDING),
+            caplog.at_level(logging.WARNING),
+        ):
             counts = service.embed_all_world_data(mock_db, story_state)
 
         assert counts["relationship"] == 0
-
-    # --- Bug 2: batch skip/retry logic ---
+        assert any("missing" in msg.lower() for msg in caplog.messages)
+        assert sample_relationship.id in service._failed_source_ids
 
     def test_batch_skips_already_embedded_items(self, service, mock_db, sample_entity):
         """Skips items that already have embeddings for the current model."""
@@ -777,12 +768,27 @@ class TestEmbedAllWorldData:
         assert counts["event"] == 0
         assert any("still without embeddings" in msg.lower() for msg in caplog.messages)
 
-    def test_batch_clears_failure_set_after_run(self, service, mock_db, sample_entity):
-        """The failure set is emptied after embed_all_world_data completes."""
-        service._record_failure("ent-999")
-        service._record_failure("rel-999")
+    def test_batch_preserves_still_failed_in_failure_set(self, service, mock_db, sample_entity):
+        """Items that fail during the batch run remain in the failure set."""
+        mock_db.list_entities.return_value = [sample_entity]
+        mock_db.list_relationships.return_value = []
+        mock_db.list_events.return_value = []
 
-        mock_db.list_entities.return_value = []
+        story_state = SimpleNamespace(
+            established_facts=[],
+            world_rules=[],
+            chapters=[],
+        )
+
+        with patch.object(service, "embed_text", return_value=[]):
+            service.embed_all_world_data(mock_db, story_state)
+
+        assert sample_entity.id in service._failed_source_ids
+
+    def test_batch_clears_succeeded_from_failure_set(self, service, mock_db, sample_entity):
+        """Previously-failed items that succeed during batch are removed from the failure set."""
+        service._record_failure(sample_entity.id)
+        mock_db.list_entities.return_value = [sample_entity]
         mock_db.list_relationships.return_value = []
         mock_db.list_events.return_value = []
 
@@ -795,12 +801,7 @@ class TestEmbedAllWorldData:
         with patch.object(service, "embed_text", return_value=FAKE_EMBEDDING):
             service.embed_all_world_data(mock_db, story_state)
 
-        assert len(service._failed_source_ids) == 0
-
-
-# ---------------------------------------------------------------------------
-# check_and_reembed_if_needed tests
-# ---------------------------------------------------------------------------
+        assert sample_entity.id not in service._failed_source_ids
 
 
 class TestCheckAndReembedIfNeeded:
@@ -813,13 +814,32 @@ class TestCheckAndReembedIfNeeded:
 
         with (
             patch.object(service, "embed_text", return_value=FAKE_EMBEDDING),
-            patch.object(service, "embed_all_world_data") as mock_batch,
+            patch.object(service, "embed_all_world_data", return_value={"entity": 3}) as mock_batch,
         ):
             result = service.check_and_reembed_if_needed(mock_db, story_state)
 
         assert result is True
         mock_db.recreate_vec_table.assert_called_once_with(len(FAKE_EMBEDDING))
         mock_batch.assert_called_once_with(mock_db, story_state)
+
+    def test_check_and_reembed_logs_warning_on_zero_items(self, service, mock_db, caplog):
+        """Logs warning when re-embedding produces zero items."""
+        mock_db.needs_reembedding.return_value = True
+        story_state = SimpleNamespace()
+
+        with (
+            patch.object(service, "embed_text", return_value=FAKE_EMBEDDING),
+            patch.object(
+                service,
+                "embed_all_world_data",
+                return_value={"entity": 0, "relationship": 0, "event": 0, "story_state": 0},
+            ),
+            caplog.at_level(logging.WARNING),
+        ):
+            result = service.check_and_reembed_if_needed(mock_db, story_state)
+
+        assert result is True
+        assert any("zero items were embedded" in msg.lower() for msg in caplog.messages)
 
     def test_check_and_reembed_if_needed_model_changed_sample_fails(self, service, mock_db):
         """Keeps existing embeddings when model is unreachable (sample embed fails)."""
@@ -855,11 +875,6 @@ class TestCheckAndReembedIfNeeded:
 
         with pytest.raises(ValueError, match="No embedding model configured"):
             service.check_and_reembed_if_needed(mock_db, story_state)
-
-
-# ---------------------------------------------------------------------------
-# attach_to_database tests
-# ---------------------------------------------------------------------------
 
 
 class TestAttachToDatabase:
@@ -935,10 +950,8 @@ class TestAttachToDatabase:
         """The content changed callback records failure when embed_text returns empty."""
         service.attach_to_database(mock_db)
         on_changed = mock_db.attach_content_changed_callback.call_args[0][0]
-
         with patch.object(service, "embed_text", return_value=[]):
             on_changed("ent-test", "entity", "Some text")
-
         assert "ent-test" in service._failed_source_ids
 
     def test_attached_on_content_changed_clears_failure_on_success(self, service, mock_db):
@@ -946,10 +959,8 @@ class TestAttachToDatabase:
         service._record_failure("ent-test")
         service.attach_to_database(mock_db)
         on_changed = mock_db.attach_content_changed_callback.call_args[0][0]
-
         with patch.object(service, "embed_text", return_value=FAKE_EMBEDDING):
             on_changed("ent-test", "entity", "Some text")
-
         assert "ent-test" not in service._failed_source_ids
 
     def test_attached_on_content_changed_exception_handled(self, service, mock_db):
@@ -975,9 +986,7 @@ class TestAttachToDatabase:
         """The content deleted callback removes the embedding from the database."""
         service.attach_to_database(mock_db)
         on_deleted = mock_db.attach_content_deleted_callback.call_args[0][0]
-
         on_deleted("ent-test")
-
         mock_db.delete_embedding.assert_called_once_with("ent-test")
 
     def test_attached_on_content_deleted_exception_handled(self, service, mock_db):
