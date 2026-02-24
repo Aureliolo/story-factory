@@ -223,6 +223,13 @@ class EmbeddingService:
                             len(embedding),
                         )
                         return embedding
+                    logger.warning(
+                        "Retry with halved input returned empty embedding for model "
+                        "'%s' (halved_len=%d, response=%r)",
+                        model,
+                        len(halved_prompt),
+                        response,
+                    )
                     return []
                 except (ollama.ResponseError, ConnectionError, TimeoutError) as retry_err:
                     logger.warning("Retry with halved input also failed: %s", retry_err)
@@ -349,15 +356,17 @@ class EmbeddingService:
         # Embed established facts
         if story_state.established_facts:
             for fact in story_state.established_facts:
+                fact_hash = hashlib.sha256(fact.encode("utf-8")).hexdigest()[:12]
+                source_id = f"fact:{fact_hash}"
                 if len(fact.strip()) < _MIN_CONTENT_LENGTH:
                     logger.warning(
                         "Skipping fact with too-short content (%d chars): '%s'",
                         len(fact.strip()),
                         fact[:40],
                     )
+                    db.delete_embedding(source_id)
+                    self._clear_failure(source_id)
                     continue
-                fact_hash = hashlib.sha256(fact.encode("utf-8")).hexdigest()[:12]
-                source_id = f"fact:{fact_hash}"
                 text = f"Established fact: {fact}"
                 embedding = self.embed_text(text)
                 if embedding:
@@ -369,21 +378,24 @@ class EmbeddingService:
                         model=model,
                     ):
                         embedded_count += 1
+                    self._clear_failure(source_id)
                 else:
                     self._record_failure(source_id)
 
         # Embed world rules
         if story_state.world_rules:
             for rule in story_state.world_rules:
+                rule_hash = hashlib.sha256(rule.encode("utf-8")).hexdigest()[:12]
+                source_id = f"rule:{rule_hash}"
                 if len(rule.strip()) < _MIN_CONTENT_LENGTH:
                     logger.warning(
                         "Skipping rule with too-short content (%d chars): '%s'",
                         len(rule.strip()),
                         rule[:40],
                     )
+                    db.delete_embedding(source_id)
+                    self._clear_failure(source_id)
                     continue
-                rule_hash = hashlib.sha256(rule.encode("utf-8")).hexdigest()[:12]
-                source_id = f"rule:{rule_hash}"
                 text = f"World rule: {rule}"
                 embedding = self.embed_text(text)
                 if embedding:
@@ -395,6 +407,7 @@ class EmbeddingService:
                         model=model,
                     ):
                         embedded_count += 1
+                    self._clear_failure(source_id)
                 else:
                     self._record_failure(source_id)
 
@@ -410,6 +423,7 @@ class EmbeddingService:
                             len(chapter.outline.strip()),
                         )
                         db.delete_embedding(source_id)
+                        self._clear_failure(source_id)
                     else:
                         title_part = f" '{chapter.title}'" if chapter.title else ""
                         text = f"Chapter {chapter.number}{title_part}: {chapter.outline}"
@@ -424,6 +438,7 @@ class EmbeddingService:
                                 chapter_number=chapter.number,
                             ):
                                 embedded_count += 1
+                            self._clear_failure(source_id)
                         else:
                             self._record_failure(source_id)
 
@@ -441,6 +456,7 @@ class EmbeddingService:
                                     len(scene.outline.strip()),
                                 )
                                 db.delete_embedding(source_id)
+                                self._clear_failure(source_id)
                                 continue
                             scene_title = f" '{scene.title}'" if scene.title else ""
                             text = (
@@ -458,6 +474,7 @@ class EmbeddingService:
                                     chapter_number=chapter.number,
                                 ):
                                     embedded_count += 1
+                                self._clear_failure(source_id)
                             else:
                                 self._record_failure(source_id)
 
