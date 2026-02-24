@@ -3,6 +3,8 @@
 from typing import cast
 from unittest.mock import MagicMock
 
+import pytest
+
 from src.memory.entities import Entity
 from src.services.world_service._name_matching import (
     _deep_normalize,
@@ -231,3 +233,19 @@ class TestFindEntityByNameExisting:
             raise AssertionError("Expected TypeError for missing threshold parameter")
         except TypeError as e:
             assert "threshold" in str(e)
+
+    def test_threshold_out_of_range_raises_value_error(self):
+        """Threshold outside [0.0, 1.0] should raise ValueError."""
+        entities = [_make_entity("Glacial Whisper")]
+        with pytest.raises(ValueError, match="threshold must be between"):
+            _find_entity_by_name(entities, "Glacial Whisper", threshold=1.5)
+        with pytest.raises(ValueError, match="threshold must be between"):
+            _find_entity_by_name(entities, "Glacial Whisper", threshold=-0.1)
+
+    def test_empty_deep_normalize_returns_none(self):
+        """Name that deep-normalizes to empty string should return None."""
+        # "A ." → _normalize_name strips article "a " → "." → rstrip punctuation → ""
+        # No similarity matching possible on empty string
+        entities = [_make_entity("Something")]
+        result = _find_entity_by_name(entities, "A .", threshold=0.8)
+        assert result is None
