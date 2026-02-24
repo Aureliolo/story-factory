@@ -840,6 +840,17 @@ class WorldDatabase:
         """
         return _embeddings.get_embedding_stats(self)
 
+    def get_embedded_source_ids(self, model: str) -> set[str]:
+        """Return source_ids with existing embeddings for the given model.
+
+        Args:
+            model: The embedding model to filter by.
+
+        Returns:
+            Set of source_id strings with existing embeddings.
+        """
+        return _embeddings.get_embedded_source_ids(self, model)
+
     def needs_reembedding(self, current_model: str) -> bool:
         """Check if existing embeddings were created with a different model.
 

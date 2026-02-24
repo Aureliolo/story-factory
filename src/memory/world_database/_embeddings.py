@@ -16,6 +16,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_MAX_DISPLAY_TEXT_LENGTH = 500  # Truncate display text stored alongside embeddings
+
 
 def _content_hash(text: str) -> str:
     """Compute a SHA-256 hash of text content for change detection.
@@ -98,7 +100,7 @@ def upsert_embedding(
                     source_id,
                     entity_type,
                     chapter_number,
-                    text[:500],  # Truncate display text for storage efficiency
+                    text[:_MAX_DISPLAY_TEXT_LENGTH],
                     model,
                     now,
                 ),
@@ -117,6 +119,11 @@ def upsert_embedding(
             db.conn.commit()
         except Exception:
             db.conn.rollback()
+            logger.debug(
+                "Rolling back upsert for source_id=%s content_type=%s",
+                source_id,
+                content_type,
+            )
             raise
 
     logger.debug("Upserted embedding for %s (%s, %d dims)", source_id, content_type, len(embedding))
@@ -313,6 +320,32 @@ def get_embedding_stats(db: WorldDatabase) -> dict[str, Any]:
         "dimensions": dimensions,
         "vec_available": True,  # Always True — sqlite-vec is mandatory
     }
+
+
+def get_embedded_source_ids(db: WorldDatabase, model: str) -> set[str]:
+    """Return the set of source_ids that already have an embedding for the given model.
+
+    Used by the batch embedding step to skip items that already have a valid
+    embedding, while still retrying items that previously failed.
+
+    Args:
+        db: WorldDatabase instance.
+        model: The embedding model to filter by.
+
+    Returns:
+        Set of source_id strings with existing embeddings for the model.
+    """
+    with db._lock:
+        db._ensure_open()
+        cursor = db.conn.cursor()
+        cursor.execute(
+            "SELECT source_id FROM embedding_metadata WHERE embedding_model = ?",
+            (model,),
+        )
+        result = {row[0] for row in cursor.fetchall()}
+
+    logger.debug("Found %d embedded source IDs for model '%s'", len(result), model)
+    return result
 
 
 def needs_reembedding(db: WorldDatabase, current_model: str) -> bool:

@@ -874,6 +874,63 @@ class TestRecreateVecTable:
         assert cursor.fetchone()[0] == 0
 
 
+class TestGetEmbeddedSourceIds:
+    """Tests for the get_embedded_source_ids function."""
+
+    def test_get_embedded_source_ids(self, db):
+        """Returns the correct set of source_ids for a given model."""
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO embedding_metadata
+            (source_id, content_type, content_hash, embedding_model, embedded_at, embedding_dim)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            ("e1", "entity", "hash1", "fake-embed:latest", "2026-01-01", 384),
+        )
+        cursor.execute(
+            """
+            INSERT INTO embedding_metadata
+            (source_id, content_type, content_hash, embedding_model, embedded_at, embedding_dim)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            ("e2", "entity", "hash2", "fake-embed:latest", "2026-01-01", 384),
+        )
+        cursor.execute(
+            """
+            INSERT INTO embedding_metadata
+            (source_id, content_type, content_hash, embedding_model, embedded_at, embedding_dim)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            ("e3", "entity", "hash3", "other-model:latest", "2026-01-01", 768),
+        )
+        db.conn.commit()
+
+        result = _embeddings.get_embedded_source_ids(db, "fake-embed:latest")
+        assert result == {"e1", "e2"}
+
+    def test_get_embedded_source_ids_empty(self, db):
+        """Returns empty set when no embeddings exist for the model."""
+        result = _embeddings.get_embedded_source_ids(db, "nonexistent-model:latest")
+        assert result == set()
+
+    def test_get_embedded_source_ids_via_world_database(self, db):
+        """WorldDatabase.get_embedded_source_ids delegates to _embeddings correctly."""
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO embedding_metadata
+            (source_id, content_type, content_hash, embedding_model, embedded_at, embedding_dim)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            ("e1", "entity", "hash1", "fake-embed:latest", "2026-01-01", 384),
+        )
+        db.conn.commit()
+
+        result = db.get_embedded_source_ids("fake-embed:latest")
+        assert result == {"e1"}
+
+
 class TestContentHash:
     """Tests for the internal _content_hash helper."""
 
