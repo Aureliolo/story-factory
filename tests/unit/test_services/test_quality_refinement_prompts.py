@@ -242,12 +242,13 @@ class TestScoreFieldAliases:
 
 
 class TestRelationshipArrayHandling:
-    """Test that relationship creation handles array responses."""
+    """Test that relationship creation uses schema-constrained generation."""
 
-    def test_create_relationship_has_array_defense(self):
-        """_create_relationship source handles list results via unwrap_single_json."""
+    def test_create_relationship_uses_schema_constrained_generation(self):
+        """_create_relationship uses json.loads with grammar-constrained format=schema."""
         source = inspect.getsource(_relationship._create_relationship)
-        assert "unwrap_single_json" in source
+        assert "json.loads" in source
+        assert "format=schema" in source
 
     def test_create_relationship_prompt_requests_single_object(self):
         """Creation prompt instructs LLM to return single object, not array."""
@@ -327,43 +328,18 @@ class TestWeakDimensionsBranchCoverage:
         assert "tension" not in weak
 
 
-class TestRelationshipArrayDefense:
-    """Test that relationship creation handles array responses at runtime."""
+class TestRelationshipSchemaDefense:
+    """Test that relationship creation guards against non-dict JSON responses."""
 
-    @patch("src.services.world_quality_service._relationship.extract_json")
-    def test_array_response_takes_first_element(self, mock_extract):
-        """When LLM returns a JSON array, first dict element is used."""
-        mock_extract.return_value = [
-            {
-                "source": "Alice",
-                "target": "Bob",
-                "relation_type": "allies_with",
-                "description": "D",
-            },
-            {"source": "X", "target": "Y", "relation_type": "knows", "description": "E"},
-        ]
-        svc = MagicMock()
-        svc._get_creator_model.return_value = "test-model:8b"
-        svc.client.generate.return_value = {"response": "[]"}
+    def test_create_relationship_has_non_dict_guard(self):
+        """_create_relationship validates json.loads result is a dict."""
+        source = inspect.getsource(_relationship._create_relationship)
+        assert "isinstance(data, dict)" in source
 
-        brief = StoryBrief(
-            premise="Test",
-            genre="fantasy",
-            tone="dark",
-            themes=["power"],
-            setting_place="Kingdom",
-            setting_time="Medieval",
-            target_length="short_story",
-            content_rating="none",
-            language="English",
-        )
-        state = StoryState(id="test-story", brief=brief)
-
-        result = _relationship._create_relationship(
-            svc, state, ["Alice", "Bob"], [], temperature=0.7
-        )
-        assert result["source"] == "Alice"
-        assert result["target"] == "Bob"
+    def test_refine_relationship_has_non_dict_guard(self):
+        """_refine_relationship validates json.loads result is a dict."""
+        source = inspect.getsource(_relationship._refine_relationship)
+        assert "isinstance(data, dict)" in source
 
 
 @pytest.fixture

@@ -2266,7 +2266,7 @@ class TestFindEntityByNameAmbiguity:
 
         e1 = MagicMock()
         e1.name = "Dark Forest"
-        result = _find_entity_by_name([e1], "Dark Forest")
+        result = _find_entity_by_name([e1], "Dark Forest", threshold=0.8)
         assert result is e1
 
     def test_single_fuzzy_match_returns_entity(self):
@@ -2275,7 +2275,7 @@ class TestFindEntityByNameAmbiguity:
 
         e1 = MagicMock()
         e1.name = "The Dark Forest"
-        result = _find_entity_by_name([e1], "Dark Forest")
+        result = _find_entity_by_name([e1], "Dark Forest", threshold=0.8)
         assert result is e1
 
     def test_no_match_returns_none(self):
@@ -2284,7 +2284,7 @@ class TestFindEntityByNameAmbiguity:
 
         e1 = MagicMock()
         e1.name = "Bright Meadow"
-        result = _find_entity_by_name([e1], "Dark Forest")
+        result = _find_entity_by_name([e1], "Dark Forest", threshold=0.8)
         assert result is None
 
     def test_ambiguous_fuzzy_match_returns_none(self, caplog):
@@ -2299,7 +2299,7 @@ class TestFindEntityByNameAmbiguity:
         e2.name = "A Guild"
 
         with caplog.at_level(logging.WARNING):
-            result = _find_entity_by_name([e1, e2], "Guild")
+            result = _find_entity_by_name([e1, e2], "Guild", threshold=0.8)
 
         assert result is None
         assert "Ambiguous fuzzy match" in caplog.text

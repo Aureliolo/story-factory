@@ -15,6 +15,7 @@ from src.memory.entities import Entity
 from src.memory.story_state import StoryState
 from src.memory.world_database import WorldDatabase
 from src.services.world_service._name_matching import _find_entity_by_name
+from src.utils.exceptions import DatabaseClosedError, GenerationCancelledError
 
 if TYPE_CHECKING:
     from src.services import ServiceContainer
@@ -46,8 +47,12 @@ def _parse_lifecycle_sub(value: Any) -> dict[str, Any] | None:
             parsed = json.loads(value)
             if isinstance(parsed, dict):
                 return parsed
-        except json.JSONDecodeError, TypeError:
-            pass
+        except (json.JSONDecodeError, TypeError) as exc:
+            logger.debug(
+                "Failed to parse lifecycle sub-entry as JSON: %r (%s)",
+                value[:100],
+                exc,
+            )
     return None
 
 
@@ -133,6 +138,11 @@ def build_event_entity_context(world_db: WorldDatabase) -> str:
             "Events will be generated without entity context."
         )
         return "No entities yet."
+
+    context_parts.append(
+        "IMPORTANT: Use entity names EXACTLY as listed above. "
+        "Do not abbreviate, modify, or invent new names."
+    )
     return "\n\n".join(context_parts)
 
 
@@ -164,7 +174,9 @@ def build_event_timestamp(event: dict[str, Any]) -> str:
 
 
 def resolve_event_participants(
-    event: dict[str, Any], all_entities: list[Entity]
+    event: dict[str, Any],
+    all_entities: list[Entity],
+    threshold: float,
 ) -> list[tuple[str, str]]:
     """Resolve event participant names to entity IDs.
 
@@ -174,6 +186,7 @@ def resolve_event_participants(
     Args:
         event: Event dict with an optional 'participants' list.
         all_entities: List of entities to match names against.
+        threshold: Minimum similarity score for fuzzy name matching fallback (required).
 
     Returns:
         List of (entity_id, role) tuples for successfully resolved participants.
@@ -192,7 +205,7 @@ def resolve_event_participants(
                 p,
             )
         if entity_name:
-            matched = _find_entity_by_name(all_entities, entity_name)
+            matched = _find_entity_by_name(all_entities, entity_name, threshold=threshold)
             if matched:
                 participants.append((matched.id, role))
             else:
@@ -260,6 +273,7 @@ def _generate_events(
     )
 
     all_entities = world_db.list_entities()
+    threshold = svc.settings.fuzzy_match_threshold
     added_count = 0
     for event, event_scores in event_results:
         if cancel_check and cancel_check():
@@ -273,7 +287,7 @@ def _generate_events(
                 continue
 
             timestamp_in_story = build_event_timestamp(event)
-            participants = resolve_event_participants(event, all_entities)
+            participants = resolve_event_participants(event, all_entities, threshold=threshold)
 
             consequences = event.get("consequences", [])
 
@@ -290,6 +304,8 @@ def _generate_events(
                 event_scores.average,
                 len(participants),
             )
+        except GenerationCancelledError, DatabaseClosedError:
+            raise
         except Exception as exc:
             logger.error(
                 "Failed to add event to database (non-fatal), skipping: %s",

@@ -97,14 +97,14 @@ repos:
         stages: [pre-commit]
 
   # Two-stage pre-push testing:
-  # 1. Fast affected-tests check with testmon (2-30 sec)
-  # 2. Coverage check on changed files (ensures new code has tests)
-  # Full test suite with 100% coverage runs in GitHub Actions CI
+  # 1. Fast affected-tests check with testmon (2-30 sec, E2E tests excluded)
+  # 2. Coverage check on changed files (ensures new code has tests, E2E excluded)
+  # E2E tests run only in CI. Full test suite with 100% coverage runs in GitHub Actions.
   - repo: local
     hooks:
       - id: pytest-testmon
         name: pytest affected tests (testmon)
-        entry: python -m pytest --testmon -q
+        entry: python -m pytest --testmon -q --ignore=tests/e2e
         language: system
         pass_filenames: false
         always_run: true
