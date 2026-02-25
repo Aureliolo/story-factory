@@ -11,11 +11,13 @@ from src.memory.entities import WorldEvent
 from src.memory.story_state import EventParticipantEntry, WorldEventCreation
 from src.services.world_service._event_helpers import (
     _extract_lifecycle_temporal,
+    _generate_events,
     _parse_lifecycle_sub,
     build_event_entity_context,
     build_event_timestamp,
     resolve_event_participants,
 )
+from src.utils.exceptions import GenerationCancelledError
 
 
 class TestParseLifecycleSub:
@@ -404,3 +406,34 @@ class TestWorldEventModel:
         event = WorldEvent(id="e1", description="Battle")
         assert event.id == "e1"
         assert event.description == "Battle"
+
+
+class TestGenerateEventsReraisesFatalExceptions:
+    """Test that _generate_events re-raises fatal exceptions from add_event."""
+
+    def test_generation_cancelled_propagates_from_add_event(self):
+        """GenerationCancelledError from add_event should propagate, not be swallowed."""
+        svc = MagicMock()
+        svc.settings.world_gen_events_min = 1
+        svc.settings.world_gen_events_max = 1
+        svc.settings.fuzzy_match_threshold = 0.8
+
+        state = MagicMock()
+        state.target_events_min = None
+        state.target_events_max = None
+
+        world_db = MagicMock()
+        world_db.list_entities.return_value = []
+        world_db.list_relationships.return_value = []
+        world_db.list_events.return_value = []
+        world_db.add_event.side_effect = GenerationCancelledError("cancelled")
+
+        mock_scores = MagicMock()
+        mock_scores.average = 7.0
+        services = MagicMock()
+        services.world_quality.generate_events_with_quality.return_value = [
+            ({"description": "A great battle", "consequences": []}, mock_scores),
+        ]
+
+        with pytest.raises(GenerationCancelledError):
+            _generate_events(svc, state, world_db, services)

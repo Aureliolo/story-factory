@@ -1313,6 +1313,33 @@ class TestLLMRelationTypeClassification:
             assert "arcane connection" in _llm_classification_cache
             assert _llm_classification_cache["arcane connection"] == ""
 
+    def test_key_error_clears_cache_when_full(self):
+        """KeyError path should clear cache before inserting when cache is at capacity."""
+        from src.services.world_quality_service._relationship import (
+            _LLM_CACHE_MAX_SIZE,
+            _classify_relation_type_with_llm,
+            _llm_classification_cache,
+            _llm_classification_cache_lock,
+        )
+
+        svc = MagicMock()
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc.client.generate.return_value = {"unexpected_key": "value"}
+
+        # Fill cache to capacity
+        with _llm_classification_cache_lock:
+            _llm_classification_cache.clear()
+            for i in range(_LLM_CACHE_MAX_SIZE):
+                _llm_classification_cache[f"filler_{i}"] = "alliance"
+
+        result = _classify_relation_type_with_llm(svc, "mystic bond")
+        assert result is None
+
+        # Cache should have been cleared and now contain only the negative entry
+        with _llm_classification_cache_lock:
+            assert len(_llm_classification_cache) == 1
+            assert _llm_classification_cache["mystic bond"] == ""
+
 
 # =========================================================================
 # Group: Schema Enum Constraints (#397)

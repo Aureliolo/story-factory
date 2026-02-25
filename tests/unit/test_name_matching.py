@@ -154,6 +154,16 @@ class TestSimilarityFallback:
         result = _find_entity_by_name([], "Anything", threshold=0.8)
         assert result is None
 
+    def test_empty_deep_candidate_skipped_in_similarity(self):
+        """Entities whose names deep-normalize to empty should be skipped in similarity."""
+        # "'s" deep-normalizes to "" after possessive removal.
+        # Use "Stone Kings" as target so it doesn't match exactly or via _normalize_name,
+        # forcing the similarity fallback where the empty-candidate guard is exercised.
+        entities = [_make_entity("'s"), _make_entity("Stone King")]
+        result = _find_entity_by_name(entities, "Stone Kings", threshold=0.7)
+        assert result is not None
+        assert result.name == "Stone King"
+
     def test_similarity_with_abbreviation_variants(self):
         """Abbreviation normalization should help similarity matching."""
         entities = [_make_entity("AP Society")]

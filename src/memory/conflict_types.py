@@ -171,9 +171,16 @@ _CONFLICT_PRIORITY: dict[ConflictCategory, int] = {
     ConflictCategory.ALLIANCE: 1,
     ConflictCategory.NEUTRAL: 0,
 }
-_missing_priorities = set(ConflictCategory) - set(_CONFLICT_PRIORITY)
-if _missing_priorities:
-    raise RuntimeError(f"_CONFLICT_PRIORITY missing categories: {_missing_priorities}")
+
+
+def _validate_conflict_priority() -> None:
+    """Validate that _CONFLICT_PRIORITY has an entry for every ConflictCategory."""
+    missing = set(ConflictCategory) - set(_CONFLICT_PRIORITY)
+    if missing:
+        raise RuntimeError(f"_CONFLICT_PRIORITY missing categories: {missing}")
+
+
+_validate_conflict_priority()
 
 # Word-level lookup: individual words that strongly signal a known relationship type.
 # Used as a last-resort fallback when substring matching fails on novel compound types.
@@ -333,10 +340,15 @@ def normalize_relation_type(raw_type: str) -> str:
     return normalized
 
 
-# Load-time assertion: every _WORD_TO_RELATION value must be a key in RELATION_CONFLICT_MAPPING
-_invalid_word_targets = set(_WORD_TO_RELATION.values()) - set(RELATION_CONFLICT_MAPPING)
-if _invalid_word_targets:
-    raise RuntimeError(f"_WORD_TO_RELATION references unknown types: {_invalid_word_targets}")
+# Load-time validation: every _WORD_TO_RELATION value must be a key in RELATION_CONFLICT_MAPPING
+def _validate_word_to_relation() -> None:
+    """Validate that every _WORD_TO_RELATION value is a key in RELATION_CONFLICT_MAPPING."""
+    invalid = set(_WORD_TO_RELATION.values()) - set(RELATION_CONFLICT_MAPPING)
+    if invalid:
+        raise RuntimeError(f"_WORD_TO_RELATION references unknown types: {invalid}")
+
+
+_validate_word_to_relation()
 
 
 # Colors for conflict visualization (consistent with theme.py patterns)

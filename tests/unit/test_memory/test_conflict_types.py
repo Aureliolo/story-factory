@@ -1,9 +1,15 @@
 """Tests for conflict types — mapping, normalization, and classification."""
 
+import pytest
+
 from src.memory.conflict_types import (
+    _CONFLICT_PRIORITY,
+    _WORD_TO_RELATION,
     RELATION_CONFLICT_MAPPING,
     VALID_RELATIONSHIP_TYPES,
     ConflictCategory,
+    _validate_conflict_priority,
+    _validate_word_to_relation,
     classify_relationship,
     normalize_relation_type,
 )
@@ -243,3 +249,37 @@ class TestClassifyRelationshipUsesNormalization:
     def test_classify_handles_spaced_input(self):
         """classify_relationship should handle spaces via normalization."""
         assert classify_relationship("allies with") == ConflictCategory.ALLIANCE
+
+
+class TestValidateConflictPriority:
+    """Test the _validate_conflict_priority guard function."""
+
+    def test_passes_when_complete(self):
+        """No error when all categories are present."""
+        _validate_conflict_priority()  # Should not raise
+
+    def test_raises_on_missing_category(self):
+        """Raises RuntimeError when a category is missing from _CONFLICT_PRIORITY."""
+        saved = _CONFLICT_PRIORITY.pop(ConflictCategory.NEUTRAL)
+        try:
+            with pytest.raises(RuntimeError, match="_CONFLICT_PRIORITY missing categories"):
+                _validate_conflict_priority()
+        finally:
+            _CONFLICT_PRIORITY[ConflictCategory.NEUTRAL] = saved
+
+
+class TestValidateWordToRelation:
+    """Test the _validate_word_to_relation guard function."""
+
+    def test_passes_when_all_values_are_valid(self):
+        """No error when all word targets are valid relation types."""
+        _validate_word_to_relation()  # Should not raise
+
+    def test_raises_on_invalid_target(self):
+        """Raises RuntimeError when a word maps to a nonexistent relation type."""
+        _WORD_TO_RELATION["bogus_word"] = "nonexistent_relation_type"
+        try:
+            with pytest.raises(RuntimeError, match="_WORD_TO_RELATION references unknown types"):
+                _validate_word_to_relation()
+        finally:
+            del _WORD_TO_RELATION["bogus_word"]
