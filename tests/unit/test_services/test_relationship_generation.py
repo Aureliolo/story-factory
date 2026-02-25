@@ -1513,3 +1513,56 @@ class TestNormalizationConsolidation:
         svc._create_relationship.assert_called()
         assert result["source"] == "The Castle"
         assert scores.average >= 6.0
+
+
+class TestRelationshipAutoPass:
+    """Tests for relationship auto-pass when historical first-pass rate >= 95%."""
+
+    def test_auto_pass_when_first_pass_rate_high(self, story_state):
+        """Relationship auto-passes judge when first-pass rate >= 95%."""
+        from src.memory.world_quality._story_scores import RelationshipQualityScores
+        from src.services.world_quality_service._relationship import (
+            generate_relationship_with_quality,
+        )
+
+        svc = MagicMock()
+        svc.analytics_db = MagicMock()
+        svc.analytics_db.get_first_pass_rate.return_value = 1.0  # 100% first-pass
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc._get_judge_model.return_value = "test-model:8b"
+        svc.get_calendar_context.return_value = ""
+        config = MagicMock()
+        config.creator_temperature = 0.9
+        config.judge_temperature = 0.1
+        config.get_threshold.return_value = 7.0
+        config.get_refinement_temperature.return_value = 0.7
+        config.max_iterations = 3
+        config.min_iterations = 1
+        config.early_stopping_patience = 2
+        config.early_stopping_min_iterations = 1
+        config.temperature_decay_rate = 0.0
+        svc.get_config.return_value = config
+
+        judge_config = MagicMock()
+        judge_config.enabled = False
+        judge_config.multi_call_enabled = False
+        svc.get_judge_config.return_value = judge_config
+
+        svc._create_relationship.return_value = {
+            "source": "Alpha",
+            "target": "Beta",
+            "relation_type": "allies_with",
+            "description": "They are allies",
+        }
+
+        entity_names = ["Alpha", "Beta"]
+        _rel, scores, iterations = generate_relationship_with_quality(
+            svc, story_state, entity_names, []
+        )
+
+        # Auto-pass produces scores with 8.0 across all dimensions
+        assert isinstance(scores, RelationshipQualityScores)
+        assert scores.tension == 8.0
+        assert "Auto-passed" in scores.feedback
+        # 0 scoring rounds because judge was skipped entirely
+        assert iterations == 0
