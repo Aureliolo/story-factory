@@ -1464,6 +1464,7 @@ class TestNormalizationConsolidation:
 
     def test_is_empty_uses_normalize_name_for_required_entity(self, story_state):
         """The _is_empty check should use _normalize_name for required entity matching."""
+        from src.memory.world_quality._story_scores import RelationshipQualityScores
         from src.services.world_quality_service._relationship import (
             generate_relationship_with_quality,
         )
@@ -1485,8 +1486,6 @@ class TestNormalizationConsolidation:
 
         # The relationship contains "The Castle" which normalizes to "castle"
         # Required entity is "Castle" which also normalizes to "castle"
-        # Mock _create_relationship (which is what generate_relationship_with_quality
-        # actually calls — it's a method on svc, not svc.client.generate)
         svc._create_relationship.return_value = {
             "source": "The Castle",
             "target": "Alice",
@@ -1494,17 +1493,19 @@ class TestNormalizationConsolidation:
             "description": "Castle contains Alice",
         }
 
+        # Mock the judge to return scores above threshold so the quality loop completes
+        svc._judge_relationship_quality.return_value = RelationshipQualityScores(
+            tension=8.0, dynamics=8.0, story_potential=8.0, authenticity=8.0, feedback="Good"
+        )
+
         # This should NOT reject the relationship because _normalize_name
-        # strips "The " and matches "castle" == "castle".
-        # May raise because judge mock isn't fully set up,
-        # but the key test is that _create_ succeeded (not rejected by _is_empty).
-        try:
-            generate_relationship_with_quality(
-                svc, story_state, ["The Castle", "Alice"], [], required_entity="Castle"
-            )
-        except Exception:
-            pass
+        # strips "The " and matches "castle" == "castle"
+        result, scores, _iterations = generate_relationship_with_quality(
+            svc, story_state, ["The Castle", "Alice"], [], required_entity="Castle"
+        )
 
         # Ensure the creator was actually invoked, proving the relationship was not
         # rejected by the _is_empty check due to normalization failure.
         svc._create_relationship.assert_called()
+        assert result["source"] == "The Castle"
+        assert scores.average >= 6.0
