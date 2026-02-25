@@ -2802,3 +2802,297 @@ class TestAutoPassScore:
         assert analytics_call.kwargs["threshold_met"] is True
         history = analytics_call.args[0]
         assert history.final_score == auto_scores.average
+
+    def test_auto_pass_below_threshold_flags_admitted(self, mock_svc, config):
+        """Auto-pass with score below threshold sets below_threshold_admitted."""
+        auto_scores = _make_scores(6.0)  # Below config threshold of 8.0
+
+        quality_refinement_loop(
+            entity_type="relationship",
+            create_fn=lambda retries: {"source": "A", "target": "B"},
+            judge_fn=MagicMock(),
+            refine_fn=MagicMock(),
+            get_name=lambda e: f"{e.get('source', '?')} -> {e.get('target', '?')}",
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("source"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+            auto_pass_score=auto_scores,
+        )
+
+        analytics_call = mock_svc._log_refinement_analytics.call_args
+        assert analytics_call.kwargs["threshold_met"] is False
+        history = analytics_call.args[0]
+        assert history.below_threshold_admitted is True
+
+    def test_auto_pass_with_initial_entity_skips_create(self, mock_svc, config):
+        """Auto-pass with initial_entity uses provided entity, does not call create_fn."""
+        auto_scores = _make_scores(8.0)
+        create_fn = MagicMock()
+
+        result_entity, _scores, scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=create_fn,
+            judge_fn=MagicMock(),
+            refine_fn=MagicMock(),
+            get_name=lambda e: e.get("name", "?"),
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+            initial_entity={"name": "PreBuilt"},
+            auto_pass_score=auto_scores,
+        )
+
+        create_fn.assert_not_called()
+        assert result_entity == {"name": "PreBuilt"}
+        assert scoring_rounds == 0
+
+
+class TestAnalyticsDbAbsence:
+    """Tests for graceful degradation when analytics_db is absent."""
+
+    def test_hail_mary_win_rate_gate_without_analytics_db(self, mock_svc, config):
+        """Hail-mary proceeds normally when analytics_db is absent (spec=[] mock)."""
+        # mock_svc has spec=[] so analytics_db raises AttributeError
+        config = RefinementConfig(
+            quality_threshold=8.0,
+            quality_thresholds=_all_thresholds(8.0),
+            max_iterations=2,
+            creator_temperature=0.9,
+            judge_temperature=0.1,
+            refinement_temperature=0.7,
+            early_stopping_patience=10,  # Disable degradation-based early stop
+            early_stopping_min_iterations=1,
+            early_stopping_variance_tolerance=0.3,
+        )
+        judge_scores = _make_scores(6.0)  # Below threshold to trigger hail-mary
+
+        result_entity, result_scores, _rounds = quality_refinement_loop(
+            entity_type="faction",
+            create_fn=lambda retries: {"name": "TestFaction"},
+            judge_fn=lambda e: judge_scores,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e.get("name", "?"),
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Should return something (not crash) even without analytics_db
+        assert result_entity is not None
+        assert result_scores is not None
+
+    def test_hail_mary_recording_without_analytics_db(self, mock_svc, config):
+        """Hail-mary recording silently skips when analytics_db is absent."""
+        config = RefinementConfig(
+            quality_threshold=8.0,
+            quality_thresholds=_all_thresholds(8.0),
+            max_iterations=2,
+            creator_temperature=0.9,
+            judge_temperature=0.1,
+            refinement_temperature=0.7,
+            early_stopping_patience=10,
+            early_stopping_min_iterations=1,
+            early_stopping_variance_tolerance=0.3,
+        )
+        call_count = 0
+
+        def create_fn(retries):
+            """Create a uniquely-named entity per call."""
+            nonlocal call_count
+            call_count += 1
+            return {"name": f"Entity{call_count}"}
+
+        judge_scores = _make_scores(6.0)  # Below threshold
+
+        result_entity, _scores, _rounds = quality_refinement_loop(
+            entity_type="faction",
+            create_fn=create_fn,
+            judge_fn=lambda e: judge_scores,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e.get("name", "?"),
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Should complete without crashing
+        assert result_entity is not None
+
+
+class TestMonotonicityGuardRevertFailure:
+    """Test monotonicity guard when best entity data cannot be retrieved."""
+
+    def test_warning_logged_when_best_entity_unavailable(self, mock_svc, caplog):
+        """Log a warning when monotonicity guard cannot revert to best entity."""
+        # Threshold 10.0 ensures no early exit on first iteration (score=9.0).
+        high_threshold_config = RefinementConfig(
+            quality_threshold=10.0,
+            quality_thresholds=_all_thresholds(10.0),
+            max_iterations=3,
+            creator_temperature=0.9,
+            judge_temperature=0.1,
+            refinement_temperature=0.7,
+            early_stopping_patience=10,
+            early_stopping_min_iterations=1,
+            early_stopping_variance_tolerance=0.3,
+        )
+
+        judge_call = 0
+
+        def judge_fn(_entity):
+            """Return escalating scores so the loop doesn't early-stop."""
+            nonlocal judge_call
+            judge_call += 1
+            # First judge: high score, second judge: low → triggers monotonicity guard
+            if judge_call == 1:
+                return _make_scores(9.0)
+            return _make_scores(5.0)
+
+        refine_call = 0
+
+        def refine_fn(entity, _scores, _iter):
+            """Return a slightly modified entity to avoid unchanged-output detection."""
+            nonlocal refine_call
+            refine_call += 1
+            # Return a different entity to avoid "unchanged refinement" early stop
+            return {**entity, "version": refine_call}
+
+        # Return None on the first call (monotonicity guard) but valid data on
+        # subsequent calls (end-of-loop best-entity retrieval).
+        call_count = 0
+        original_get = RefinementHistory.get_best_entity
+
+        def get_best_entity_side_effect(history_instance):
+            """Return None on first call to simulate revert failure."""
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return None  # Monotonicity guard call → cannot revert
+            return original_get(history_instance)
+
+        with patch.object(
+            RefinementHistory,
+            "get_best_entity",
+            autospec=True,
+            side_effect=get_best_entity_side_effect,
+        ):
+            with caplog.at_level(logging.WARNING):
+                result_entity, _scores, _rounds = quality_refinement_loop(
+                    entity_type="character",
+                    create_fn=lambda retries: {"name": "Hero"},
+                    judge_fn=judge_fn,
+                    refine_fn=refine_fn,
+                    get_name=lambda e: e.get("name", "?"),
+                    serialize=lambda e: e.copy(),
+                    is_empty=lambda e: not e.get("name"),
+                    score_cls=CharacterQualityScores,
+                    config=high_threshold_config,
+                    svc=mock_svc,
+                    story_id="test-story",
+                )
+
+        assert result_entity is not None
+        assert any("could not retrieve best entity data" in r.message for r in caplog.records)
+
+
+class TestAnalyticsDbUnexpectedErrors:
+    """Tests for except-Exception handlers when analytics_db raises unexpected errors."""
+
+    def test_win_rate_gate_unexpected_error_proceeds_with_hail_mary(self, mock_svc, config, caplog):
+        """Win-rate gate logs warning and proceeds when analytics_db raises RuntimeError."""
+        # Give mock_svc a real analytics_db that raises RuntimeError
+        analytics_db = MagicMock()
+        analytics_db.get_hail_mary_win_rate.side_effect = RuntimeError("DB connection lost")
+        mock_svc.analytics_db = analytics_db
+
+        config = RefinementConfig(
+            quality_threshold=8.0,
+            quality_thresholds=_all_thresholds(8.0),
+            max_iterations=2,
+            creator_temperature=0.9,
+            judge_temperature=0.1,
+            refinement_temperature=0.7,
+            early_stopping_patience=10,
+            early_stopping_min_iterations=1,
+            early_stopping_variance_tolerance=0.3,
+        )
+        judge_scores = _make_scores(6.0)  # Below threshold to trigger hail-mary
+
+        with caplog.at_level(logging.WARNING):
+            result_entity, result_scores, _rounds = quality_refinement_loop(
+                entity_type="faction",
+                create_fn=lambda retries: {"name": "TestFaction"},
+                judge_fn=lambda e: judge_scores,
+                refine_fn=lambda e, s, i: e,
+                get_name=lambda e: e.get("name", "?"),
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
+
+        assert result_entity is not None
+        assert result_scores is not None
+        assert any("Hail-mary win-rate query failed" in msg for msg in caplog.messages)
+
+    def test_hail_mary_recording_unexpected_error_continues(self, mock_svc, config, caplog):
+        """Hail-mary recording logs warning and continues when analytics_db raises RuntimeError."""
+        analytics_db = MagicMock()
+        # Win-rate gate succeeds (returns high rate so hail-mary proceeds)
+        analytics_db.get_hail_mary_win_rate.return_value = 0.50
+        # Recording fails with unexpected error
+        analytics_db.record_hail_mary_attempt.side_effect = RuntimeError("write failed")
+        mock_svc.analytics_db = analytics_db
+
+        config = RefinementConfig(
+            quality_threshold=8.0,
+            quality_thresholds=_all_thresholds(8.0),
+            max_iterations=2,
+            creator_temperature=0.9,
+            judge_temperature=0.1,
+            refinement_temperature=0.7,
+            early_stopping_patience=10,
+            early_stopping_min_iterations=1,
+            early_stopping_variance_tolerance=0.3,
+        )
+        call_count = 0
+
+        def create_fn(retries):
+            """Create a uniquely-named entity per call."""
+            nonlocal call_count
+            call_count += 1
+            return {"name": f"Entity{call_count}"}
+
+        judge_scores = _make_scores(6.0)  # Below threshold
+
+        with caplog.at_level(logging.WARNING):
+            result_entity, _scores, _rounds = quality_refinement_loop(
+                entity_type="faction",
+                create_fn=create_fn,
+                judge_fn=lambda e: judge_scores,
+                refine_fn=lambda e, s, i: e,
+                get_name=lambda e: e.get("name", "?"),
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
+
+        assert result_entity is not None
+        assert any("failed to record hail-mary analytics" in msg for msg in caplog.messages)

@@ -10,10 +10,13 @@ to discard likely LLM parse failures (all-zero dimension scores).
 import logging
 import time
 from collections.abc import Callable
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from src.memory.world_quality import BaseQualityScores, RefinementConfig, RefinementHistory
 from src.utils.exceptions import WorldGenerationError
+
+if TYPE_CHECKING:
+    from src.services.world_quality_service import WorldQualityService
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +58,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     is_empty: Callable[[T], bool],
     score_cls: type[S],
     config: RefinementConfig,
-    svc,
+    svc: WorldQualityService,
     story_id: str,
     initial_entity: T | None = None,
     auto_pass_score: S | None = None,
@@ -117,10 +120,24 @@ def quality_refinement_loop[T, S: BaseQualityScores](
             )
             history.final_iteration = 1
             history.final_score = auto_pass_score.average
+            # Compute threshold_met from actual score vs configured threshold,
+            # using the same rounding precision as the rest of the loop.
+            rounded_auto = round(auto_pass_score.average, 1)
+            auto_threshold_met = rounded_auto >= entity_threshold
+            if not auto_threshold_met:
+                history.below_threshold_admitted = True
+                logger.warning(
+                    "%s '%s' auto-pass score %.1f is below threshold %.1f; "
+                    "admitting below threshold",
+                    entity_type.capitalize(),
+                    get_name(entity),
+                    auto_pass_score.average,
+                    entity_threshold,
+                )
             svc._log_refinement_analytics(
                 history,
                 story_id,
-                threshold_met=True,
+                threshold_met=auto_threshold_met,
                 early_stop_triggered=False,
                 quality_threshold=entity_threshold,
                 max_iterations=config.max_iterations,
@@ -340,6 +357,16 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                         history.peak_score,
                         history.best_iteration,
                     )
+                else:
+                    logger.warning(
+                        "%s '%s' score regressed (%.1f < %.1f) but could not retrieve "
+                        "best entity data for revert (best_iteration=%d)",
+                        entity_type.capitalize(),
+                        get_name(entity),
+                        scores.average,
+                        history.peak_score,
+                        history.best_iteration,
+                    )
 
             # Threshold check — round to 1 decimal so the comparison matches
             # the %.1f log display (e.g. 7.46 rounds to 7.5, passes >= 7.5).
@@ -508,7 +535,16 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                         win_rate * 100,
                     )
             except AttributeError, TypeError:
-                pass  # analytics_db not available — proceed with hail-mary
+                logger.debug(
+                    "Could not query hail-mary win rate for %s, proceeding with hail-mary",
+                    entity_type,
+                )
+            except Exception:
+                logger.warning(
+                    "Hail-mary win-rate query failed for %s, proceeding with hail-mary",
+                    entity_type,
+                    exc_info=True,
+                )
 
         if not skip_hail_mary:
             logger.info(
@@ -550,7 +586,18 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                                 hail_mary_score=fresh_scores.average,
                             )
                         except AttributeError:
-                            pass  # analytics_db not available
+                            logger.debug(
+                                "Could not record hail-mary attempt for %s (analytics_db "
+                                "unavailable)",
+                                entity_type,
+                            )
+                        except Exception:
+                            logger.warning(
+                                "%s '%s': failed to record hail-mary analytics; continuing",
+                                entity_type.capitalize(),
+                                history.entity_name,
+                                exc_info=True,
+                            )
                     if hail_mary_won:
                         logger.info(
                             "%s hail-mary beats previous best! Using fresh entity.",
@@ -689,7 +736,7 @@ def _reconstruct_entity[T](entity_data: dict, current_entity: T, entity_type: st
     """
     if isinstance(current_entity, dict):
         logger.debug("Reconstructing %s from dict data", entity_type)
-        return cast(T, entity_data)
+        return cast(T, dict(entity_data))
     # Pydantic model — reconstruct from dict
     entity_cls = type(current_entity)
     logger.debug("Reconstructing %s as %s from stored data", entity_type, entity_cls.__name__)

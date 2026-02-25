@@ -349,17 +349,27 @@ def record_hail_mary_attempt(
         best_score or 0.0,
         hail_mary_score or 0.0,
     )
-    with db._lock:
-        with sqlite3.connect(db.db_path) as conn:
-            cursor = conn.execute(
-                """
-                INSERT INTO hail_mary_stats (entity_type, won, best_score, hail_mary_score)
-                VALUES (?, ?, ?, ?)
-                """,
-                (entity_type, 1 if won else 0, best_score, hail_mary_score),
-            )
-            conn.commit()
-            return cursor.lastrowid or 0
+    try:
+        with db._lock:
+            with sqlite3.connect(db.db_path) as conn:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO hail_mary_stats (entity_type, won, best_score, hail_mary_score)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (entity_type, 1 if won else 0, best_score, hail_mary_score),
+                )
+                conn.commit()
+                return cursor.lastrowid or 0
+    except sqlite3.Error as e:
+        logger.error(
+            "Failed to record hail-mary attempt for entity_type=%s won=%s: %s",
+            entity_type,
+            won,
+            e,
+            exc_info=True,
+        )
+        raise
 
 
 def get_hail_mary_win_rate(
@@ -377,6 +387,8 @@ def get_hail_mary_win_rate(
     Returns:
         Win rate as a float (0.0 to 1.0), or None if insufficient data.
     """
+    if min_attempts < 1:
+        raise ValueError("min_attempts must be >= 1")
     query = "SELECT COUNT(*), SUM(won) FROM hail_mary_stats WHERE 1=1"
     params: list[Any] = []
     if entity_type:
@@ -389,7 +401,7 @@ def get_hail_mary_win_rate(
             row = cursor.fetchone()
             total = row[0] or 0
             wins = row[1] or 0
-            if total < min_attempts:
+            if total == 0 or total < min_attempts:
                 logger.debug(
                     "Hail-mary win rate: insufficient data (%d/%d attempts for %s)",
                     total,
@@ -423,6 +435,8 @@ def get_first_pass_rate(
     Returns:
         First-pass rate as a float (0.0 to 1.0), or None if insufficient data.
     """
+    if min_records < 1:
+        raise ValueError("min_records must be >= 1")
     query = """
         SELECT COUNT(*),
                SUM(CASE WHEN iterations_used = 1 AND threshold_met = 1 THEN 1 ELSE 0 END)
@@ -435,7 +449,7 @@ def get_first_pass_rate(
             row = cursor.fetchone()
             total = row[0] or 0
             first_pass = row[1] or 0
-            if total < min_records:
+            if total == 0 or total < min_records:
                 logger.debug(
                     "First-pass rate: insufficient data (%d/%d records for %s)",
                     total,

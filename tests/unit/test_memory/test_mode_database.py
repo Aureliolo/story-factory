@@ -2504,3 +2504,32 @@ class TestBelowThresholdAdmittedColumn:
                 "SELECT below_threshold_admitted FROM world_entity_scores LIMIT 1"
             ).fetchone()
         assert row[0] == 0
+
+
+class TestMinAttemptsValidation:
+    """Tests for input validation on rate-calculation functions."""
+
+    @pytest.fixture
+    def db(self, tmp_path: Path) -> ModeDatabase:
+        """Create a test database."""
+        return ModeDatabase(tmp_path / "test_validation.db")
+
+    def test_hail_mary_win_rate_rejects_zero_min_attempts(self, db: ModeDatabase) -> None:
+        """get_hail_mary_win_rate raises ValueError for min_attempts=0."""
+        with pytest.raises(ValueError, match="min_attempts must be >= 1"):
+            db.get_hail_mary_win_rate(entity_type="faction", min_attempts=0)
+
+    def test_hail_mary_win_rate_rejects_negative_min_attempts(self, db: ModeDatabase) -> None:
+        """get_hail_mary_win_rate raises ValueError for negative min_attempts."""
+        with pytest.raises(ValueError, match="min_attempts must be >= 1"):
+            db.get_hail_mary_win_rate(entity_type="faction", min_attempts=-1)
+
+    def test_first_pass_rate_rejects_zero_min_records(self, db: ModeDatabase) -> None:
+        """get_first_pass_rate raises ValueError for min_records=0."""
+        with pytest.raises(ValueError, match="min_records must be >= 1"):
+            db.get_first_pass_rate(entity_type="character", min_records=0)
+
+    def test_first_pass_rate_rejects_negative_min_records(self, db: ModeDatabase) -> None:
+        """get_first_pass_rate raises ValueError for negative min_records."""
+        with pytest.raises(ValueError, match="min_records must be >= 1"):
+            db.get_first_pass_rate(entity_type="character", min_records=-1)

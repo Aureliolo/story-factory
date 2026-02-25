@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from src.memory.world_health import WorldHealthMetrics
     from src.services import ServiceContainer
     from src.services.temporal_validation_service import TemporalValidationService
+    from src.services.world_quality_service import EntityGenerationProgress
 
 logger = logging.getLogger(__name__)
 
@@ -631,7 +632,7 @@ class WorldService:
         world_db: WorldDatabase,
         services: ServiceContainer,
         cancel_check: Callable[[], bool] | None = None,
-        progress_callback: Callable | None = None,
+        progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> int:
         """Generate and add relationships between entities."""
         return _build._generate_relationships(

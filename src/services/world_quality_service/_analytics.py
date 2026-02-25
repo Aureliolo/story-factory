@@ -95,7 +95,15 @@ def record_entity_quality(
         )
     except Exception as e:
         # Don't fail generation if analytics recording fails
-        logger.warning(f"Failed to record entity quality to analytics: {e}")
+        logger.warning(
+            "Failed to record %s '%s' quality to analytics (project=%s, model=%s): %s",
+            entity_type,
+            entity_name,
+            project_id,
+            model_id,
+            e,
+            exc_info=True,
+        )
 
 
 def log_refinement_analytics(
