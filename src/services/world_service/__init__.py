@@ -43,6 +43,9 @@ class WorldBuildProgress:
     message: str
     entity_type: str | None = None
     count: int = 0
+    sub_current: int | None = None
+    sub_total: int | None = None
+    sub_entity_name: str | None = None
 
 
 @dataclass
@@ -628,6 +631,7 @@ class WorldService:
         world_db: WorldDatabase,
         services: ServiceContainer,
         cancel_check: Callable[[], bool] | None = None,
+        progress_callback: Callable | None = None,
     ) -> int:
         """Generate and add relationships between entities."""
         return _build._generate_relationships(
@@ -636,6 +640,7 @@ class WorldService:
             world_db,
             services,
             cancel_check=cancel_check,
+            progress_callback=progress_callback,
         )
 
     def _generate_events(

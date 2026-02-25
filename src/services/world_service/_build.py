@@ -173,6 +173,8 @@ def build_world(
             counts,
             check_cancelled,
             report_progress,
+            raw_progress_callback=progress_callback,
+            step_context=lambda: (current_step, total_steps),
         )
     finally:
         services.world_quality.set_calendar_context(None)
@@ -199,6 +201,9 @@ def _build_world_entities(
     counts: dict[str, int],
     check_cancelled: Callable[[], None],
     report_progress: Callable[..., None],
+    *,
+    raw_progress_callback: Callable | None = None,
+    step_context: Callable[[], tuple[int, int]] | None = None,
 ) -> None:
     """Execute all world-building steps after initial setup.
 
@@ -345,12 +350,42 @@ def _build_world_entities(
     if options.generate_relationships:
         check_cancelled()
         report_progress("Generating relationships...", "relationship")
+
+        # Wire sub-step progress: adapter maps EntityGenerationProgress
+        # into WorldBuildProgress so the build dialog shows per-relationship updates.
+        rel_progress_cb = None
+        if raw_progress_callback and step_context:
+            from src.services.world_quality_service import EntityGenerationProgress
+            from src.services.world_service import WorldBuildProgress as WBP
+
+            def _rel_progress_adapter(p: EntityGenerationProgress) -> None:
+                """Map EntityGenerationProgress to WorldBuildProgress with sub-step fields."""
+                cur_step, tot_steps = step_context()
+                raw_progress_callback(
+                    WBP(
+                        step=cur_step,
+                        total_steps=tot_steps,
+                        message=(
+                            f"[{cur_step}/{tot_steps}] Generating relationship "
+                            f"{p.current}/{p.total}..."
+                        ),
+                        entity_type="relationship",
+                        count=p.current,
+                        sub_current=p.current,
+                        sub_total=p.total,
+                        sub_entity_name=p.entity_name,
+                    )
+                )
+
+            rel_progress_cb = _rel_progress_adapter
+
         rel_count = _generate_relationships(
             svc,
             state,
             world_db,
             services,
             cancel_check=options.is_cancelled,
+            progress_callback=rel_progress_cb,
         )
         counts["relationships"] = rel_count
         logger.info(f"Generated {rel_count} relationships")
@@ -815,6 +850,7 @@ def _generate_relationships(
     world_db: WorldDatabase,
     services: ServiceContainer,
     cancel_check: Callable[[], bool] | None = None,
+    progress_callback: Callable | None = None,
 ) -> int:
     """Generate and add relationships between entities using quality refinement.
 
@@ -824,6 +860,7 @@ def _generate_relationships(
         world_db: World database to read entities from and persist relationships to.
         services: Service container providing the world quality service.
         cancel_check: Optional callable that returns True to stop generation.
+        progress_callback: Optional callback receiving EntityGenerationProgress updates.
 
     Returns:
         Number of relationships successfully added to the world database.
@@ -865,7 +902,12 @@ def _generate_relationships(
         rel_count = max_by_entities
 
     relationship_results = services.world_quality.generate_relationships_with_quality(
-        state, entity_names, existing_rels, rel_count, cancel_check=cancel_check
+        state,
+        entity_names,
+        existing_rels,
+        rel_count,
+        cancel_check=cancel_check,
+        progress_callback=progress_callback,
     )
     added_count = 0
     threshold = svc.settings.fuzzy_match_threshold

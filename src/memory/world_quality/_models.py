@@ -44,6 +44,10 @@ class RefinementHistory(BaseModel):
         default=0,
         description="Count of refinement attempts that raised WorldGenerationError",
     )
+    below_threshold_admitted: bool = Field(
+        default=False,
+        description="True when entity was admitted despite not meeting quality threshold",
+    )
 
     def add_iteration(
         self,

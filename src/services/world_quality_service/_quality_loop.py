@@ -58,6 +58,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     svc,
     story_id: str,
     initial_entity: T | None = None,
+    auto_pass_score: S | None = None,
 ) -> tuple[T, S, int]:
     """Run the quality refinement loop for any entity type.
 
@@ -79,6 +80,10 @@ def quality_refinement_loop[T, S: BaseQualityScores](
         svc: WorldQualityService instance (for analytics logging).
         story_id: Project/story ID for analytics.
         initial_entity: If provided, skip creation and start with this entity (review mode).
+        auto_pass_score: If provided, skip the entire judge/refine loop — create
+            the entity and return immediately with this score and scoring_rounds=0.
+            Used when historical data shows the judge is nearly always a no-op
+            (e.g. relationship first-pass rate >= 95%).
 
     Returns:
         Tuple of (best_entity, best_scores, scoring_rounds) where scoring_rounds
@@ -89,6 +94,42 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     """
     # Resolve per-entity threshold
     entity_threshold = config.get_threshold(entity_type)
+    entity: T | None = initial_entity
+
+    # Auto-pass: skip the entire judge/refine loop when historical data shows
+    # the judge is nearly always a no-op (e.g. relationship first-pass rate >= 95%).
+    if auto_pass_score is not None:
+        t_create = time.perf_counter()
+        entity = create_fn(0) if entity is None else entity
+        if entity is not None and not is_empty(entity):
+            logger.info(
+                "%s '%s' auto-passed (creation took %.2fs, scoring_rounds=0)",
+                entity_type.capitalize(),
+                get_name(entity),
+                time.perf_counter() - t_create,
+            )
+            history = RefinementHistory(entity_type=entity_type, entity_name=get_name(entity))
+            history.add_iteration(
+                entity_data=serialize(entity),
+                scores=auto_pass_score.to_dict(),
+                average_score=auto_pass_score.average,
+                feedback=auto_pass_score.feedback,
+            )
+            history.final_iteration = 1
+            history.final_score = auto_pass_score.average
+            svc._log_refinement_analytics(
+                history,
+                story_id,
+                threshold_met=True,
+                early_stop_triggered=False,
+                quality_threshold=entity_threshold,
+                max_iterations=config.max_iterations,
+            )
+            return entity, auto_pass_score, 0
+        logger.warning(
+            "%s auto-pass creation returned empty entity, falling through to full loop",
+            entity_type.capitalize(),
+        )
 
     logger.info(
         "Starting quality refinement loop for %s (threshold=%.1f, max_iterations=%d, "
@@ -101,7 +142,6 @@ def quality_refinement_loop[T, S: BaseQualityScores](
 
     history = RefinementHistory(entity_type=entity_type, entity_name="")
     iteration = 0
-    entity: T | None = initial_entity
     scores: S | None = None
     last_error: str = ""
     creation_retries = 0
@@ -283,6 +323,24 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                 {k: f"{v:.1f}" for k, v in scores.to_dict().items() if isinstance(v, float)},
             )
 
+            # Monotonicity guard: when a refinement degrades the entity, revert
+            # to the best iteration's entity before the next refinement cycle.
+            # This prevents wasting a refinement+judge cycle on a degraded entity
+            # while still letting the patience mechanism handle persistent degradation.
+            if scores.average < history.peak_score and history.best_iteration != current_iter:
+                best_entity_data_snap = history.get_best_entity()
+                if best_entity_data_snap:
+                    entity = _reconstruct_entity(best_entity_data_snap, entity, entity_type)
+                    logger.info(
+                        "%s '%s' score regressed (%.1f < %.1f), reverting to best "
+                        "iteration %d for next refinement",
+                        entity_type.capitalize(),
+                        get_name(entity),
+                        scores.average,
+                        history.peak_score,
+                        history.best_iteration,
+                    )
+
             # Threshold check — round to 1 decimal so the comparison matches
             # the %.1f log display (e.g. 7.46 rounds to 7.5, passes >= 7.5).
             rounded_score = round(scores.average, 1)
@@ -405,6 +463,8 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     threshold_met_pre_hail_mary = round(history.peak_score, 1) >= entity_threshold
 
     if not threshold_met_pre_hail_mary and config.max_iterations > 1:
+        # Resolve analytics_db once for hail-mary gate and recording
+        analytics_db = getattr(svc, "analytics_db", None)
         # Gate: skip hail-mary when failure is structural (temporal context deficit).
         # After the judge prompt context gap is fixed, temporal_plausibility should
         # rarely score below 4.0. But if it does (e.g., no calendar available),
@@ -433,6 +493,20 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                     history.entity_name,
                     weakest_dim,
                     weakest_score,
+                )
+
+        # Win-rate gate: skip hail-mary if historical win rate is too low.
+        if not skip_hail_mary and analytics_db is not None:
+            win_rate = svc.analytics_db.get_hail_mary_win_rate(
+                entity_type=entity_type, min_attempts=10
+            )
+            if win_rate is not None and win_rate < 0.20:
+                skip_hail_mary = True
+                logger.info(
+                    "%s '%s': skipping hail-mary — win rate %.0f%% is below 20%% threshold",
+                    entity_type.capitalize(),
+                    history.entity_name,
+                    win_rate * 100,
                 )
 
         if not skip_hail_mary:
@@ -464,7 +538,16 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                             fresh_scores.average,
                             history.peak_score,
                         )
-                    if not hail_mary_zero and fresh_scores.average > history.peak_score:
+                    hail_mary_won = not hail_mary_zero and fresh_scores.average > history.peak_score
+                    # Record hail-mary attempt for win-rate tracking
+                    if analytics_db is not None and not hail_mary_zero:
+                        svc.analytics_db.record_hail_mary_attempt(
+                            entity_type=entity_type,
+                            won=hail_mary_won,
+                            best_score=history.peak_score,
+                            hail_mary_score=fresh_scores.average,
+                        )
+                    if hail_mary_won:
                         logger.info(
                             "%s hail-mary beats previous best! Using fresh entity.",
                             entity_type.capitalize(),
@@ -514,6 +597,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     if best_entity_data:
         threshold_met = round(history.peak_score, 1) >= entity_threshold
         if not threshold_met:
+            history.below_threshold_admitted = True
             logger.warning(
                 "%s '%s' did not meet quality threshold after %d scoring round(s) "
                 "(best: %.1f, threshold: %.1f). Returning best iteration %d.",

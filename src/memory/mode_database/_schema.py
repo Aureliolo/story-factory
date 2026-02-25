@@ -196,6 +196,18 @@ def init_db(db) -> None:
                     ON generation_runs(run_type);
                 CREATE INDEX IF NOT EXISTS idx_generation_runs_started
                     ON generation_runs(started_at);
+
+                -- Hail-mary fresh-creation attempt tracking
+                CREATE TABLE IF NOT EXISTS hail_mary_stats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+                    entity_type TEXT NOT NULL,
+                    won INTEGER NOT NULL DEFAULT 0,
+                    best_score REAL,
+                    hail_mary_score REAL
+                );
+                CREATE INDEX IF NOT EXISTS idx_hail_mary_entity_type
+                    ON hail_mary_stats(entity_type);
             """)
             conn.commit()
 
@@ -214,6 +226,7 @@ def init_db(db) -> None:
                 ("max_iterations", "INTEGER"),
                 ("temporal_consistency_score", "REAL"),
                 ("temporal_validation_errors", "TEXT"),
+                ("below_threshold_admitted", "INTEGER DEFAULT 0"),
             ]
             for col_name, col_type in _new_columns:
                 try:

@@ -244,6 +244,26 @@ def generate_relationship_with_quality(
             return True
         return False
 
+    # Auto-pass: skip judge when historical first-pass rate is >= 95%
+    # (all judge calls were wasted — entity always passed on first try).
+    auto_pass: RelationshipQualityScores | None = None
+    if getattr(svc, "analytics_db", None) is not None:
+        first_pass_rate = svc.analytics_db.get_first_pass_rate(
+            entity_type="relationship", min_records=20
+        )
+        if first_pass_rate is not None and first_pass_rate >= 0.95:
+            logger.info(
+                "Relationship first-pass rate %.0f%% >= 95%%, auto-passing judge",
+                first_pass_rate * 100,
+            )
+            auto_pass = RelationshipQualityScores(
+                tension=8.0,
+                dynamics=8.0,
+                story_potential=8.0,
+                authenticity=8.0,
+                feedback="Auto-passed: historical first-pass rate >= 95%",
+            )
+
     return quality_refinement_loop(
         entity_type="relationship",
         create_fn=_create,
@@ -265,6 +285,7 @@ def generate_relationship_with_quality(
         config=config,
         svc=svc,
         story_id=story_state.id,
+        auto_pass_score=auto_pass,
     )
 
 

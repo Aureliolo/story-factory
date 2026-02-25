@@ -251,7 +251,7 @@ class TestDynamicScaling:
             # Capture the count passed to generate_relationships_with_quality
             captured_count = {}
 
-            def capture_generate(state, names, rels, count, cancel_check=None):
+            def capture_generate(state, names, rels, count, cancel_check=None, **kwargs):
                 """Capture the count argument for later assertion."""
                 captured_count["value"] = count
                 return []
@@ -288,7 +288,7 @@ class TestDynamicScaling:
             services = MagicMock()
             captured_count = {}
 
-            def capture_generate(state, names, rels, count, cancel_check=None):
+            def capture_generate(state, names, rels, count, cancel_check=None, **kwargs):
                 """Capture the count argument for later assertion."""
                 captured_count["value"] = count
                 return []
@@ -379,7 +379,7 @@ class TestRelationTypeNormalizedBeforeStorage:
 
             services = MagicMock()
 
-            def fake_generate(state, names, rels, count, cancel_check=None):
+            def fake_generate(state, names, rels, count, cancel_check=None, **kwargs):
                 """Return a relationship with a pre-normalized type (as the real service does)."""
                 scores = MagicMock()
                 scores.average = 8.0
@@ -429,7 +429,7 @@ class TestRelationTypeNormalizedInBuild:
 
             services = MagicMock()
 
-            def fake_generate(state, names, rels, count, cancel_check=None):
+            def fake_generate(state, names, rels, count, cancel_check=None, **kwargs):
                 """Return a relationship with a pre-normalized type."""
                 scores = MagicMock()
                 scores.average = 8.0
@@ -474,7 +474,7 @@ class TestRelationTypeNormalizedInBuild:
 
             services = MagicMock()
 
-            def fake_generate(state, names, rels, count, cancel_check=None):
+            def fake_generate(state, names, rels, count, cancel_check=None, **kwargs):
                 """Return a relationship without relation_type key."""
                 scores = MagicMock()
                 scores.average = 8.0
@@ -755,6 +755,7 @@ class TestRequiredEntityConstraint:
         )
 
         svc = MagicMock()
+        svc.analytics_db = None
         config = MagicMock()
         config.creator_temperature = 0.9
         config.judge_temperature = 0.1
@@ -910,6 +911,7 @@ class TestRequiredEntityConstraint:
         )
 
         svc = MagicMock()
+        svc.analytics_db = None
         config = MagicMock()
         config.creator_temperature = 0.9
         config.judge_temperature = 0.1
@@ -961,6 +963,7 @@ class TestRequiredEntityConstraint:
         )
 
         svc = MagicMock()
+        svc.analytics_db = None
         config = MagicMock()
         config.creator_temperature = 0.9
         config.judge_temperature = 0.1
@@ -1470,6 +1473,7 @@ class TestNormalizationConsolidation:
         )
 
         svc = MagicMock()
+        svc.analytics_db = None
         svc._get_creator_model.return_value = "test-model:8b"
         svc._get_judge_model.return_value = "test-model:8b"
         svc.get_calendar_context.return_value = ""

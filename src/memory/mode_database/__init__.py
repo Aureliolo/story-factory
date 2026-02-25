@@ -387,6 +387,7 @@ class ModeDatabase:
         best_iteration: int = 0,
         quality_threshold: float | None = None,
         max_iterations: int | None = None,
+        below_threshold_admitted: bool = False,
     ) -> int:
         """Record a world entity quality score with refinement effectiveness metrics."""
         return _world_entity.record_world_entity_score(
@@ -409,6 +410,7 @@ class ModeDatabase:
             best_iteration=best_iteration,
             quality_threshold=quality_threshold,
             max_iterations=max_iterations,
+            below_threshold_admitted=below_threshold_admitted,
         )
 
     def get_world_entity_scores(
@@ -436,6 +438,36 @@ class ModeDatabase:
     ) -> int:
         """Get count of world entity scores."""
         return _world_entity.get_world_entity_count(self, entity_type, model_id)
+
+    # === Hail-Mary Stats (delegated to _world_entity) ===
+
+    def record_hail_mary_attempt(
+        self,
+        entity_type: str,
+        won: bool,
+        best_score: float | None = None,
+        hail_mary_score: float | None = None,
+    ) -> int:
+        """Record a hail-mary fresh-creation attempt outcome."""
+        return _world_entity.record_hail_mary_attempt(
+            self, entity_type, won, best_score, hail_mary_score
+        )
+
+    def get_hail_mary_win_rate(
+        self,
+        entity_type: str | None = None,
+        min_attempts: int = 10,
+    ) -> float | None:
+        """Get the hail-mary win rate for an entity type."""
+        return _world_entity.get_hail_mary_win_rate(self, entity_type, min_attempts)
+
+    def get_first_pass_rate(
+        self,
+        entity_type: str,
+        min_records: int = 20,
+    ) -> float | None:
+        """Get the fraction of entities that passed on the first iteration."""
+        return _world_entity.get_first_pass_rate(self, entity_type, min_records)
 
     # === Prompt Metrics (delegated to _prompt_metrics) ===
 
