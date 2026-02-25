@@ -2533,3 +2533,25 @@ class TestMinAttemptsValidation:
         """get_first_pass_rate raises ValueError for negative min_records."""
         with pytest.raises(ValueError, match="min_records must be >= 1"):
             db.get_first_pass_rate(entity_type="character", min_records=-1)
+
+
+class TestRecordHailMarySqliteError:
+    """Test that record_hail_mary_attempt logs and re-raises sqlite3.Error."""
+
+    @pytest.fixture
+    def db(self, tmp_path: Path) -> ModeDatabase:
+        """Create a test database."""
+        return ModeDatabase(tmp_path / "test_hail_mary_error.db")
+
+    def test_record_hail_mary_attempt_logs_and_reraises_sqlite_error(
+        self, db: ModeDatabase
+    ) -> None:
+        """record_hail_mary_attempt logs the error and re-raises on sqlite3.Error."""
+        import sqlite3
+        from unittest.mock import patch
+
+        with patch("sqlite3.connect", side_effect=sqlite3.OperationalError("disk I/O error")):
+            with pytest.raises(sqlite3.OperationalError, match="disk I/O error"):
+                db.record_hail_mary_attempt(
+                    entity_type="faction", won=True, best_score=6.0, hail_mary_score=7.5
+                )
