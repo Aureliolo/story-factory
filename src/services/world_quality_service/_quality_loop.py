@@ -463,8 +463,6 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     threshold_met_pre_hail_mary = round(history.peak_score, 1) >= entity_threshold
 
     if not threshold_met_pre_hail_mary and config.max_iterations > 1:
-        # Resolve analytics_db once for hail-mary gate and recording
-        analytics_db = getattr(svc, "analytics_db", None)
         # Gate: skip hail-mary when failure is structural (temporal context deficit).
         # After the judge prompt context gap is fixed, temporal_plausibility should
         # rarely score below 4.0. But if it does (e.g., no calendar available),
@@ -496,18 +494,21 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                 )
 
         # Win-rate gate: skip hail-mary if historical win rate is too low.
-        if not skip_hail_mary and analytics_db is not None:
-            win_rate = svc.analytics_db.get_hail_mary_win_rate(
-                entity_type=entity_type, min_attempts=10
-            )
-            if win_rate is not None and win_rate < 0.20:
-                skip_hail_mary = True
-                logger.info(
-                    "%s '%s': skipping hail-mary — win rate %.0f%% is below 20%% threshold",
-                    entity_type.capitalize(),
-                    history.entity_name,
-                    win_rate * 100,
+        if not skip_hail_mary:
+            try:
+                win_rate = svc.analytics_db.get_hail_mary_win_rate(
+                    entity_type=entity_type, min_attempts=10
                 )
+                if isinstance(win_rate, (int, float)) and win_rate < 0.20:
+                    skip_hail_mary = True
+                    logger.info(
+                        "%s '%s': skipping hail-mary — win rate %.0f%% is below 20%% threshold",
+                        entity_type.capitalize(),
+                        history.entity_name,
+                        win_rate * 100,
+                    )
+            except AttributeError, TypeError:
+                pass  # analytics_db not available — proceed with hail-mary
 
         if not skip_hail_mary:
             logger.info(
@@ -540,13 +541,16 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                         )
                     hail_mary_won = not hail_mary_zero and fresh_scores.average > history.peak_score
                     # Record hail-mary attempt for win-rate tracking
-                    if analytics_db is not None and not hail_mary_zero:
-                        svc.analytics_db.record_hail_mary_attempt(
-                            entity_type=entity_type,
-                            won=hail_mary_won,
-                            best_score=history.peak_score,
-                            hail_mary_score=fresh_scores.average,
-                        )
+                    if not hail_mary_zero:
+                        try:
+                            svc.analytics_db.record_hail_mary_attempt(
+                                entity_type=entity_type,
+                                won=hail_mary_won,
+                                best_score=history.peak_score,
+                                hail_mary_score=fresh_scores.average,
+                            )
+                        except AttributeError:
+                            pass  # analytics_db not available
                     if hail_mary_won:
                         logger.info(
                             "%s hail-mary beats previous best! Using fresh entity.",

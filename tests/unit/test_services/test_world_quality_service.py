@@ -721,6 +721,7 @@ class TestRecordEntityQuality:
             best_iteration=0,
             quality_threshold=None,
             max_iterations=None,
+            below_threshold_admitted=False,
         )
 
     def test_record_entity_quality_handles_error(self, service, mock_mode_service):
