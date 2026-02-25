@@ -244,6 +244,39 @@ def generate_relationship_with_quality(
             return True
         return False
 
+    # Auto-pass: skip judge when historical first-pass rate is >= 95%
+    # (all judge calls were wasted — entity always passed on first try).
+    auto_pass: RelationshipQualityScores | None = None
+    first_pass_rate = None
+    try:
+        first_pass_rate = svc.analytics_db.get_first_pass_rate(
+            entity_type="relationship", min_records=20
+        )
+    except AttributeError, TypeError:
+        logger.debug("Relationship auto-pass check skipped: analytics API unavailable")
+    except Exception:
+        logger.warning(
+            "Relationship auto-pass check failed; continuing without auto-pass",
+            exc_info=True,
+        )
+    if isinstance(first_pass_rate, (int, float)) and first_pass_rate >= 0.95:
+        # Derive auto-pass scores from the configured threshold so they stay
+        # consistent with the quality loop's threshold comparison.
+        threshold = config.get_threshold("relationship")
+        logger.info(
+            "Relationship first-pass rate %.0f%% >= 95%%, auto-passing judge "
+            "(auto-pass score=%.1f)",
+            first_pass_rate * 100,
+            threshold,
+        )
+        auto_pass = RelationshipQualityScores(
+            tension=threshold,
+            dynamics=threshold,
+            story_potential=threshold,
+            authenticity=threshold,
+            feedback="Auto-passed: historical first-pass rate >= 95%",
+        )
+
     return quality_refinement_loop(
         entity_type="relationship",
         create_fn=_create,
@@ -265,6 +298,7 @@ def generate_relationship_with_quality(
         config=config,
         svc=svc,
         story_id=story_state.id,
+        auto_pass_score=auto_pass,
     )
 
 

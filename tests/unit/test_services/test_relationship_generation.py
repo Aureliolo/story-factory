@@ -251,7 +251,7 @@ class TestDynamicScaling:
             # Capture the count passed to generate_relationships_with_quality
             captured_count = {}
 
-            def capture_generate(state, names, rels, count, cancel_check=None):
+            def capture_generate(state, names, rels, count, cancel_check=None, **kwargs):
                 """Capture the count argument for later assertion."""
                 captured_count["value"] = count
                 return []
@@ -288,7 +288,7 @@ class TestDynamicScaling:
             services = MagicMock()
             captured_count = {}
 
-            def capture_generate(state, names, rels, count, cancel_check=None):
+            def capture_generate(state, names, rels, count, cancel_check=None, **kwargs):
                 """Capture the count argument for later assertion."""
                 captured_count["value"] = count
                 return []
@@ -379,7 +379,7 @@ class TestRelationTypeNormalizedBeforeStorage:
 
             services = MagicMock()
 
-            def fake_generate(state, names, rels, count, cancel_check=None):
+            def fake_generate(state, names, rels, count, cancel_check=None, **kwargs):
                 """Return a relationship with a pre-normalized type (as the real service does)."""
                 scores = MagicMock()
                 scores.average = 8.0
@@ -429,7 +429,7 @@ class TestRelationTypeNormalizedInBuild:
 
             services = MagicMock()
 
-            def fake_generate(state, names, rels, count, cancel_check=None):
+            def fake_generate(state, names, rels, count, cancel_check=None, **kwargs):
                 """Return a relationship with a pre-normalized type."""
                 scores = MagicMock()
                 scores.average = 8.0
@@ -474,7 +474,7 @@ class TestRelationTypeNormalizedInBuild:
 
             services = MagicMock()
 
-            def fake_generate(state, names, rels, count, cancel_check=None):
+            def fake_generate(state, names, rels, count, cancel_check=None, **kwargs):
                 """Return a relationship without relation_type key."""
                 scores = MagicMock()
                 scores.average = 8.0
@@ -755,6 +755,7 @@ class TestRequiredEntityConstraint:
         )
 
         svc = MagicMock()
+        svc.analytics_db = None
         config = MagicMock()
         config.creator_temperature = 0.9
         config.judge_temperature = 0.1
@@ -910,6 +911,7 @@ class TestRequiredEntityConstraint:
         )
 
         svc = MagicMock()
+        svc.analytics_db = None
         config = MagicMock()
         config.creator_temperature = 0.9
         config.judge_temperature = 0.1
@@ -961,6 +963,7 @@ class TestRequiredEntityConstraint:
         )
 
         svc = MagicMock()
+        svc.analytics_db = None
         config = MagicMock()
         config.creator_temperature = 0.9
         config.judge_temperature = 0.1
@@ -1470,6 +1473,7 @@ class TestNormalizationConsolidation:
         )
 
         svc = MagicMock()
+        svc.analytics_db = None
         svc._get_creator_model.return_value = "test-model:8b"
         svc._get_judge_model.return_value = "test-model:8b"
         svc.get_calendar_context.return_value = ""
@@ -1509,3 +1513,262 @@ class TestNormalizationConsolidation:
         svc._create_relationship.assert_called()
         assert result["source"] == "The Castle"
         assert scores.average >= 6.0
+
+
+class TestRelationshipAutoPass:
+    """Tests for relationship auto-pass when historical first-pass rate >= 95%."""
+
+    def test_auto_pass_when_first_pass_rate_high(self, story_state):
+        """Relationship auto-passes judge when first-pass rate >= 95%."""
+        from src.memory.world_quality._story_scores import RelationshipQualityScores
+        from src.services.world_quality_service._relationship import (
+            generate_relationship_with_quality,
+        )
+
+        svc = MagicMock()
+        svc.analytics_db = MagicMock()
+        svc.analytics_db.get_first_pass_rate.return_value = 1.0  # 100% first-pass
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc._get_judge_model.return_value = "test-model:8b"
+        svc.get_calendar_context.return_value = ""
+        config = MagicMock()
+        config.creator_temperature = 0.9
+        config.judge_temperature = 0.1
+        config.get_threshold.return_value = 7.0
+        config.get_refinement_temperature.return_value = 0.7
+        config.max_iterations = 3
+        config.early_stopping_patience = 2
+        config.early_stopping_min_iterations = 1
+        config.temperature_decay_rate = 0.0
+        svc.get_config.return_value = config
+
+        judge_config = MagicMock()
+        judge_config.enabled = False
+        judge_config.multi_call_enabled = False
+        svc.get_judge_config.return_value = judge_config
+
+        svc._create_relationship.return_value = {
+            "source": "Alpha",
+            "target": "Beta",
+            "relation_type": "allies_with",
+            "description": "They are allies",
+        }
+
+        entity_names = ["Alpha", "Beta"]
+        _rel, scores, iterations = generate_relationship_with_quality(
+            svc, story_state, entity_names, []
+        )
+
+        # Auto-pass scores are derived from the configured threshold (7.0)
+        assert isinstance(scores, RelationshipQualityScores)
+        assert scores.tension == 7.0
+        assert scores.dynamics == 7.0
+        assert scores.story_potential == 7.0
+        assert scores.authenticity == 7.0
+        assert "Auto-passed" in scores.feedback
+        # 0 scoring rounds because judge was skipped entirely
+        assert iterations == 0
+
+    def test_no_auto_pass_when_rate_below_threshold(self, story_state):
+        """Judge is invoked when first-pass rate is below the 95% threshold."""
+        from src.memory.world_quality._story_scores import RelationshipQualityScores
+        from src.services.world_quality_service._relationship import (
+            generate_relationship_with_quality,
+        )
+
+        svc = MagicMock()
+        svc.analytics_db = MagicMock()
+        svc.analytics_db.get_first_pass_rate.return_value = 0.94  # Below 95%
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc._get_judge_model.return_value = "test-model:8b"
+        svc.get_calendar_context.return_value = ""
+        config = MagicMock()
+        config.creator_temperature = 0.9
+        config.judge_temperature = 0.1
+        config.get_threshold.return_value = 7.0
+        config.get_refinement_temperature.return_value = 0.7
+        config.max_iterations = 1
+        config.early_stopping_patience = 2
+        config.early_stopping_min_iterations = 1
+        config.temperature_decay_rate = 0.0
+        svc.get_config.return_value = config
+
+        judge_config = MagicMock()
+        judge_config.enabled = False
+        judge_config.multi_call_enabled = False
+        svc.get_judge_config.return_value = judge_config
+
+        svc._create_relationship.return_value = {
+            "source": "Alpha",
+            "target": "Beta",
+            "relation_type": "allies_with",
+            "description": "They are allies",
+        }
+        judge_scores = RelationshipQualityScores(
+            tension=8.0, dynamics=8.0, story_potential=8.0, authenticity=8.0, feedback="Good"
+        )
+        svc._judge_relationship_quality.return_value = judge_scores
+
+        entity_names = ["Alpha", "Beta"]
+        _rel, _scores, iterations = generate_relationship_with_quality(
+            svc, story_state, entity_names, []
+        )
+
+        # Judge was invoked (not auto-passed), so iterations > 0
+        assert iterations >= 1
+        svc._judge_relationship_quality.assert_called()
+
+    def test_auto_pass_skipped_when_analytics_db_absent(self, story_state):
+        """Auto-pass is skipped when analytics_db is not available."""
+        from src.memory.world_quality._story_scores import RelationshipQualityScores
+        from src.services.world_quality_service._relationship import (
+            generate_relationship_with_quality,
+        )
+
+        svc = MagicMock(spec=[])
+        svc._get_creator_model = MagicMock(return_value="test-model:8b")
+        svc._get_judge_model = MagicMock(return_value="test-model:8b")
+        svc.get_calendar_context = MagicMock(return_value="")
+        svc._log_refinement_analytics = MagicMock()
+        config = MagicMock()
+        config.creator_temperature = 0.9
+        config.judge_temperature = 0.1
+        config.get_threshold.return_value = 7.0
+        config.get_refinement_temperature.return_value = 0.7
+        config.max_iterations = 1
+        config.early_stopping_patience = 2
+        config.early_stopping_min_iterations = 1
+        config.temperature_decay_rate = 0.0
+        svc.get_config = MagicMock(return_value=config)
+
+        judge_config = MagicMock()
+        judge_config.enabled = False
+        judge_config.multi_call_enabled = False
+        svc.get_judge_config = MagicMock(return_value=judge_config)
+
+        svc._create_relationship = MagicMock(
+            return_value={
+                "source": "Alpha",
+                "target": "Beta",
+                "relation_type": "allies_with",
+                "description": "They are allies",
+            }
+        )
+        judge_scores = RelationshipQualityScores(
+            tension=8.0, dynamics=8.0, story_potential=8.0, authenticity=8.0, feedback="Good"
+        )
+        svc._judge_relationship_quality = MagicMock(return_value=judge_scores)
+        svc._refine_relationship = MagicMock()
+
+        entity_names = ["Alpha", "Beta"]
+        _rel, _scores, iterations = generate_relationship_with_quality(
+            svc, story_state, entity_names, []
+        )
+
+        # Without analytics_db, auto-pass cannot activate; judge must be invoked
+        assert iterations >= 1
+        svc._judge_relationship_quality.assert_called()
+
+    def test_auto_pass_at_exact_boundary(self, story_state):
+        """Auto-pass triggers at exactly 95% first-pass rate (boundary)."""
+        from src.memory.world_quality._story_scores import RelationshipQualityScores
+        from src.services.world_quality_service._relationship import (
+            generate_relationship_with_quality,
+        )
+
+        svc = MagicMock()
+        svc.analytics_db = MagicMock()
+        svc.analytics_db.get_first_pass_rate.return_value = 0.95  # Exact boundary
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc._get_judge_model.return_value = "test-model:8b"
+        svc.get_calendar_context.return_value = ""
+        config = MagicMock()
+        config.creator_temperature = 0.9
+        config.judge_temperature = 0.1
+        config.get_threshold.return_value = 7.0
+        config.get_refinement_temperature.return_value = 0.7
+        config.max_iterations = 3
+        config.early_stopping_patience = 2
+        config.early_stopping_min_iterations = 1
+        config.temperature_decay_rate = 0.0
+        svc.get_config.return_value = config
+
+        judge_config = MagicMock()
+        judge_config.enabled = False
+        judge_config.multi_call_enabled = False
+        svc.get_judge_config.return_value = judge_config
+
+        svc._create_relationship.return_value = {
+            "source": "Alpha",
+            "target": "Beta",
+            "relation_type": "allies_with",
+            "description": "They are allies",
+        }
+
+        entity_names = ["Alpha", "Beta"]
+        _rel, scores, iterations = generate_relationship_with_quality(
+            svc, story_state, entity_names, []
+        )
+
+        # At exactly 95%, auto-pass should trigger
+        assert isinstance(scores, RelationshipQualityScores)
+        assert iterations == 0
+        assert "Auto-passed" in scores.feedback
+
+    def test_auto_pass_unexpected_error_falls_through_to_judge(self, story_state, caplog):
+        """Auto-pass logs warning and falls through to judge when analytics raises RuntimeError."""
+        import logging
+
+        from src.memory.world_quality._story_scores import RelationshipQualityScores
+        from src.services.world_quality_service._relationship import (
+            generate_relationship_with_quality,
+        )
+
+        svc = MagicMock()
+        analytics_db = MagicMock()
+        analytics_db.get_first_pass_rate.side_effect = RuntimeError("DB connection lost")
+        svc.analytics_db = analytics_db
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc._get_judge_model.return_value = "test-model:8b"
+        svc.get_calendar_context.return_value = ""
+        svc._log_refinement_analytics = MagicMock()
+        config = MagicMock()
+        config.creator_temperature = 0.9
+        config.judge_temperature = 0.1
+        config.get_threshold.return_value = 7.0
+        config.get_refinement_temperature.return_value = 0.7
+        config.max_iterations = 1
+        config.early_stopping_patience = 2
+        config.early_stopping_min_iterations = 1
+        config.temperature_decay_rate = 0.0
+        svc.get_config = MagicMock(return_value=config)
+
+        judge_config = MagicMock()
+        judge_config.enabled = False
+        judge_config.multi_call_enabled = False
+        svc.get_judge_config = MagicMock(return_value=judge_config)
+
+        svc._create_relationship = MagicMock(
+            return_value={
+                "source": "Alpha",
+                "target": "Beta",
+                "relation_type": "allies_with",
+                "description": "They are allies",
+            }
+        )
+        judge_scores = RelationshipQualityScores(
+            tension=8.0, dynamics=8.0, story_potential=8.0, authenticity=8.0, feedback="Good"
+        )
+        svc._judge_relationship_quality = MagicMock(return_value=judge_scores)
+        svc._refine_relationship = MagicMock()
+
+        entity_names = ["Alpha", "Beta"]
+        with caplog.at_level(logging.WARNING):
+            _rel, _scores, iterations = generate_relationship_with_quality(
+                svc, story_state, entity_names, []
+            )
+
+        # RuntimeError should be caught; auto-pass skipped, judge invoked
+        assert iterations >= 1
+        svc._judge_relationship_quality.assert_called()
+        assert any("Relationship auto-pass check failed" in msg for msg in caplog.messages)

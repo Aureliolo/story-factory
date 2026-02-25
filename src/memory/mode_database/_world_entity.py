@@ -34,6 +34,7 @@ def record_world_entity_score(
     max_iterations: int | None = None,
     temporal_consistency_score: float | None = None,
     temporal_validation_errors: list[dict] | None = None,
+    below_threshold_admitted: bool = False,
 ) -> int:
     """Record a world entity quality score with refinement effectiveness metrics.
 
@@ -59,6 +60,7 @@ def record_world_entity_score(
         max_iterations: Maximum iterations configured for this entity.
         temporal_consistency_score: Score for temporal consistency validation (0-10).
         temporal_validation_errors: List of temporal validation error dicts.
+        below_threshold_admitted: Whether entity was admitted below quality threshold.
 
     Returns:
         The ID of the inserted record.
@@ -92,8 +94,9 @@ def record_world_entity_score(
                         early_stop_triggered, threshold_met, peak_score, final_score,
                         score_progression_json, consecutive_degradations, best_iteration,
                         quality_threshold, max_iterations,
-                        temporal_consistency_score, temporal_validation_errors
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        temporal_consistency_score, temporal_validation_errors,
+                        below_threshold_admitted
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         project_id,
@@ -120,6 +123,7 @@ def record_world_entity_score(
                         max_iterations,
                         temporal_consistency_score,
                         temporal_errors_json,
+                        1 if below_threshold_admitted else 0,
                     ),
                 )
                 conn.commit()
@@ -317,3 +321,148 @@ def get_world_entity_count(
             cursor = conn.execute(query, params)
             result = cursor.fetchone()[0]
             return int(result) if result is not None else 0
+
+
+def record_hail_mary_attempt(
+    db,
+    entity_type: str,
+    won: bool,
+    best_score: float | None = None,
+    hail_mary_score: float | None = None,
+) -> int:
+    """Record a hail-mary fresh-creation attempt outcome.
+
+    Args:
+        db: ModeDatabase instance.
+        entity_type: Type of entity (e.g. "faction", "relationship").
+        won: True if the hail-mary entity beat the previous best.
+        best_score: Best score before the hail-mary attempt.
+        hail_mary_score: Score of the hail-mary entity.
+
+    Returns:
+        The ID of the inserted record.
+    """
+    logger.debug(
+        "Recording hail-mary attempt: entity_type=%s, won=%s, best=%.1f, hail_mary=%.1f",
+        entity_type,
+        won,
+        best_score or 0.0,
+        hail_mary_score or 0.0,
+    )
+    try:
+        with db._lock:
+            with sqlite3.connect(db.db_path) as conn:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO hail_mary_stats (entity_type, won, best_score, hail_mary_score)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (entity_type, 1 if won else 0, best_score, hail_mary_score),
+                )
+                conn.commit()
+                return cursor.lastrowid or 0
+    except sqlite3.Error as e:
+        logger.error(
+            "Failed to record hail-mary attempt for entity_type=%s won=%s: %s",
+            entity_type,
+            won,
+            e,
+            exc_info=True,
+        )
+        raise
+
+
+def get_hail_mary_win_rate(
+    db,
+    entity_type: str | None = None,
+    min_attempts: int = 10,
+) -> float | None:
+    """Get the hail-mary win rate for an entity type.
+
+    Args:
+        db: ModeDatabase instance.
+        entity_type: Filter by entity type. None for overall rate.
+        min_attempts: Minimum attempts required to return a rate.
+
+    Returns:
+        Win rate as a float (0.0 to 1.0), or None if insufficient data.
+    """
+    if min_attempts < 1:
+        raise ValueError("min_attempts must be >= 1")
+    query = "SELECT COUNT(*), SUM(won) FROM hail_mary_stats WHERE 1=1"
+    params: list[Any] = []
+    if entity_type:
+        query += " AND entity_type = ?"
+        params.append(entity_type)
+
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            cursor = conn.execute(query, params)
+            row = cursor.fetchone()
+            total = row[0] or 0
+            wins = row[1] or 0
+            if total == 0 or total < min_attempts:
+                logger.debug(
+                    "Hail-mary win rate: insufficient data (%d/%d attempts for %s)",
+                    total,
+                    min_attempts,
+                    entity_type or "all",
+                )
+                return None
+            rate = wins / total
+            logger.debug(
+                "Hail-mary win rate for %s: %.1f%% (%d/%d)",
+                entity_type or "all",
+                rate * 100,
+                wins,
+                total,
+            )
+            return rate
+
+
+def get_first_pass_rate(
+    db,
+    entity_type: str,
+    min_records: int = 20,
+) -> float | None:
+    """Get the fraction of entities that passed on the first iteration.
+
+    Args:
+        db: ModeDatabase instance.
+        entity_type: Entity type to query.
+        min_records: Minimum records required to return a rate.
+
+    Returns:
+        First-pass rate as a float (0.0 to 1.0), or None if insufficient data.
+    """
+    if min_records < 1:
+        raise ValueError("min_records must be >= 1")
+    query = """
+        SELECT COUNT(*),
+               SUM(CASE WHEN iterations_used = 1 AND threshold_met = 1 THEN 1 ELSE 0 END)
+        FROM world_entity_scores
+        WHERE entity_type = ?
+    """
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            cursor = conn.execute(query, (entity_type,))
+            row = cursor.fetchone()
+            total = row[0] or 0
+            first_pass = row[1] or 0
+            if total == 0 or total < min_records:
+                logger.debug(
+                    "First-pass rate: insufficient data (%d/%d records for %s)",
+                    total,
+                    min_records,
+                    entity_type,
+                )
+                return None
+            rate = first_pass / total
+            logger.debug(
+                "First-pass rate for %s: %.1f%% (%d/%d)",
+                entity_type,
+                rate * 100,
+                first_pass,
+                total,
+            )
+            return rate

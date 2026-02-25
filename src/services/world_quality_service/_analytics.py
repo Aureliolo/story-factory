@@ -35,6 +35,7 @@ def record_entity_quality(
     best_iteration: int = 0,
     quality_threshold: float | None = None,
     max_iterations: int | None = None,
+    below_threshold_admitted: bool = False,
 ) -> None:
     """Persist entity quality scores and refinement metrics to the analytics database.
 
@@ -56,6 +57,7 @@ def record_entity_quality(
         best_iteration: Iteration index that produced the best observed score.
         quality_threshold: Quality threshold used to judge success.
         max_iterations: Maximum allowed refinement iterations.
+        below_threshold_admitted: Whether entity was admitted below quality threshold.
     """
     validate_not_empty(project_id, "project_id")
     validate_not_empty(entity_type, "entity_type")
@@ -84,6 +86,7 @@ def record_entity_quality(
             best_iteration=best_iteration,
             quality_threshold=quality_threshold,
             max_iterations=max_iterations,
+            below_threshold_admitted=below_threshold_admitted,
         )
         logger.debug(
             f"Recorded {entity_type} '{entity_name}' quality to analytics "
@@ -92,7 +95,15 @@ def record_entity_quality(
         )
     except Exception as e:
         # Don't fail generation if analytics recording fails
-        logger.warning(f"Failed to record entity quality to analytics: {e}")
+        logger.warning(
+            "Failed to record %s '%s' quality to analytics (project=%s, model=%s): %s",
+            entity_type,
+            entity_name,
+            project_id,
+            model_id,
+            e,
+            exc_info=True,
+        )
 
 
 def log_refinement_analytics(
@@ -139,6 +150,7 @@ def log_refinement_analytics(
             f"  - Worsened after peak: {analysis['worsened_after_peak']}\n"
             f"  - Mid-loop regression: {analysis['mid_loop_regression']}\n"
             f"  - Threshold met: {threshold_met}\n"
+            f"  - Below threshold admitted: {history.below_threshold_admitted}\n"
             f"  - Early stop triggered: {early_stop_triggered}"
         )
 
@@ -149,6 +161,7 @@ def log_refinement_analytics(
         "best_iteration": analysis["best_iteration"],
         "improved": analysis["improved"],
         "worsened_after_peak": analysis["worsened_after_peak"],
+        "below_threshold_admitted": history.below_threshold_admitted,
         "average": history.final_score,  # For backwards compatibility
     }
     record_entity_quality(
@@ -168,4 +181,5 @@ def log_refinement_analytics(
         best_iteration=analysis["best_iteration"],
         quality_threshold=quality_threshold,
         max_iterations=max_iterations,
+        below_threshold_admitted=history.below_threshold_admitted,
     )

@@ -2276,3 +2276,282 @@ class TestSharedModeDatabasePattern:
         # mode_db should be the same object as mode.db (public property)
         assert container.mode_db is container.mode.db
         assert isinstance(container.mode_db, ModeDatabase)
+
+
+class TestHailMaryStats:
+    """Tests for hail_mary_stats table and related queries."""
+
+    @pytest.fixture
+    def db(self, tmp_path: Path) -> ModeDatabase:
+        """Create a test database."""
+        return ModeDatabase(tmp_path / "test_hail_mary.db")
+
+    def test_hail_mary_stats_table_exists(self, db: ModeDatabase) -> None:
+        """Test that hail_mary_stats table is created on init."""
+        with sqlite3.connect(db.db_path) as conn:
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = {row[0] for row in cursor.fetchall()}
+        assert "hail_mary_stats" in tables
+
+    def test_record_hail_mary_attempt_win(self, db: ModeDatabase) -> None:
+        """Test recording a winning hail-mary attempt."""
+        row_id = db.record_hail_mary_attempt(
+            entity_type="faction", won=True, best_score=6.5, hail_mary_score=7.8
+        )
+        assert row_id > 0
+        with sqlite3.connect(db.db_path) as conn:
+            row = conn.execute(
+                "SELECT entity_type, won, best_score, hail_mary_score "
+                "FROM hail_mary_stats WHERE id = ?",
+                (row_id,),
+            ).fetchone()
+        assert row == ("faction", 1, 6.5, 7.8)
+
+    def test_record_hail_mary_attempt_loss(self, db: ModeDatabase) -> None:
+        """Test recording a losing hail-mary attempt."""
+        row_id = db.record_hail_mary_attempt(
+            entity_type="location", won=False, best_score=7.0, hail_mary_score=5.5
+        )
+        assert row_id > 0
+        with sqlite3.connect(db.db_path) as conn:
+            row = conn.execute("SELECT won FROM hail_mary_stats WHERE id = ?", (row_id,)).fetchone()
+        assert row[0] == 0
+
+    def test_get_hail_mary_win_rate_insufficient_data(self, db: ModeDatabase) -> None:
+        """Win rate returns None when fewer than min_attempts recorded."""
+        for _ in range(5):
+            db.record_hail_mary_attempt(entity_type="item", won=False, best_score=7.0)
+        result = db.get_hail_mary_win_rate(entity_type="item", min_attempts=10)
+        assert result is None
+
+    def test_get_hail_mary_win_rate_sufficient_data(self, db: ModeDatabase) -> None:
+        """Win rate returns correct rate with sufficient data."""
+        for _ in range(8):
+            db.record_hail_mary_attempt(entity_type="concept", won=False, best_score=7.0)
+        for _ in range(2):
+            db.record_hail_mary_attempt(entity_type="concept", won=True, best_score=6.0)
+        result = db.get_hail_mary_win_rate(entity_type="concept", min_attempts=10)
+        assert result is not None
+        assert abs(result - 0.2) < 1e-9
+
+    def test_get_hail_mary_win_rate_filters_by_entity_type(self, db: ModeDatabase) -> None:
+        """Win rate query respects entity_type filter."""
+        for _ in range(10):
+            db.record_hail_mary_attempt(entity_type="faction", won=True, best_score=5.0)
+        for _ in range(10):
+            db.record_hail_mary_attempt(entity_type="item", won=False, best_score=7.0)
+        faction_rate = db.get_hail_mary_win_rate(entity_type="faction", min_attempts=10)
+        item_rate = db.get_hail_mary_win_rate(entity_type="item", min_attempts=10)
+        assert faction_rate == 1.0
+        assert item_rate == 0.0
+
+    def test_get_hail_mary_win_rate_overall(self, db: ModeDatabase) -> None:
+        """Win rate with no entity_type filter returns overall rate."""
+        for _ in range(5):
+            db.record_hail_mary_attempt(entity_type="faction", won=True, best_score=5.0)
+        for _ in range(5):
+            db.record_hail_mary_attempt(entity_type="item", won=False, best_score=7.0)
+        overall = db.get_hail_mary_win_rate(entity_type=None, min_attempts=10)
+        assert overall is not None
+        assert abs(overall - 0.5) < 1e-9
+
+
+class TestFirstPassRate:
+    """Tests for get_first_pass_rate query."""
+
+    @pytest.fixture
+    def db(self, tmp_path: Path) -> ModeDatabase:
+        """Create a test database."""
+        return ModeDatabase(tmp_path / "test_first_pass.db")
+
+    def test_first_pass_rate_insufficient_data(self, db: ModeDatabase) -> None:
+        """Returns None when fewer than min_records exist."""
+        for i in range(5):
+            db.record_world_entity_score(
+                project_id="p1",
+                entity_type="relationship",
+                entity_name=f"rel-{i}",
+                model_id="model-a",
+                scores={"average": 8.0},
+                iterations_used=1,
+                threshold_met=True,
+            )
+        result = db.get_first_pass_rate(entity_type="relationship", min_records=20)
+        assert result is None
+
+    def test_first_pass_rate_all_first_pass(self, db: ModeDatabase) -> None:
+        """Returns 1.0 when all entities pass on first iteration."""
+        for i in range(25):
+            db.record_world_entity_score(
+                project_id="p1",
+                entity_type="relationship",
+                entity_name=f"rel-{i}",
+                model_id="model-a",
+                scores={"average": 8.0},
+                iterations_used=1,
+                threshold_met=True,
+            )
+        result = db.get_first_pass_rate(entity_type="relationship", min_records=20)
+        assert result == 1.0
+
+    def test_first_pass_rate_mixed(self, db: ModeDatabase) -> None:
+        """Returns correct rate with mix of first-pass and multi-iteration entities."""
+        # 15 first-pass
+        for i in range(15):
+            db.record_world_entity_score(
+                project_id="p1",
+                entity_type="relationship",
+                entity_name=f"rel-pass-{i}",
+                model_id="model-a",
+                scores={"average": 8.0},
+                iterations_used=1,
+                threshold_met=True,
+            )
+        # 5 multi-iteration
+        for i in range(5):
+            db.record_world_entity_score(
+                project_id="p1",
+                entity_type="relationship",
+                entity_name=f"rel-multi-{i}",
+                model_id="model-a",
+                scores={"average": 7.5},
+                iterations_used=3,
+                threshold_met=True,
+            )
+        result = db.get_first_pass_rate(entity_type="relationship", min_records=20)
+        assert result is not None
+        assert abs(result - 0.75) < 1e-9
+
+    def test_first_pass_rate_filters_by_entity_type(self, db: ModeDatabase) -> None:
+        """First-pass rate respects entity_type filter."""
+        for i in range(25):
+            db.record_world_entity_score(
+                project_id="p1",
+                entity_type="relationship",
+                entity_name=f"rel-{i}",
+                model_id="model-a",
+                scores={"average": 8.0},
+                iterations_used=1,
+                threshold_met=True,
+            )
+        for i in range(25):
+            db.record_world_entity_score(
+                project_id="p1",
+                entity_type="location",
+                entity_name=f"loc-{i}",
+                model_id="model-a",
+                scores={"average": 6.0},
+                iterations_used=3,
+                threshold_met=False,
+            )
+        rel_rate = db.get_first_pass_rate(entity_type="relationship", min_records=20)
+        loc_rate = db.get_first_pass_rate(entity_type="location", min_records=20)
+        assert rel_rate == 1.0
+        assert loc_rate == 0.0
+
+
+class TestBelowThresholdAdmittedColumn:
+    """Tests for below_threshold_admitted column in world_entity_scores."""
+
+    @pytest.fixture
+    def db(self, tmp_path: Path) -> ModeDatabase:
+        """Create a test database."""
+        return ModeDatabase(tmp_path / "test_below_threshold.db")
+
+    def test_below_threshold_admitted_default_false(self, db: ModeDatabase) -> None:
+        """Column defaults to 0 (False) when not specified."""
+        db.record_world_entity_score(
+            project_id="p1",
+            entity_type="character",
+            entity_name="Hero",
+            model_id="model-a",
+            scores={"average": 8.0},
+        )
+        with sqlite3.connect(db.db_path) as conn:
+            row = conn.execute(
+                "SELECT below_threshold_admitted FROM world_entity_scores LIMIT 1"
+            ).fetchone()
+        assert row[0] == 0
+
+    def test_below_threshold_admitted_true(self, db: ModeDatabase) -> None:
+        """Column stores 1 when below_threshold_admitted=True."""
+        db.record_world_entity_score(
+            project_id="p1",
+            entity_type="faction",
+            entity_name="Guild",
+            model_id="model-a",
+            scores={"average": 5.0},
+            below_threshold_admitted=True,
+        )
+        with sqlite3.connect(db.db_path) as conn:
+            row = conn.execute(
+                "SELECT below_threshold_admitted FROM world_entity_scores LIMIT 1"
+            ).fetchone()
+        assert row[0] == 1
+
+    def test_below_threshold_admitted_false_explicit(self, db: ModeDatabase) -> None:
+        """Column stores 0 when below_threshold_admitted=False explicitly."""
+        db.record_world_entity_score(
+            project_id="p1",
+            entity_type="item",
+            entity_name="Sword",
+            model_id="model-a",
+            scores={"average": 9.0},
+            below_threshold_admitted=False,
+        )
+        with sqlite3.connect(db.db_path) as conn:
+            row = conn.execute(
+                "SELECT below_threshold_admitted FROM world_entity_scores LIMIT 1"
+            ).fetchone()
+        assert row[0] == 0
+
+
+class TestMinAttemptsValidation:
+    """Tests for input validation on rate-calculation functions."""
+
+    @pytest.fixture
+    def db(self, tmp_path: Path) -> ModeDatabase:
+        """Create a test database."""
+        return ModeDatabase(tmp_path / "test_validation.db")
+
+    def test_hail_mary_win_rate_rejects_zero_min_attempts(self, db: ModeDatabase) -> None:
+        """get_hail_mary_win_rate raises ValueError for min_attempts=0."""
+        with pytest.raises(ValueError, match="min_attempts must be >= 1"):
+            db.get_hail_mary_win_rate(entity_type="faction", min_attempts=0)
+
+    def test_hail_mary_win_rate_rejects_negative_min_attempts(self, db: ModeDatabase) -> None:
+        """get_hail_mary_win_rate raises ValueError for negative min_attempts."""
+        with pytest.raises(ValueError, match="min_attempts must be >= 1"):
+            db.get_hail_mary_win_rate(entity_type="faction", min_attempts=-1)
+
+    def test_first_pass_rate_rejects_zero_min_records(self, db: ModeDatabase) -> None:
+        """get_first_pass_rate raises ValueError for min_records=0."""
+        with pytest.raises(ValueError, match="min_records must be >= 1"):
+            db.get_first_pass_rate(entity_type="character", min_records=0)
+
+    def test_first_pass_rate_rejects_negative_min_records(self, db: ModeDatabase) -> None:
+        """get_first_pass_rate raises ValueError for negative min_records."""
+        with pytest.raises(ValueError, match="min_records must be >= 1"):
+            db.get_first_pass_rate(entity_type="character", min_records=-1)
+
+
+class TestRecordHailMarySqliteError:
+    """Test that record_hail_mary_attempt logs and re-raises sqlite3.Error."""
+
+    @pytest.fixture
+    def db(self, tmp_path: Path) -> ModeDatabase:
+        """Create a test database."""
+        return ModeDatabase(tmp_path / "test_hail_mary_error.db")
+
+    def test_record_hail_mary_attempt_logs_and_reraises_sqlite_error(
+        self, db: ModeDatabase
+    ) -> None:
+        """record_hail_mary_attempt logs the error and re-raises on sqlite3.Error."""
+        import sqlite3
+        from unittest.mock import patch
+
+        with patch("sqlite3.connect", side_effect=sqlite3.OperationalError("disk I/O error")):
+            with pytest.raises(sqlite3.OperationalError, match="disk I/O error"):
+                db.record_hail_mary_attempt(
+                    entity_type="faction", won=True, best_score=6.0, hail_mary_score=7.5
+                )

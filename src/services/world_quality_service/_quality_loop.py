@@ -10,10 +10,13 @@ to discard likely LLM parse failures (all-zero dimension scores).
 import logging
 import time
 from collections.abc import Callable
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from src.memory.world_quality import BaseQualityScores, RefinementConfig, RefinementHistory
 from src.utils.exceptions import WorldGenerationError
+
+if TYPE_CHECKING:
+    from src.services.world_quality_service import WorldQualityService
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +58,10 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     is_empty: Callable[[T], bool],
     score_cls: type[S],
     config: RefinementConfig,
-    svc,
+    svc: WorldQualityService,
     story_id: str,
     initial_entity: T | None = None,
+    auto_pass_score: S | None = None,
 ) -> tuple[T, S, int]:
     """Run the quality refinement loop for any entity type.
 
@@ -79,6 +83,10 @@ def quality_refinement_loop[T, S: BaseQualityScores](
         svc: WorldQualityService instance (for analytics logging).
         story_id: Project/story ID for analytics.
         initial_entity: If provided, skip creation and start with this entity (review mode).
+        auto_pass_score: If provided, skip the entire judge/refine loop — create
+            the entity and return immediately with this score and scoring_rounds=0.
+            Used when historical data shows the judge is nearly always a no-op
+            (e.g. relationship first-pass rate >= 95%).
 
     Returns:
         Tuple of (best_entity, best_scores, scoring_rounds) where scoring_rounds
@@ -89,6 +97,56 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     """
     # Resolve per-entity threshold
     entity_threshold = config.get_threshold(entity_type)
+    entity: T | None = initial_entity
+
+    # Auto-pass: skip the entire judge/refine loop when historical data shows
+    # the judge is nearly always a no-op (e.g. relationship first-pass rate >= 95%).
+    if auto_pass_score is not None:
+        t_create = time.perf_counter()
+        entity = create_fn(0) if entity is None else entity
+        if entity is not None and not is_empty(entity):
+            logger.info(
+                "%s '%s' auto-passed (creation took %.2fs, scoring_rounds=0)",
+                entity_type.capitalize(),
+                get_name(entity),
+                time.perf_counter() - t_create,
+            )
+            history = RefinementHistory(entity_type=entity_type, entity_name=get_name(entity))
+            history.add_iteration(
+                entity_data=serialize(entity),
+                scores=auto_pass_score.to_dict(),
+                average_score=auto_pass_score.average,
+                feedback=auto_pass_score.feedback,
+            )
+            history.final_iteration = 1
+            history.final_score = auto_pass_score.average
+            # Compute threshold_met from actual score vs configured threshold,
+            # using the same rounding precision as the rest of the loop.
+            rounded_auto = round(auto_pass_score.average, 1)
+            auto_threshold_met = rounded_auto >= entity_threshold
+            if not auto_threshold_met:
+                history.below_threshold_admitted = True
+                logger.warning(
+                    "%s '%s' auto-pass score %.1f is below threshold %.1f; "
+                    "admitting below threshold",
+                    entity_type.capitalize(),
+                    get_name(entity),
+                    auto_pass_score.average,
+                    entity_threshold,
+                )
+            svc._log_refinement_analytics(
+                history,
+                story_id,
+                threshold_met=auto_threshold_met,
+                early_stop_triggered=False,
+                quality_threshold=entity_threshold,
+                max_iterations=config.max_iterations,
+            )
+            return entity, auto_pass_score, 0
+        logger.warning(
+            "%s auto-pass creation returned empty entity, falling through to full loop",
+            entity_type.capitalize(),
+        )
 
     logger.info(
         "Starting quality refinement loop for %s (threshold=%.1f, max_iterations=%d, "
@@ -101,7 +159,6 @@ def quality_refinement_loop[T, S: BaseQualityScores](
 
     history = RefinementHistory(entity_type=entity_type, entity_name="")
     iteration = 0
-    entity: T | None = initial_entity
     scores: S | None = None
     last_error: str = ""
     creation_retries = 0
@@ -283,6 +340,34 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                 {k: f"{v:.1f}" for k, v in scores.to_dict().items() if isinstance(v, float)},
             )
 
+            # Monotonicity guard: when a refinement degrades the entity, revert
+            # to the best iteration's entity before the next refinement cycle.
+            # This prevents wasting a refinement+judge cycle on a degraded entity
+            # while still letting the patience mechanism handle persistent degradation.
+            if scores.average < history.peak_score and history.best_iteration != current_iter:
+                best_entity_data_snap = history.get_best_entity()
+                if best_entity_data_snap:
+                    entity = _reconstruct_entity(best_entity_data_snap, entity, entity_type)
+                    logger.info(
+                        "%s '%s' score regressed (%.1f < %.1f), reverting to best "
+                        "iteration %d for next refinement",
+                        entity_type.capitalize(),
+                        get_name(entity),
+                        scores.average,
+                        history.peak_score,
+                        history.best_iteration,
+                    )
+                else:
+                    logger.warning(
+                        "%s '%s' score regressed (%.1f < %.1f) but could not retrieve "
+                        "best entity data for revert (best_iteration=%d)",
+                        entity_type.capitalize(),
+                        get_name(entity),
+                        scores.average,
+                        history.peak_score,
+                        history.best_iteration,
+                    )
+
             # Threshold check — round to 1 decimal so the comparison matches
             # the %.1f log display (e.g. 7.46 rounds to 7.5, passes >= 7.5).
             rounded_score = round(scores.average, 1)
@@ -435,6 +520,32 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                     weakest_score,
                 )
 
+        # Win-rate gate: skip hail-mary if historical win rate is too low.
+        if not skip_hail_mary:
+            try:
+                win_rate = svc.analytics_db.get_hail_mary_win_rate(
+                    entity_type=entity_type, min_attempts=10
+                )
+                if isinstance(win_rate, (int, float)) and win_rate < 0.20:
+                    skip_hail_mary = True
+                    logger.info(
+                        "%s '%s': skipping hail-mary — win rate %.0f%% is below 20%% threshold",
+                        entity_type.capitalize(),
+                        history.entity_name,
+                        win_rate * 100,
+                    )
+            except AttributeError, TypeError:
+                logger.debug(
+                    "Could not query hail-mary win rate for %s, proceeding with hail-mary",
+                    entity_type,
+                )
+            except Exception:
+                logger.warning(
+                    "Hail-mary win-rate query failed for %s, proceeding with hail-mary",
+                    entity_type,
+                    exc_info=True,
+                )
+
         if not skip_hail_mary:
             logger.info(
                 "%s '%s': threshold not met (best=%.1f < %.1f), "
@@ -464,7 +575,30 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                             fresh_scores.average,
                             history.peak_score,
                         )
-                    if not hail_mary_zero and fresh_scores.average > history.peak_score:
+                    hail_mary_won = not hail_mary_zero and fresh_scores.average > history.peak_score
+                    # Record hail-mary attempt for win-rate tracking
+                    if not hail_mary_zero:
+                        try:
+                            svc.analytics_db.record_hail_mary_attempt(
+                                entity_type=entity_type,
+                                won=hail_mary_won,
+                                best_score=history.peak_score,
+                                hail_mary_score=fresh_scores.average,
+                            )
+                        except AttributeError:
+                            logger.debug(
+                                "Could not record hail-mary attempt for %s (analytics_db "
+                                "unavailable)",
+                                entity_type,
+                            )
+                        except Exception:
+                            logger.warning(
+                                "%s '%s': failed to record hail-mary analytics; continuing",
+                                entity_type.capitalize(),
+                                history.entity_name,
+                                exc_info=True,
+                            )
+                    if hail_mary_won:
                         logger.info(
                             "%s hail-mary beats previous best! Using fresh entity.",
                             entity_type.capitalize(),
@@ -514,6 +648,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     if best_entity_data:
         threshold_met = round(history.peak_score, 1) >= entity_threshold
         if not threshold_met:
+            history.below_threshold_admitted = True
             logger.warning(
                 "%s '%s' did not meet quality threshold after %d scoring round(s) "
                 "(best: %.1f, threshold: %.1f). Returning best iteration %d.",
@@ -601,7 +736,7 @@ def _reconstruct_entity[T](entity_data: dict, current_entity: T, entity_type: st
     """
     if isinstance(current_entity, dict):
         logger.debug("Reconstructing %s from dict data", entity_type)
-        return cast(T, entity_data)
+        return cast(T, dict(entity_data))
     # Pydantic model — reconstruct from dict
     entity_cls = type(current_entity)
     logger.debug("Reconstructing %s as %s from stored data", entity_type, entity_cls.__name__)
