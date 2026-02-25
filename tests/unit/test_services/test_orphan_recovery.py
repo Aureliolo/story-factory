@@ -529,6 +529,6 @@ class TestRecoverOrphansEntityIdResolution:
 
         count = _recover_orphans(mock_svc, story_state, mock_world_db, mock_services)
 
-        # Fuzzy matching may or may not resolve these names — either outcome is valid.
-        # The key assertion is that the code doesn't crash and the fuzzy branch executes.
-        assert count >= 0
+        # "Brave Warrior" does not fuzzy-match "Hero" and "Dark Castle" does not
+        # match "Castle" — no orphan recovery relationships should be created.
+        assert count == 0

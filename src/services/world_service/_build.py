@@ -16,7 +16,11 @@ from src.services.world_service._lifecycle_helpers import (
 )
 from src.services.world_service._name_matching import _find_entity_by_name
 from src.services.world_service._orphan_recovery import _recover_orphans
-from src.utils.exceptions import GenerationCancelledError, WorldGenerationError
+from src.utils.exceptions import (
+    DatabaseClosedError,
+    GenerationCancelledError,
+    WorldGenerationError,
+)
 from src.utils.validation import validate_not_none, validate_type
 
 if TYPE_CHECKING:
@@ -154,7 +158,7 @@ def build_world(
                     calendar_iterations,
                     calendar_scores.average,
                 )
-            except GenerationCancelledError:
+            except GenerationCancelledError, DatabaseClosedError:
                 raise
             except Exception as e:
                 logger.warning("Calendar generation failed (non-fatal), continuing without: %s", e)
@@ -392,7 +396,7 @@ def _build_world_entities(
                 result.error_count,
                 result.warning_count,
             )
-        except GenerationCancelledError:
+        except GenerationCancelledError, DatabaseClosedError:
             raise
         except Exception as e:
             logger.warning("Temporal validation failed (non-fatal): %s", e, exc_info=True)
@@ -403,6 +407,8 @@ def _build_world_entities(
     try:
         embed_counts = services.embedding.embed_all_world_data(world_db, state)
         logger.info("World embedding complete: %s", embed_counts)
+    except GenerationCancelledError, DatabaseClosedError:
+        raise
     except Exception as e:
         logger.warning(
             "World embedding failed (non-fatal), RAG context unavailable: %s", e, exc_info=True

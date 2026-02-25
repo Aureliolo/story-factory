@@ -15,6 +15,7 @@ from src.memory.entities import Entity
 from src.memory.story_state import StoryState
 from src.memory.world_database import WorldDatabase
 from src.services.world_service._name_matching import _find_entity_by_name
+from src.utils.exceptions import DatabaseClosedError, GenerationCancelledError
 
 if TYPE_CHECKING:
     from src.services import ServiceContainer
@@ -46,8 +47,12 @@ def _parse_lifecycle_sub(value: Any) -> dict[str, Any] | None:
             parsed = json.loads(value)
             if isinstance(parsed, dict):
                 return parsed
-        except json.JSONDecodeError, TypeError:
-            pass
+        except (json.JSONDecodeError, TypeError) as exc:
+            logger.debug(
+                "Failed to parse lifecycle sub-entry as JSON: %r (%s)",
+                value[:100],
+                exc,
+            )
     return None
 
 
@@ -299,6 +304,8 @@ def _generate_events(
                 event_scores.average,
                 len(participants),
             )
+        except GenerationCancelledError, DatabaseClosedError:
+            raise
         except Exception as exc:
             logger.error(
                 "Failed to add event to database (non-fatal), skipping: %s",

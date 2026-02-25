@@ -1292,8 +1292,8 @@ class TestLLMRelationTypeClassification:
             assert len(_llm_classification_cache) == 1
             assert _llm_classification_cache["deep ancestral link"] == ""
 
-    def test_key_error_returns_none_without_caching(self):
-        """KeyError from response parsing should return None without caching."""
+    def test_key_error_returns_none_with_negative_caching(self):
+        """KeyError from response parsing should return None and cache negative result."""
         from src.services.world_quality_service._relationship import (
             _classify_relation_type_with_llm,
             _llm_classification_cache,
@@ -1308,9 +1308,10 @@ class TestLLMRelationTypeClassification:
         result = _classify_relation_type_with_llm(svc, "arcane connection")
         assert result is None
 
-        # Should NOT be cached (parsing errors are not cached)
+        # Should be cached with empty-string sentinel to avoid repeated LLM calls
         with _llm_classification_cache_lock:
-            assert "arcane connection" not in _llm_classification_cache
+            assert "arcane connection" in _llm_classification_cache
+            assert _llm_classification_cache["arcane connection"] == ""
 
 
 # =========================================================================
@@ -1467,14 +1468,14 @@ class TestNormalizationConsolidation:
         }
 
         # This should NOT reject the relationship because _normalize_name
-        # strips "The " and matches "castle" == "castle"
+        # strips "The " and matches "castle" == "castle".
+        # May raise because judge mock isn't fully set up,
+        # but the key test is that _create_ succeeded (not rejected by _is_empty).
         try:
             generate_relationship_with_quality(
                 svc, story_state, ["The Castle", "Alice"], [], required_entity="Castle"
             )
-        except WorldGenerationError, Exception:
-            # May raise because judge mock isn't fully set up,
-            # but the key test is that _create_ succeeded (not rejected by _is_empty)
+        except Exception:
             pass
 
         # Ensure the creator was actually invoked, proving the relationship was not

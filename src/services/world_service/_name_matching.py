@@ -48,7 +48,7 @@ def _deep_normalize(name: str) -> str:
 
     Extends ``_normalize_name`` with additional transformations:
     - Strip possessives ("'s", "s'")
-    - Normalize abbreviation punctuation ("A.P." -> "AP", "A. P." -> "AP")
+    - Normalize abbreviation punctuation ("A.P." -> "ap", "A. P." -> "a p")
     - Strip trailing punctuation
     - Collapse whitespace
 
@@ -134,6 +134,8 @@ def _find_entity_by_name(
     similarity_matches: list[tuple[Entity, float]] = []
     for e in entities:
         deep_candidate = _deep_normalize(e.name)
+        if not deep_candidate:
+            continue
         score = calculate_name_similarity(deep_target, deep_candidate)
         if score >= threshold:
             similarity_matches.append((e, score))

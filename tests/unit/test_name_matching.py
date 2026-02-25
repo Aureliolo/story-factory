@@ -158,9 +158,9 @@ class TestSimilarityFallback:
         """Abbreviation normalization should help similarity matching."""
         entities = [_make_entity("AP Society")]
         result = _find_entity_by_name(entities, "A.P. Society", threshold=0.8)
-        # After normalization, "A.P. Society" becomes "ap society"
-        # The entity also normalizes to "ap society"
-        # This should match via normalized comparison (step 2), not even needing similarity
+        # _normalize_name doesn't strip abbreviation dots, so step 2 won't match.
+        # _deep_normalize("A.P. Society") = "ap society" and
+        # _deep_normalize("AP Society") = "ap society" -> exact similarity -> match via step 3.
         assert result is not None
         assert result.name == "AP Society"
 
@@ -226,13 +226,9 @@ class TestFindEntityByNameExisting:
 
     def test_threshold_is_required(self):
         """threshold parameter must be explicitly provided (no default)."""
-        # Verify by calling without threshold — should raise TypeError
         entities = [_make_entity("Glacial Whisper")]
-        try:
+        with pytest.raises(TypeError, match="threshold"):
             _find_entity_by_name(entities, "Glacial Whisper")  # type: ignore[call-arg]
-            raise AssertionError("Expected TypeError for missing threshold parameter")
-        except TypeError as e:
-            assert "threshold" in str(e)
 
     def test_threshold_out_of_range_raises_value_error(self):
         """Threshold outside [0.0, 1.0] should raise ValueError."""

@@ -172,7 +172,8 @@ _CONFLICT_PRIORITY: dict[ConflictCategory, int] = {
     ConflictCategory.NEUTRAL: 0,
 }
 _missing_priorities = set(ConflictCategory) - set(_CONFLICT_PRIORITY)
-assert not _missing_priorities, f"_CONFLICT_PRIORITY missing categories: {_missing_priorities}"
+if _missing_priorities:
+    raise RuntimeError(f"_CONFLICT_PRIORITY missing categories: {_missing_priorities}")
 
 # Word-level lookup: individual words that strongly signal a known relationship type.
 # Used as a last-resort fallback when substring matching fails on novel compound types.
@@ -334,9 +335,8 @@ def normalize_relation_type(raw_type: str) -> str:
 
 # Load-time assertion: every _WORD_TO_RELATION value must be a key in RELATION_CONFLICT_MAPPING
 _invalid_word_targets = set(_WORD_TO_RELATION.values()) - set(RELATION_CONFLICT_MAPPING)
-assert not _invalid_word_targets, (
-    f"_WORD_TO_RELATION references unknown types: {_invalid_word_targets}"
-)
+if _invalid_word_targets:
+    raise RuntimeError(f"_WORD_TO_RELATION references unknown types: {_invalid_word_targets}")
 
 
 # Colors for conflict visualization (consistent with theme.py patterns)

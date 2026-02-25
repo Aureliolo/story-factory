@@ -117,6 +117,10 @@ def _classify_relation_type_with_llm(svc: WorldQualityService, raw_type: str) ->
             raw_type,
             e,
         )
+        with _llm_classification_cache_lock:
+            if len(_llm_classification_cache) >= _LLM_CACHE_MAX_SIZE:
+                _llm_classification_cache.clear()
+            _llm_classification_cache[cache_key] = ""
         return None
 
 
