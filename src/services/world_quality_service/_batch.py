@@ -187,13 +187,15 @@ def _generate_batch[T, S: BaseQualityScores](
             logger.info("Generating %s %d/%d with quality refinement", entity_type, i + 1, count)
             entity, scores, iterations = generate_fn(i)
             entity_elapsed = time.time() - entity_start
-            completed_times.append(entity_elapsed)
-            results.append((entity, scores))
-            consecutive_failures = 0
             entity_name = get_name(entity)
 
             if on_success:
                 on_success(entity)
+
+            # Only count as success after get_name and on_success pass
+            completed_times.append(entity_elapsed)
+            results.append((entity, scores))
+            consecutive_failures = 0
 
             logger.info(
                 "%s '%s' complete after %d iteration(s), quality: %.1f, generation_time: %.2fs",

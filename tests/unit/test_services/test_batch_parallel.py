@@ -259,6 +259,38 @@ class TestGenerateBatchParallel:
         # Sequential: indices should be in order
         assert call_indices == [0, 1, 2]
 
+    def test_sequential_on_success_rejection_excludes_entity(self, mock_svc):
+        """Sequential path (max_workers=1) excludes entities rejected by on_success."""
+        call_count = 0
+
+        def gen_fn(_i):
+            """Generate entities."""
+            nonlocal call_count
+            call_count += 1
+            return ({"name": f"E{call_count}"}, _make_char_scores(8.0), 1)
+
+        def reject_second(entity):
+            """Reject the second entity."""
+            if entity["name"] == "E2":
+                raise WorldGenerationError("Duplicate rejected")
+
+        results = _generate_batch_parallel(
+            svc=mock_svc,
+            count=3,
+            entity_type="test",
+            generate_fn=gen_fn,
+            get_name=lambda e: e["name"],
+            on_success=reject_second,
+            quality_threshold=7.5,
+            max_workers=1,
+        )
+
+        # E2 should be excluded; E1 and E3 should be present
+        result_names = [r[0]["name"] for r in results]
+        assert "E2" not in result_names
+        assert "E1" in result_names
+        assert "E3" in result_names
+
     def test_zero_count_returns_empty(self, mock_svc):
         """count=0 returns empty list without calling generate_fn."""
         gen_fn = MagicMock()
