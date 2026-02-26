@@ -671,6 +671,35 @@ class TestEmbedRelationship:
         assert embedded_text.startswith("Alice allied_with Bob: ")
         assert any("Truncating relationship description" in r.message for r in caplog.records)
 
+    def test_embed_relationship_empty_description_when_header_exceeds_budget(
+        self, service, mock_db, caplog
+    ):
+        """Description is cleared when entity names alone exceed the embedding budget."""
+        long_name_rel = Relationship(
+            id="rel-overflow",
+            source_id="ent-001",
+            target_id="ent-002",
+            relation_type="allied_with",
+            description="Some description",
+        )
+        mock_client = MagicMock()
+        mock_embed_text = MagicMock(return_value=FAKE_EMBEDDING)
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            # Tiny context so header alone exceeds budget
+            patch("src.services.embedding_service.get_model_context_size", return_value=1),
+            patch("src.services.embedding_service.get_embedding_prefix", return_value=""),
+            patch.object(service, "embed_text", mock_embed_text),
+            caplog.at_level(logging.WARNING),
+        ):
+            result = service.embed_relationship(mock_db, long_name_rel, "Alice", "Bob")
+
+        assert result is True
+        # The text should contain the header but no description
+        embedded_text = mock_embed_text.call_args[0][0]
+        assert embedded_text.endswith(": ")
+        assert any("exceeds embedding budget" in r.message for r in caplog.records)
+
 
 # ---------------------------------------------------------------------------
 # embed_event tests
