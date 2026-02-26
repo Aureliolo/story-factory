@@ -563,6 +563,17 @@ class TestGetModelContextSize:
         # Should NOT be cached — next call should retry
         assert "bad-meta-model:8b" not in _model_context_cache
 
+    def test_get_model_context_size_caches_none_on_response_error(self):
+        """Test that ollama.ResponseError is cached as None (model doesn't support query)."""
+        mock_client = MagicMock()
+        mock_client.show.side_effect = ollama.ResponseError("model not found")
+
+        result = get_model_context_size(mock_client, "missing-model:8b")
+        assert result is None
+        # ResponseError should be cached — model genuinely doesn't support it
+        assert "missing-model:8b" in _model_context_cache
+        assert _model_context_cache["missing-model:8b"] is None
+
     def test_get_model_context_size_double_check_lock(self):
         """Test double-checked locking when cache is populated during lock acquisition."""
         mock_client = MagicMock()
