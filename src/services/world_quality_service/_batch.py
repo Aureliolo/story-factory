@@ -187,13 +187,15 @@ def _generate_batch[T, S: BaseQualityScores](
             logger.info("Generating %s %d/%d with quality refinement", entity_type, i + 1, count)
             entity, scores, iterations = generate_fn(i)
             entity_elapsed = time.time() - entity_start
-            completed_times.append(entity_elapsed)
-            results.append((entity, scores))
-            consecutive_failures = 0
             entity_name = get_name(entity)
 
             if on_success:
                 on_success(entity)
+
+            # Only count as success after get_name and on_success pass
+            completed_times.append(entity_elapsed)
+            results.append((entity, scores))
+            consecutive_failures = 0
 
             logger.info(
                 "%s '%s' complete after %d iteration(s), quality: %.1f, generation_time: %.2fs",
@@ -650,6 +652,13 @@ def generate_relationships_with_quality(
 ) -> list[tuple[dict[str, Any], RelationshipQualityScores]]:
     """Generate multiple relationships with quality refinement.
 
+    Uses parallel generation (up to ``llm_max_concurrent_requests`` workers)
+    with a thread-safe deduplication list. Each worker gets a point-in-time
+    snapshot of existing relationships; the ``_is_duplicate_relationship()``
+    check in the quality refinement loop rejects duplicates from the snapshot,
+    and the atomic ``append_if_new_pair()`` dedup catches any duplicates that
+    concurrent workers may produce from identical snapshots.
+
     Args:
         svc: WorldQualityService instance.
         story_state: Current story state.
@@ -665,18 +674,34 @@ def generate_relationships_with_quality(
     Raises:
         WorldGenerationError: If no relationships could be generated.
     """
-    rels: list[tuple[str, str, str]] = existing_rels.copy()
-    return _generate_batch(
+    from src.services.world_quality_service._batch_parallel import (
+        _generate_batch_parallel,
+        _ThreadSafeRelsList,
+    )
+
+    safe_rels = _ThreadSafeRelsList(existing_rels)
+    max_workers = min(svc.settings.llm_max_concurrent_requests, count)
+
+    def _on_relationship_success(r: dict[str, Any]) -> None:
+        """Atomic dedup: reject if a concurrent worker already produced this pair."""
+        accepted = safe_rels.append_if_new_pair((r["source"], r["target"], r["relation_type"]))
+        if not accepted:
+            raise WorldGenerationError(
+                f"Duplicate relationship from parallel worker: {r['source']} -> {r['target']}"
+            )
+
+    return _generate_batch_parallel(
         svc=svc,
         count=count,
         entity_type="relationship",
         generate_fn=lambda _i: svc.generate_relationship_with_quality(
-            story_state, entity_names, rels
+            story_state, entity_names, safe_rels.snapshot()
         ),
         get_name=lambda r: f"{r['source']} -> {r['target']}",
-        on_success=lambda r: rels.append((r["source"], r["target"], r["relation_type"])),
+        on_success=_on_relationship_success,
         cancel_check=cancel_check,
         progress_callback=progress_callback,
+        max_workers=max_workers,
     )
 
 

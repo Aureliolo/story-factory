@@ -2,6 +2,7 @@
 
 import json
 import logging
+import sqlite3
 import threading
 from collections import Counter
 from typing import TYPE_CHECKING, Any
@@ -252,9 +253,18 @@ def generate_relationship_with_quality(
         )
     except AttributeError, TypeError:
         logger.debug("Relationship auto-pass check skipped: analytics API unavailable")
-    except Exception:
+    except (sqlite3.Error, OSError) as e:
         logger.warning(
-            "Relationship auto-pass check failed; continuing without auto-pass",
+            "Relationship auto-pass check failed (database error: %s); "
+            "continuing without auto-pass",
+            e,
+            exc_info=True,
+        )
+    except Exception as e:
+        logger.warning(
+            "Relationship auto-pass check failed (unexpected error: %s); "
+            "continuing without auto-pass",
+            e,
             exc_info=True,
         )
     if isinstance(first_pass_rate, (int, float)) and first_pass_rate >= 0.95:
@@ -547,6 +557,13 @@ def _create_relationship(
 
     calendar_context = svc.get_calendar_context()
 
+    bridging_directive = ""
+    if unused_pairs_block:
+        bridging_directive = (
+            f"{unused_pairs_block}\n\n"
+            "You MUST choose a pair from the AVAILABLE UNUSED PAIRS list above.\n"
+        )
+
     prompt = f"""Create a compelling relationship between entities for a {brief.genre} story.
 
 STORY PREMISE: {brief.premise}
@@ -555,9 +572,9 @@ THEMES: {", ".join(brief.themes)}
 {calendar_context}
 AVAILABLE ENTITIES: {", ".join(entity_names)}
 
-FORBIDDEN ENTITY PAIRS (you MUST NOT use any of these pairs in either direction):
-{existing_pairs_block}{unused_pairs_block}
-{required_entity_block}
+FORBIDDEN ENTITY PAIRS - THESE ALREADY EXIST (selecting any is an ERROR that wastes resources):
+{existing_pairs_block}
+{required_entity_block}{bridging_directive}
 Create a relationship with:
 1. Tension - conflict potential
 2. Complex dynamics - power balance, history

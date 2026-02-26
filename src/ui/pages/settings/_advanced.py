@@ -360,6 +360,18 @@ def build_circuit_breaker_section(page: SettingsPage) -> None:
 
         with ui.row().classes("items-center gap-3 flex-wrap"):
             with ui.column().classes("gap-1"):
+                ui.label("Max Concurrent").classes("text-xs text-gray-500")
+                page._llm_max_concurrent_requests_input = page._build_number_input(
+                    value=page.settings.llm_max_concurrent_requests,
+                    min_val=1,
+                    max_val=10,
+                    step=1,
+                    tooltip_text="Max concurrent LLM requests (1-10). "
+                    "Higher values speed up parallel generation but use more VRAM.",
+                    width="w-16",
+                )
+
+            with ui.column().classes("gap-1"):
                 ui.label("Queue Timeout").classes("text-xs text-gray-500")
                 page._llm_semaphore_timeout_input = page._build_number_input(
                     value=page.settings.llm_semaphore_timeout,
@@ -855,6 +867,7 @@ def save_to_settings(page: SettingsPage) -> None:
         ("_judge_outlier_detection_switch", "judge_outlier_detection", None),
         ("_judge_outlier_std_threshold_input", "judge_outlier_std_threshold", float),
         ("_judge_outlier_strategy_select", "judge_outlier_strategy", None),
+        ("_llm_max_concurrent_requests_input", "llm_max_concurrent_requests", int),
         ("_llm_semaphore_timeout_input", "llm_semaphore_timeout", int),
         # Small model timeout cap
         ("_small_model_size_threshold_input", "small_model_size_threshold_gb", float),
@@ -943,6 +956,7 @@ def refresh_from_settings(page: SettingsPage) -> None:
         ("_judge_outlier_detection_switch", "judge_outlier_detection"),
         ("_judge_outlier_std_threshold_input", "judge_outlier_std_threshold"),
         ("_judge_outlier_strategy_select", "judge_outlier_strategy"),
+        ("_llm_max_concurrent_requests_input", "llm_max_concurrent_requests"),
         ("_llm_semaphore_timeout_input", "llm_semaphore_timeout"),
         # Small model timeout cap
         ("_small_model_size_threshold_input", "small_model_size_threshold_gb"),

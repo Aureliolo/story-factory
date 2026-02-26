@@ -655,6 +655,7 @@ class TestExistingRelsIncludeTypes:
         svc = MagicMock()
         svc.get_config.return_value.get_threshold.return_value = 7.0
         svc._calculate_eta.return_value = 0.0
+        svc.settings.llm_max_concurrent_requests = 1  # Sequential: test expects ordered rels
 
         # Capture the rels list passed to generate_fn
         captured_rels = []
@@ -1772,3 +1773,62 @@ class TestRelationshipAutoPass:
         assert iterations >= 1
         svc._judge_relationship_quality.assert_called()
         assert any("Relationship auto-pass check failed" in msg for msg in caplog.messages)
+
+    def test_auto_pass_sqlite_error_falls_through_to_judge(self, story_state, caplog):
+        """Auto-pass logs warning and falls through to judge when analytics raises sqlite3.Error."""
+        import logging
+        import sqlite3
+
+        from src.memory.world_quality._story_scores import RelationshipQualityScores
+        from src.services.world_quality_service._relationship import (
+            generate_relationship_with_quality,
+        )
+
+        svc = MagicMock()
+        analytics_db = MagicMock()
+        analytics_db.get_first_pass_rate.side_effect = sqlite3.OperationalError("disk I/O error")
+        svc.analytics_db = analytics_db
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc._get_judge_model.return_value = "test-model:8b"
+        svc.get_calendar_context.return_value = ""
+        svc._log_refinement_analytics = MagicMock()
+        config = MagicMock()
+        config.creator_temperature = 0.9
+        config.judge_temperature = 0.1
+        config.get_threshold.return_value = 7.0
+        config.get_refinement_temperature.return_value = 0.7
+        config.max_iterations = 1
+        config.early_stopping_patience = 2
+        config.early_stopping_min_iterations = 1
+        config.temperature_decay_rate = 0.0
+        svc.get_config = MagicMock(return_value=config)
+
+        judge_config = MagicMock()
+        judge_config.enabled = False
+        judge_config.multi_call_enabled = False
+        svc.get_judge_config = MagicMock(return_value=judge_config)
+
+        svc._create_relationship = MagicMock(
+            return_value={
+                "source": "Alpha",
+                "target": "Beta",
+                "relation_type": "allies_with",
+                "description": "They are allies",
+            }
+        )
+        judge_scores = RelationshipQualityScores(
+            tension=8.0, dynamics=8.0, story_potential=8.0, authenticity=8.0, feedback="Good"
+        )
+        svc._judge_relationship_quality = MagicMock(return_value=judge_scores)
+        svc._refine_relationship = MagicMock()
+
+        entity_names = ["Alpha", "Beta"]
+        with caplog.at_level(logging.WARNING):
+            _rel, _scores, iterations = generate_relationship_with_quality(
+                svc, story_state, entity_names, []
+            )
+
+        # sqlite3.Error should be caught with "database error" message
+        assert iterations >= 1
+        svc._judge_relationship_quality.assert_called()
+        assert any("database error" in msg for msg in caplog.messages)
