@@ -34,6 +34,7 @@ class Character(BaseModel):
     birth_year: int | None = None
     death_year: int | None = None
     birth_era: str | None = None
+    death_era: str | None = None
     temporal_notes: str = ""
 
     @field_validator("personality_traits", mode="before")
@@ -755,6 +756,7 @@ class CharacterCreation(BaseModel):
     birth_year: int | None = None
     death_year: int | None = None
     birth_era: str | None = None
+    death_era: str | None = None
     temporal_notes: str = ""
 
     @field_validator("personality_traits", mode="before")

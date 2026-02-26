@@ -28,6 +28,9 @@ from src.settings._utils import get_installed_models_with_sizes
 # Configure module logger
 logger = logging.getLogger(__name__)
 
+# Track models for which we've already logged timeout scaling info
+_logged_timeout_models: set[str] = set()
+
 # Default per-entity quality thresholds — used by migration to populate empty dicts.
 # Primary types (character-concept) are displayed prominently in the Settings UI.
 # Secondary types (relationship, plot, chapter) use the same default as most primary
@@ -871,5 +874,7 @@ class Settings:
         if size_gb < self.small_model_size_threshold_gb:
             scaled = min(scaled, self.small_model_timeout_cap)
 
-        logger.debug(f"Timeout for {model_id}: {scaled:.0f}s (size={size_gb:.1f}GB)")
+        if model_id not in _logged_timeout_models:
+            logger.debug(f"Timeout for {model_id}: {scaled:.0f}s (size={size_gb:.1f}GB)")
+            _logged_timeout_models.add(model_id)
         return scaled

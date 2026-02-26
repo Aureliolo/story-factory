@@ -19,13 +19,14 @@ class TestBuildCharacterLifecycle:
             birth_year=100,
             death_year=200,
             birth_era="First Age",
+            death_era="Third Age",
             temporal_notes="Some notes",
         )
         result = build_character_lifecycle(char)
         assert result == {
             "lifecycle": {
                 "birth": {"year": 100, "era_name": "First Age"},
-                "death": {"year": 200},
+                "death": {"year": 200, "era_name": "Third Age"},
                 "temporal_notes": "Some notes",
             }
         }
@@ -83,6 +84,29 @@ class TestBuildCharacterLifecycle:
         )
         result = build_character_lifecycle(char)
         assert result == {"lifecycle": {"death": {"year": 500}}}
+
+    def test_death_era_only(self):
+        """Character with only death_era returns lifecycle with death era."""
+        char = Character(
+            name="Test",
+            role="protagonist",
+            description="A test character",
+            death_era="Final Age",
+        )
+        result = build_character_lifecycle(char)
+        assert result == {"lifecycle": {"death": {"era_name": "Final Age"}}}
+
+    def test_death_year_and_era(self):
+        """Character with death_year and death_era produces both in death dict."""
+        char = Character(
+            name="Test",
+            role="protagonist",
+            description="A test character",
+            death_year=500,
+            death_era="Dark Age",
+        )
+        result = build_character_lifecycle(char)
+        assert result == {"lifecycle": {"death": {"year": 500, "era_name": "Dark Age"}}}
 
     def test_birth_year_and_era(self):
         """Character with birth_year and birth_era produces both in birth dict."""

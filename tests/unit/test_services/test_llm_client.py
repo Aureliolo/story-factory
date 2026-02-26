@@ -520,10 +520,10 @@ class TestGetModelContextSize:
         assert result2 == 4096
         mock_client.show.assert_called_once()
 
-    def test_get_model_context_size_returns_none_on_error(self):
-        """Test that None is returned when client.show raises an exception.
+    def test_get_model_context_size_caches_none_on_error(self):
+        """Test that None is cached when client.show raises an exception.
 
-        Transient errors should NOT be cached so the next call can retry.
+        Caching None prevents repeated API calls on every embed_text() call.
         """
         mock_client = MagicMock()
         mock_client.show.side_effect = Exception("Connection refused")
@@ -531,8 +531,22 @@ class TestGetModelContextSize:
         result = get_model_context_size(mock_client, "error-model:8b")
 
         assert result is None
-        # Transient errors must not be cached — the key should be absent
-        assert "error-model:8b" not in _model_context_cache
+        # None should be cached so subsequent calls don't retry
+        assert "error-model:8b" in _model_context_cache
+        assert _model_context_cache["error-model:8b"] is None
+
+    def test_get_model_context_size_no_retry_after_cached_none(self):
+        """Test that after exception caches None, subsequent call returns from cache."""
+        mock_client = MagicMock()
+        mock_client.show.side_effect = Exception("Connection refused")
+
+        get_model_context_size(mock_client, "retry-model:8b")
+        mock_client.show.assert_called_once()
+
+        # Second call should return cached None without calling show() again
+        result = get_model_context_size(mock_client, "retry-model:8b")
+        assert result is None
+        mock_client.show.assert_called_once()  # Still only one call
 
     def test_get_model_context_size_double_check_lock(self):
         """Test double-checked locking when cache is populated during lock acquisition."""

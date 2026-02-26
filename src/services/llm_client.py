@@ -61,7 +61,8 @@ def get_model_context_size(client: ollama.Client, model: str) -> int | None:
                 logger.debug("Model %s context size: %d tokens", model, context_length)
             return context_length
         except Exception as e:
-            # Don't cache on transient errors — let the next call retry
+            # Cache None so we don't retry the API call on every embed_text() call
+            _model_context_cache[model] = None
             logger.debug("Could not query context size for model %s: %s", model, e)
             return None
 

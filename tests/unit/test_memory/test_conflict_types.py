@@ -15,6 +15,16 @@ from src.memory.conflict_types import (
 )
 
 
+@pytest.fixture(autouse=True)
+def clear_lru_caches():
+    """Clear LRU caches before each test to avoid cross-test pollution."""
+    normalize_relation_type.cache_clear()
+    classify_relationship.cache_clear()
+    yield
+    normalize_relation_type.cache_clear()
+    classify_relationship.cache_clear()
+
+
 class TestNewTypesInMapping:
     """Verify the three new types (D1-D3) are classified correctly."""
 
@@ -283,3 +293,82 @@ class TestValidateWordToRelation:
                 _validate_word_to_relation()
         finally:
             del _WORD_TO_RELATION["bogus_word"]
+
+
+class TestNewRivalryKeywords:
+    """Tests for H1 rivalry signal words added to _WORD_TO_RELATION."""
+
+    def test_hostile_resolves_to_rivalry(self):
+        """'hostile' in prose should resolve to RIVALRY via 'enemy_of'."""
+        result = normalize_relation_type("hostile_relationship")
+        assert classify_relationship(result) == ConflictCategory.RIVALRY
+
+    def test_contempt_resolves_to_rivalry(self):
+        """'contempt' in prose should resolve to RIVALRY via 'despises'."""
+        result = normalize_relation_type("mutual_contempt")
+        assert classify_relationship(result) == ConflictCategory.RIVALRY
+
+    def test_hatred_resolves_to_rivalry(self):
+        """'hatred' in prose should resolve to RIVALRY via 'hates'."""
+        result = normalize_relation_type("deep_hatred")
+        assert classify_relationship(result) == ConflictCategory.RIVALRY
+
+
+class TestNewTensionKeywords:
+    """Tests for H1 tension signal words added to _WORD_TO_RELATION."""
+
+    def test_distrustful_resolves_to_tension(self):
+        """'Distrustful, often questioning his leadership' should resolve to TENSION."""
+        result = normalize_relation_type("distrustful, often questioning his leadership")
+        assert classify_relationship(result) == ConflictCategory.TENSION
+
+    def test_annoyance_resolves_to_tension(self):
+        """'Friendly annoyance, often stealing her snacks' should resolve to TENSION."""
+        result = normalize_relation_type("friendly annoyance, often stealing her snacks")
+        assert classify_relationship(result) == ConflictCategory.TENSION
+
+    def test_suspicious_resolves_to_tension(self):
+        """'suspicious' in prose should resolve to TENSION via 'suspects'."""
+        result = normalize_relation_type("deeply_suspicious")
+        assert classify_relationship(result) == ConflictCategory.TENSION
+
+    def test_questioning_resolves_to_tension(self):
+        """'questioning' in prose should resolve to TENSION via 'challenges'."""
+        result = normalize_relation_type("constant_questioning")
+        assert classify_relationship(result) == ConflictCategory.TENSION
+
+    def test_stealing_resolves_to_tension(self):
+        """'stealing' in prose should resolve to TENSION via 'manipulates'."""
+        result = normalize_relation_type("always_stealing")
+        assert classify_relationship(result) == ConflictCategory.TENSION
+
+    def test_grudge_resolves_to_tension(self):
+        """'grudge' in prose should resolve to TENSION via 'resents'."""
+        result = normalize_relation_type("old_grudge")
+        assert classify_relationship(result) == ConflictCategory.TENSION
+
+
+class TestLruCacheBehavior:
+    """Tests for LRU cache on normalize_relation_type and classify_relationship."""
+
+    def test_normalize_cache_hits(self):
+        """Repeated calls to normalize_relation_type show cache hits."""
+        normalize_relation_type("allies_with")
+        normalize_relation_type("allies_with")
+        normalize_relation_type("allies_with")
+        info = normalize_relation_type.cache_info()
+        assert info.hits >= 2
+
+    def test_classify_cache_hits(self):
+        """Repeated calls to classify_relationship show cache hits."""
+        classify_relationship("hates")
+        classify_relationship("hates")
+        classify_relationship("hates")
+        info = classify_relationship.cache_info()
+        assert info.hits >= 2
+
+    def test_cache_returns_same_result(self):
+        """Cached result matches first-call result."""
+        first = normalize_relation_type("colleague_and_occasional_rival")
+        second = normalize_relation_type("colleague_and_occasional_rival")
+        assert first == second

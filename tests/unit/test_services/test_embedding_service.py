@@ -12,6 +12,7 @@ import ollama
 import pytest
 
 from src.memory.entities import Entity, Relationship, WorldEvent
+from src.services import embedding_service as embedding_service_mod
 from src.services.embedding_service import (
     _FALLBACK_CONTEXT_TOKENS,
     _MIN_CONTENT_LENGTH,
@@ -22,6 +23,14 @@ from src.settings import Settings
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def clear_warned_context_models():
+    """Clear the module-level warned set before each test."""
+    embedding_service_mod._warned_context_models.clear()
+    yield
+    embedding_service_mod._warned_context_models.clear()
 
 
 @pytest.fixture
@@ -299,6 +308,26 @@ class TestEmbedTextTruncation:
             service.embed_text("Some text")
 
         assert any("fallback" in msg.lower() for msg in caplog.messages)
+
+    def test_fallback_context_warning_only_once(self, service, caplog):
+        """Logs fallback warning only once per model, not on every call."""
+        mock_client = MagicMock()
+        response = MagicMock()
+        response.__getitem__ = lambda self, key: FAKE_EMBEDDING if key == "embedding" else None
+        mock_client.embeddings.return_value = response
+
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch("src.services.embedding_service.get_model_context_size", return_value=None),
+            caplog.at_level(logging.WARNING),
+        ):
+            service.embed_text("First call")
+            first_count = sum(1 for msg in caplog.messages if "fallback" in msg.lower())
+            service.embed_text("Second call")
+            second_count = sum(1 for msg in caplog.messages if "fallback" in msg.lower())
+
+        assert first_count == 1
+        assert second_count == 1  # No additional warning on second call
 
     def test_truncation_logs_warning(self, service, caplog):
         """Logs a warning when truncation occurs."""

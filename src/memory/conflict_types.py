@@ -6,6 +6,7 @@ These models define the structure for:
 - Conflict metrics and analysis results
 """
 
+import functools
 import logging
 import threading
 from enum import StrEnum
@@ -213,6 +214,9 @@ _WORD_TO_RELATION: dict[str, str] = {
     "colleague": "works_with",
     "follows": "follows",
     # Rivalry signals
+    "hostile": "enemy_of",
+    "contempt": "despises",
+    "hatred": "hates",
     "enemy": "enemy_of",
     "enemies": "enemies_with",
     "rival": "rivals",
@@ -234,6 +238,12 @@ _WORD_TO_RELATION: dict[str, str] = {
     "destroy": "destroys",
     "fight": "fights",
     # Tension signals
+    "distrustful": "distrusts",
+    "annoyance": "resents",
+    "suspicious": "suspects",
+    "questioning": "challenges",
+    "stealing": "manipulates",
+    "grudge": "resents",
     "fears": "fears",
     "fear": "fears",
     "wary": "wary_of",
@@ -258,6 +268,7 @@ _WORD_TO_RELATION: dict[str, str] = {
 }
 
 
+@functools.lru_cache(maxsize=256)
 def normalize_relation_type(raw_type: str) -> str:
     """Normalize a free-form relationship type to the controlled vocabulary.
 
@@ -364,6 +375,7 @@ _warned_types: set[str] = set()
 _warned_types_lock = threading.Lock()
 
 
+@functools.lru_cache(maxsize=256)
 def classify_relationship(relation_type: str) -> ConflictCategory:
     """
     Map a relationship type string to its corresponding ConflictCategory.

@@ -33,6 +33,9 @@ _CONTEXT_LENGTH_ERROR_PATTERNS = (
 )  # Ollama context overflow markers
 _MIN_CONTENT_LENGTH = 10  # Minimum content length to be worth embedding
 
+# Track models for which we've already logged "context size unavailable" warning
+_warned_context_models: set[str] = set()
+
 
 class EmbeddingService:
     """Generates and manages vector embeddings for world content.
@@ -150,11 +153,13 @@ class EmbeddingService:
                 client = self._get_client()
                 context_limit = get_model_context_size(client, model)
                 if context_limit is None:
-                    logger.warning(
-                        "Context size unavailable for model '%s'; using fallback %d tokens",
-                        model,
-                        _FALLBACK_CONTEXT_TOKENS,
-                    )
+                    if model not in _warned_context_models:
+                        logger.warning(
+                            "Context size unavailable for model '%s'; using fallback %d tokens",
+                            model,
+                            _FALLBACK_CONTEXT_TOKENS,
+                        )
+                        _warned_context_models.add(model)
                     context_limit = _FALLBACK_CONTEXT_TOKENS
                 if context_limit <= _MIN_USABLE_CONTEXT_TOKENS:
                     logger.error(
