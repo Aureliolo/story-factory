@@ -203,6 +203,12 @@ def mock_services():
     services.world_quality.generate_concepts_with_quality = MagicMock(return_value=[])
     services.world_quality.generate_relationships_with_quality = MagicMock(return_value=[])
     services.world_quality.generate_events_with_quality = MagicMock(return_value=[])
+    # Warm-up: model resolution and client settings for get_ollama_client
+    services.world_quality._get_creator_model.return_value = "test-model:8b"
+    services.world_quality._get_judge_model.return_value = "test-model:8b"
+    services.world_quality.settings.ollama_url = "http://localhost:11434"
+    services.world_quality.settings.ollama_timeout = 120
+    services.world_quality.settings.get_scaled_timeout.return_value = 120.0
     # Calendar quality mock - returns a valid calendar dict and scores
     services.world_quality.generate_calendar_with_quality = MagicMock(
         return_value=(
