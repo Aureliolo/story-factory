@@ -278,7 +278,10 @@ def normalize_relation_type(raw_type: str) -> str:
     3. If pipe-delimited, take the first recognized part.
     4. If a known type appears as a substring, extract and return it
        (prefers longer matches to avoid partial hits).
-    5. Otherwise return the normalized string unchanged.
+    5. Split on underscores and check individual words against _WORD_TO_RELATION.
+       When multiple words match, the highest-conflict-priority category wins
+       (RIVALRY > TENSION > ALLIANCE > NEUTRAL).
+    6. Otherwise return the normalized string unchanged.
 
     Args:
         raw_type: Raw relationship type string from the LLM or legacy data.

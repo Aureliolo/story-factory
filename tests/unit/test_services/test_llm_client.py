@@ -574,6 +574,40 @@ class TestGetModelContextSize:
         assert "missing-model:8b" in _model_context_cache
         assert _model_context_cache["missing-model:8b"] is None
 
+    def test_get_model_context_size_caches_none_on_timeout_error(self):
+        """Test that TimeoutError is cached as None (network error)."""
+        mock_client = MagicMock()
+        mock_client.show.side_effect = TimeoutError("Connection timed out")
+
+        result = get_model_context_size(mock_client, "timeout-model:8b")
+        assert result is None
+        assert "timeout-model:8b" in _model_context_cache
+        assert _model_context_cache["timeout-model:8b"] is None
+
+    def test_get_model_context_size_caches_none_on_httpx_timeout(self):
+        """Test that httpx.TimeoutException is cached as None (network error)."""
+        import httpx
+
+        mock_client = MagicMock()
+        mock_client.show.side_effect = httpx.ReadTimeout("Read timed out")
+
+        result = get_model_context_size(mock_client, "httpx-timeout-model:8b")
+        assert result is None
+        assert "httpx-timeout-model:8b" in _model_context_cache
+        assert _model_context_cache["httpx-timeout-model:8b"] is None
+
+    def test_get_model_context_size_caches_none_on_httpx_transport_error(self):
+        """Test that httpx.TransportError is cached as None (network error)."""
+        import httpx
+
+        mock_client = MagicMock()
+        mock_client.show.side_effect = httpx.RemoteProtocolError("Server disconnected")
+
+        result = get_model_context_size(mock_client, "httpx-transport-model:8b")
+        assert result is None
+        assert "httpx-transport-model:8b" in _model_context_cache
+        assert _model_context_cache["httpx-transport-model:8b"] is None
+
     def test_get_model_context_size_double_check_lock(self):
         """Test double-checked locking when cache is populated during lock acquisition."""
         mock_client = MagicMock()
