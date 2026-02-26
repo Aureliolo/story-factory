@@ -1199,6 +1199,11 @@ class TestHealthMetricsCache:
         # Use a mock ServiceContainer — build_world invalidates after delegating
         mock_services = MagicMock()
         mock_services.world_quality = MagicMock()
+        mock_services.world_quality._get_creator_model.return_value = "test-model:8b"
+        mock_services.world_quality._get_judge_model.return_value = "test-model:8b"
+        mock_services.world_quality.settings.ollama_url = "http://localhost:11434"
+        mock_services.world_quality.settings.ollama_timeout = 120
+        mock_services.world_quality.settings.get_scaled_timeout.return_value = 120.0
         mock_services.scoring = MagicMock()
 
         options = WorldBuildOptions(
