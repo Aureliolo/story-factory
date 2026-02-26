@@ -333,10 +333,15 @@ class WorldQualityService(EntityDelegatesMixin):
         """
         with self._calendar_context_lock:
             if not self._calendar_context:
+                logger.debug("get_calendar_context: returning sentinel calendar context")
                 return (
                     "\nCALENDAR & TIMELINE:\n"
                     "No calendar available — temporal scores should reflect this uncertainty.\n"
                 )
+            logger.debug(
+                "get_calendar_context: returning actual calendar context (%d chars)",
+                len(self._calendar_context),
+            )
             return f"\nCALENDAR & TIMELINE:\n{self._calendar_context}\n"
 
     @property

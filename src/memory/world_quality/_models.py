@@ -10,11 +10,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.utils.exceptions import StoryFactoryError
+
 logger = logging.getLogger(__name__)
 
 # Keys returned by BaseQualityScores.to_dict() that are metadata, not scoring
 # dimensions.  Used by minimum_score and the quality loop's dimension checks.
-SCORE_METADATA_KEYS = {"average", "feedback"}
+SCORE_METADATA_KEYS: frozenset[str] = frozenset({"average", "feedback"})
 
 
 class IterationRecord(BaseModel):
@@ -282,8 +284,8 @@ class BaseQualityScores(BaseModel, ABC):
         scoring dimensions are considered.
 
         Raises:
-            ValueError: If no numeric scoring dimensions are found, indicating
-                a bug in the score model's ``to_dict()`` implementation.
+            StoryFactoryError: If no numeric scoring dimensions are found,
+                indicating a bug in the score model's ``to_dict()`` implementation.
         """
         scores = {
             k: v
@@ -297,7 +299,7 @@ class BaseQualityScores(BaseModel, ABC):
                 type(self).__name__,
                 list(self.to_dict().keys()),
             )
-            raise ValueError(
+            raise StoryFactoryError(
                 f"{type(self).__name__}.to_dict() returned no numeric scoring dimensions. "
                 f"This indicates a bug in the score model implementation."
             )
