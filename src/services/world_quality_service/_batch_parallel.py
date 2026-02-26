@@ -14,7 +14,7 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING
 
 from src.memory.world_quality import BaseQualityScores
-from src.utils.exceptions import WorldGenerationError, summarize_llm_error
+from src.utils.exceptions import DuplicateNameError, WorldGenerationError, summarize_llm_error
 
 if TYPE_CHECKING:
     from src.services.world_quality_service import EntityGenerationProgress, WorldQualityService
@@ -265,26 +265,26 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
                         task_idx + 1,
                     )
 
+                except DuplicateNameError as e:
+                    # Don't count duplicates as consecutive failures —
+                    # they're expected race outcomes in parallel generation
+                    logger.warning(
+                        "Duplicate %s from parallel worker (task %d): %s",
+                        entity_type,
+                        task_idx + 1,
+                        summarize_llm_error(e, max_length=200),
+                    )
+
                 except WorldGenerationError as e:
                     error_msg = summarize_llm_error(e, max_length=200)
-                    if "duplicate" in error_msg.lower():
-                        logger.warning(
-                            "Duplicate %s from parallel worker (task %d): %s",
-                            entity_type,
-                            task_idx + 1,
-                            error_msg,
-                        )
-                        # Don't count duplicates as consecutive failures —
-                        # they're expected race outcomes in parallel generation
-                    else:
-                        errors.append(error_msg)
-                        consecutive_failures += 1
-                        logger.error(
-                            "Failed to generate %s (task %d): %s",
-                            entity_type,
-                            task_idx + 1,
-                            error_msg,
-                        )
+                    errors.append(error_msg)
+                    consecutive_failures += 1
+                    logger.error(
+                        "Failed to generate %s (task %d): %s",
+                        entity_type,
+                        task_idx + 1,
+                        error_msg,
+                    )
 
                 except Exception as e:
                     error_msg = summarize_llm_error(e, max_length=200)
@@ -407,8 +407,9 @@ def _collect_late_results[T, S: BaseQualityScores](
             )
         except Exception as late_err:
             errors.append(str(late_err)[:200])
-            logger.debug(
+            logger.warning(
                 "Discarded late %s during early termination: %s",
                 entity_type,
                 late_err,
+                exc_info=True,
             )

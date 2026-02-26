@@ -116,8 +116,6 @@ class TestTemporalValidationResult:
                 message="Minor date issue",
             )
         )
-        result.is_valid = len(result.errors) == 0
-
         assert result.is_valid is True
         assert result.warning_count == 1
         assert result.total_issues == 1
@@ -137,8 +135,6 @@ class TestTemporalValidationResult:
                 message="Timeline conflict",
             )
         )
-        result.is_valid = len(result.errors) == 0
-
         assert result.is_valid is False
         assert result.error_count == 1
 
@@ -1368,7 +1364,7 @@ class TestEraMismatchDetection:
         """Test that era name mismatch produces INVALID_ERA warning."""
         entity = Entity(id="ent-001", name="Hero", type="character")
         timestamp = StoryTimestamp(year=50, era_name="Wrong Era")
-        result = TemporalValidationResult(entity_count=1)
+        result = TemporalValidationResult()
 
         validation_service._check_era_name_mismatch(
             entity, timestamp, calendar_with_eras, "birth", result
@@ -1383,7 +1379,7 @@ class TestEraMismatchDetection:
         """Test no warning when entity era matches calendar era."""
         entity = Entity(id="ent-001", name="Hero", type="character")
         timestamp = StoryTimestamp(year=50, era_name="First Age")
-        result = TemporalValidationResult(entity_count=1)
+        result = TemporalValidationResult()
 
         validation_service._check_era_name_mismatch(
             entity, timestamp, calendar_with_eras, "birth", result
@@ -1395,7 +1391,7 @@ class TestEraMismatchDetection:
         """Test early return when timestamp has no year."""
         entity = Entity(id="ent-001", name="Hero", type="character")
         timestamp = StoryTimestamp(year=None, era_name="First Age")
-        result = TemporalValidationResult(entity_count=1)
+        result = TemporalValidationResult()
 
         validation_service._check_era_name_mismatch(
             entity, timestamp, calendar_with_eras, "birth", result
@@ -1407,7 +1403,7 @@ class TestEraMismatchDetection:
         """Test early return when timestamp has no era_name."""
         entity = Entity(id="ent-001", name="Hero", type="character")
         timestamp = StoryTimestamp(year=50, era_name="")
-        result = TemporalValidationResult(entity_count=1)
+        result = TemporalValidationResult()
 
         validation_service._check_era_name_mismatch(
             entity, timestamp, calendar_with_eras, "birth", result
@@ -1420,7 +1416,7 @@ class TestEraMismatchDetection:
         entity = Entity(id="ent-001", name="Hero", type="character")
         # Year -500 is outside all era ranges
         timestamp = StoryTimestamp(year=-500, era_name="Ancient Era")
-        result = TemporalValidationResult(entity_count=1)
+        result = TemporalValidationResult()
 
         validation_service._check_era_name_mismatch(
             entity, timestamp, calendar_with_eras, "birth", result

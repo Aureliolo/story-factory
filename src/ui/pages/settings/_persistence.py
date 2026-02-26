@@ -182,6 +182,10 @@ def capture_settings_snapshot(page: SettingsPage) -> dict[str, Any]:
         "rag_context_similarity_threshold",
         "rag_context_graph_expansion",
         "rag_context_graph_depth",
+        # Model service cache TTLs
+        "model_health_cache_ttl",
+        "model_installed_cache_ttl",
+        "model_vram_cache_ttl",
     ]
     for key in advanced_llm_keys:
         snapshot[key] = getattr(settings, key)
@@ -294,6 +298,10 @@ def restore_settings_snapshot(page: SettingsPage, snapshot: dict[str, Any]) -> N
         "rag_context_similarity_threshold",
         "rag_context_graph_expansion",
         "rag_context_graph_depth",
+        # Model service cache TTLs
+        "model_health_cache_ttl",
+        "model_installed_cache_ttl",
+        "model_vram_cache_ttl",
     ]
     for key in advanced_llm_keys:
         if key in snapshot:

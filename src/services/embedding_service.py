@@ -321,7 +321,18 @@ class EmbeddingService:
 
         description = rel.description
         available_for_desc = max_chars - overhead_chars
-        if available_for_desc > 0 and len(description) > available_for_desc:
+        if available_for_desc <= 0:
+            logger.warning(
+                "Relationship header exceeds embedding budget (%d > %d chars); "
+                "embedding with empty description to preserve entity names: %s...%s...%s",
+                overhead_chars,
+                max_chars,
+                source_name,
+                rel.relation_type,
+                target_name,
+            )
+            description = ""
+        elif len(description) > available_for_desc:
             logger.warning(
                 "Truncating relationship description for embedding "
                 "(names preserved, desc %d -> %d chars): %s...%s...%s",

@@ -332,6 +332,42 @@ class TestLogHealthFailure:
             assert any("transition failure" in r.message for r in warn_records)
 
 
+class TestLogHealthFailureTransitions:
+    """Tests for _log_health_failure transition lifecycle.
+
+    Verifies the full WARNING→DEBUG→WARNING cycle across state transitions:
+    healthy→unhealthy (WARNING), unhealthy→unhealthy (DEBUG), recovery→unhealthy (WARNING).
+    """
+
+    def test_full_transition_lifecycle(self, model_service, caplog):
+        """Test WARNING on first failure, DEBUG on repeat, WARNING after recovery."""
+        with caplog.at_level(logging.DEBUG, logger="src.services.model_service"):
+            # Initial state (None) → first failure → WARNING
+            model_service._log_health_failure("failure 1")
+            warn_1 = [r for r in caplog.records if r.levelno == logging.WARNING]
+            assert any("failure 1" in r.message for r in warn_1)
+
+            # Simulate state update to unhealthy
+            model_service._last_health_healthy = False
+
+            # Consecutive failure → DEBUG (not WARNING)
+            caplog.clear()
+            model_service._log_health_failure("failure 2")
+            warn_2 = [r for r in caplog.records if r.levelno == logging.WARNING]
+            debug_2 = [r for r in caplog.records if r.levelno == logging.DEBUG]
+            assert not any("failure 2" in r.message for r in warn_2)
+            assert any("failure 2" in r.message for r in debug_2)
+
+            # Recovery (set healthy)
+            model_service._last_health_healthy = True
+
+            # Failure after recovery → WARNING again
+            caplog.clear()
+            model_service._log_health_failure("failure 3")
+            warn_3 = [r for r in caplog.records if r.levelno == logging.WARNING]
+            assert any("failure 3" in r.message for r in warn_3)
+
+
 class TestModelServiceCheckHealthEdgeCases:
     """Additional edge case tests for check_health."""
 
@@ -1411,6 +1447,65 @@ class TestTTLCaching:
         assert mock_client.call_count == 4
 
 
+class TestTTLCacheExpiration:
+    """Tests for TTL cache expiration using mocked time."""
+
+    def test_check_health_cache_expires_after_ttl(self, model_service):
+        """Test that check_health re-queries Ollama after TTL expires."""
+        call_count = 0
+        monotonic_values = iter([100.0, 100.5, 200.0])  # start, within TTL, past TTL
+
+        def mock_monotonic():
+            nonlocal call_count
+            call_count += 1
+            return next(monotonic_values)
+
+        with (
+            patch("src.services.model_service.time.monotonic", side_effect=mock_monotonic),
+            patch("src.services.model_service.ollama.Client") as mock_client,
+            patch("src.services.model_service.get_available_vram", return_value=24),
+            patch.object(model_service, "get_running_models", return_value=[]),
+        ):
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_instance.list.return_value = MagicMock(models=[])
+
+            result1 = model_service.check_health()
+            result2 = model_service.check_health()  # within TTL — cached
+            result3 = model_service.check_health()  # past TTL — fresh
+
+        assert result1 is result2  # Same cached object
+        assert result3 is not result1  # Fresh object after expiration
+        assert mock_client.call_count == 2  # Created for call 1 and call 3
+
+    def test_list_installed_cache_expires_after_ttl(self, model_service):
+        """Test that list_installed re-queries Ollama after TTL expires."""
+        monotonic_values = iter([100.0, 100.5, 200.0])
+
+        with (
+            patch(
+                "src.services.model_service.time.monotonic",
+                side_effect=lambda: next(monotonic_values),
+            ),
+            patch("src.services.model_service.ollama.Client") as mock_client,
+        ):
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_model = MagicMock()
+            mock_model.model = "test-model:8b"
+            mock_instance.list.return_value = MagicMock(models=[mock_model])
+
+            result1 = model_service.list_installed()
+            result2 = model_service.list_installed()  # within TTL
+            result3 = model_service.list_installed()  # past TTL
+
+        assert result1 == result2 == result3 == ["test-model:8b"]
+        # Defensive copies mean different list objects even from cache
+        assert result1 is not result2
+        # Client created twice (first call + expired call)
+        assert mock_client.call_count == 2
+
+
 class TestColdStartDetection:
     """Tests for cold-start model detection in check_health."""
 
@@ -1464,7 +1559,7 @@ class TestColdStartDetection:
                 with patch.object(
                     model_service,
                     "get_running_models",
-                    side_effect=RuntimeError("connection failed"),
+                    side_effect=ConnectionError("connection failed"),
                 ):
                     with caplog.at_level(logging.DEBUG, logger="src.services.model_service"):
                         result = model_service.check_health()

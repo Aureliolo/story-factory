@@ -55,6 +55,7 @@ def validate(settings: Settings) -> bool:
     _validate_ollama_client_timeouts(settings)
     _validate_retry_configuration(settings)
     _validate_verification_delays(settings)
+    _validate_model_cache_ttls(settings)
     _validate_validation_thresholds(settings)
     _validate_outline_generation(settings)
     _validate_import_thresholds(settings)
@@ -636,6 +637,17 @@ def _validate_verification_delays(settings: Settings) -> None:
             f"model_verification_sleep must be between 0.01 and 5.0 seconds, "
             f"got {settings.model_verification_sleep}"
         )
+
+
+def _validate_model_cache_ttls(settings: Settings) -> None:
+    """Validate model service cache TTL settings."""
+    for name, value in [
+        ("model_health_cache_ttl", settings.model_health_cache_ttl),
+        ("model_installed_cache_ttl", settings.model_installed_cache_ttl),
+        ("model_vram_cache_ttl", settings.model_vram_cache_ttl),
+    ]:
+        if not 1.0 <= value <= 300.0:
+            raise ValueError(f"{name} must be between 1.0 and 300.0 seconds, got {value}")
 
 
 def _validate_validation_thresholds(settings: Settings) -> None:

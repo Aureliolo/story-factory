@@ -38,6 +38,7 @@ class Header:
         self.current_path = current_path
         self._project_select: Select | None = None
         self._status_label: Label | None = None
+        self._cold_start_icon: Any = None
 
     def build(self) -> None:
         """Build the header UI."""
@@ -113,9 +114,17 @@ class Header:
                 self._status_label = ui.label(f"{vram}GB").classes("text-xs text-green-500")
                 if health.cold_start_models:
                     cold_names = ", ".join(health.cold_start_models)
-                    ui.icon("hourglass_empty", size="xs").classes("text-yellow-500").tooltip(
-                        f"Cold start: {cold_names} not loaded in VRAM"
+                    self._cold_start_icon = (
+                        ui.icon("hourglass_empty", size="xs")
+                        .classes("text-yellow-500")
+                        .tooltip(f"Cold start: {cold_names} not loaded in VRAM")
                     )
+                else:
+                    # Create hidden placeholder so refresh_status can show it later
+                    self._cold_start_icon = (
+                        ui.icon("hourglass_empty", size="xs").classes("text-yellow-500").tooltip("")
+                    )
+                    self._cold_start_icon.visible = False
             else:
                 ui.icon("error", size="xs").classes("text-red-500")
                 self._status_label = ui.label("Offline").classes("text-xs text-red-500")
@@ -185,7 +194,7 @@ class Header:
             self._project_select.update()
 
     def refresh_status(self) -> None:
-        """Refresh the Ollama status display."""
+        """Refresh the Ollama status display including cold-start indicator."""
         if self._status_label:
             health = self.services.model.check_health()
             vram = self.services.model.get_vram()
@@ -196,3 +205,12 @@ class Header:
             else:
                 self._status_label.text = "Offline"
                 self._status_label.classes(replace="text-xs text-red-500")
+
+            # Update cold-start indicator
+            if self._cold_start_icon:
+                if health.is_healthy and health.cold_start_models:
+                    cold_names = ", ".join(health.cold_start_models)
+                    self._cold_start_icon.tooltip(f"Cold start: {cold_names} not loaded in VRAM")
+                    self._cold_start_icon.visible = True
+                else:
+                    self._cold_start_icon.visible = False

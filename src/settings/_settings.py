@@ -451,6 +451,12 @@ class Settings:
     llm_retry_delay: float = 2.0  # Base delay in seconds between retries
     llm_retry_backoff: float = 2.0  # Exponential backoff multiplier
 
+    # Model service cache TTLs (seconds) — control how often the header
+    # refresh loop re-queries Ollama for health, installed models, and VRAM.
+    model_health_cache_ttl: float = 15.0  # Health check cache lifetime
+    model_installed_cache_ttl: float = 10.0  # Installed model list cache lifetime
+    model_vram_cache_ttl: float = 15.0  # VRAM query cache lifetime
+
     # Verification delays
     model_verification_sleep: float = 0.1  # Delay for model download verification
 

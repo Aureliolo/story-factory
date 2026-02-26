@@ -58,7 +58,11 @@ class TemporalValidationResult(BaseModel):
 
     errors: list[TemporalValidationIssue] = Field(default_factory=list)
     warnings: list[TemporalValidationIssue] = Field(default_factory=list)
-    is_valid: bool = Field(default=True, description="True if no errors (warnings OK)")
+
+    @property
+    def is_valid(self) -> bool:
+        """True if no errors (warnings OK). Computed from errors list."""
+        return len(self.errors) == 0
 
     @property
     def error_count(self) -> int:
@@ -144,9 +148,6 @@ class TemporalValidationService:
         if calendar and lifecycle:
             self._validate_dates_against_calendar(entity, lifecycle, calendar, result)
 
-        # Set is_valid based on errors (warnings don't affect validity)
-        result.is_valid = len(result.errors) == 0
-
         logger.debug(
             f"Validation complete for '{entity.name}': "
             f"{len(result.errors)} errors, {len(result.warnings)} warnings"
@@ -194,8 +195,6 @@ class TemporalValidationService:
             entity_result = self.validate_entity(entity, calendar, all_entities, all_relationships)
             result.errors.extend(entity_result.errors)
             result.warnings.extend(entity_result.warnings)
-
-        result.is_valid = len(result.errors) == 0
 
         logger.info(
             f"World validation complete: {len(result.errors)} errors, "
