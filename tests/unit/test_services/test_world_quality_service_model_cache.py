@@ -589,11 +589,32 @@ class TestEnvironmentContextCaching:
         assert service._model_cache._env_context_cache is None
         assert service._model_cache._env_context_timestamp == 0.0
 
-    def test_env_context_ttl_is_60_seconds(self):
-        """TTL should be 60s to avoid redundant subprocess calls during builds."""
+    def test_env_context_ttl_is_300_seconds(self):
+        """TTL should be 300s (5 minutes) per #399 item 2."""
         from src.services.world_quality_service._model_cache import _ENV_CONTEXT_TTL_SECONDS
 
-        assert _ENV_CONTEXT_TTL_SECONDS == 60.0
+        assert _ENV_CONTEXT_TTL_SECONDS == 300.0
+
+    @patch("src.settings.get_installed_models_with_sizes", return_value={"test-model:8b": 8.0})
+    @patch("src.settings.get_available_vram", return_value=16)
+    @patch("src.services.world_quality_service._model_cache._ENV_CONTEXT_TTL_SECONDS", 0)
+    def test_env_context_change_logs_debug(self, mock_vram, mock_models, service, caplog):
+        """When env context changes on refresh, a debug log should be emitted."""
+        import logging
+
+        # First call establishes the cached env context
+        service._get_creator_model("character")
+
+        # Change the VRAM value so the next refresh detects a change
+        mock_vram.return_value = 32
+
+        with caplog.at_level(
+            logging.DEBUG, logger="src.services.world_quality_service._model_cache"
+        ):
+            service._get_creator_model("faction")
+
+        change_msgs = [r for r in caplog.records if "Environment context changed" in r.message]
+        assert len(change_msgs) == 1
 
     @patch("src.settings.get_installed_models_with_sizes", return_value={"test-model:8b": 8.0})
     @patch("src.settings.get_available_vram", return_value=16)

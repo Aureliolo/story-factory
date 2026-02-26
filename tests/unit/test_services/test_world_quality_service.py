@@ -678,6 +678,82 @@ class TestJudgeConfigCaching:
         service.invalidate_model_cache()
         assert service._client is None
 
+    def test_client_thread_safe_single_instance(self, service):
+        """Concurrent client property access should all observe the same cached instance."""
+        import threading
+
+        barrier = threading.Barrier(8)
+        ids: list[int] = []
+        ids_lock = threading.Lock()
+
+        def worker() -> None:
+            barrier.wait()
+            c = service.client
+            with ids_lock:
+                ids.append(id(c))
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(set(ids)) == 1
+
+
+class TestRefinementConfigCaching:
+    """Tests for RefinementConfig caching in WorldQualityService."""
+
+    def test_refinement_config_cached_on_second_call(self, service):
+        """get_config() returns the same cached instance on repeated calls."""
+        config1 = service.get_config()
+        config2 = service.get_config()
+        assert config1 is config2
+
+    def test_refinement_config_cleared_on_invalidate(self, service):
+        """invalidate_model_cache() clears the cached RefinementConfig."""
+        config1 = service.get_config()
+        assert service._refinement_config is not None
+
+        service.invalidate_model_cache()
+        assert service._refinement_config is None
+
+        # Next call creates a fresh config
+        config2 = service.get_config()
+        assert config2 is not config1
+
+    def test_invalidate_before_any_get_config(self, service):
+        """invalidate_model_cache() is a no-op when _refinement_config was never populated."""
+        assert service._refinement_config is None  # initial state
+        service.invalidate_model_cache()  # must not raise
+        assert service._refinement_config is None
+
+        # Subsequent get_config still creates a fresh config
+        config = service.get_config()
+        assert config is not None
+
+    def test_refinement_config_thread_safe_single_instance(self, service):
+        """Concurrent get_config() calls should all observe the same cached instance."""
+        import threading
+
+        barrier = threading.Barrier(8)
+        ids: list[int] = []
+        ids_lock = threading.Lock()
+
+        def worker() -> None:
+            barrier.wait()
+            cfg = service.get_config()
+            with ids_lock:
+                ids.append(id(cfg))
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(set(ids)) == 1
+
 
 class TestRecordEntityQuality:
     """Tests for record_entity_quality method."""

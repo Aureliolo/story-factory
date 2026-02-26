@@ -203,6 +203,12 @@ def mock_services():
     services.world_quality.generate_concepts_with_quality = MagicMock(return_value=[])
     services.world_quality.generate_relationships_with_quality = MagicMock(return_value=[])
     services.world_quality.generate_events_with_quality = MagicMock(return_value=[])
+    # Warm-up: model resolution and client settings for get_ollama_client
+    services.world_quality._get_creator_model.return_value = "test-model:8b"
+    services.world_quality._get_judge_model.return_value = "test-model:8b"
+    services.world_quality.settings.ollama_url = "http://localhost:11434"
+    services.world_quality.settings.ollama_timeout = 120
+    services.world_quality.settings.get_scaled_timeout.return_value = 120.0
     # Calendar quality mock - returns a valid calendar dict and scores
     services.world_quality.generate_calendar_with_quality = MagicMock(
         return_value=(
@@ -1735,13 +1741,47 @@ class TestWorldBuildCancellation:
         cancel_event.set()  # Pre-set to trigger immediate cancellation
 
         options = WorldBuildOptions(
-            clear_existing=True,  # This step checks cancellation first
+            clear_existing=True,  # Cancellation checked before warm-up
             generate_structure=True,
             generate_locations=True,
             generate_factions=True,
             generate_items=True,
             generate_concepts=True,
             generate_relationships=True,
+            cancellation_event=cancel_event,
+        )
+
+        with pytest.raises(GenerationCancelledError, match="Generation cancelled"):
+            world_service.build_world(
+                sample_story_state,
+                mock_world_db,
+                mock_services,
+                options,
+            )
+
+    def test_build_world_cancellation_during_build_step(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test that cancellation during a build step (after warm-up) raises error."""
+        import threading
+
+        from src.utils.exceptions import GenerationCancelledError
+
+        # Cancel fires after warm-up completes, during the clear_existing step
+        cancel_event = threading.Event()
+
+        original_warm = mock_services.world_quality._get_creator_model.return_value
+
+        def set_cancel_after_warm(*_args, **_kwargs):
+            """Set cancellation after warm-up model resolution succeeds."""
+            cancel_event.set()
+            return original_warm
+
+        mock_services.world_quality._get_creator_model.side_effect = set_cancel_after_warm
+
+        options = WorldBuildOptions(
+            clear_existing=True,
+            generate_structure=True,
             cancellation_event=cancel_event,
         )
 

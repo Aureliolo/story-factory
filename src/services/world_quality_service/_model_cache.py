@@ -14,10 +14,13 @@ from src.settings import Settings
 
 logger = logging.getLogger(__name__)
 
-# Time-to-live for environment context cache (VRAM and installed models)
+# Time-to-live for environment context cache (VRAM and installed models).
 # These checks involve subprocess calls (nvidia-smi, ollama list), so we
-# cache them briefly to avoid overhead on every cache access.
-_ENV_CONTEXT_TTL_SECONDS = 60.0
+# cache them to avoid overhead on every cache access.  During world builds
+# (which can run 5-15 minutes) the environment rarely changes, so 5 minutes
+# is a safe TTL — explicit invalidation via invalidate() still forces a
+# fresh check when settings change.
+_ENV_CONTEXT_TTL_SECONDS = 300.0
 
 
 class ModelResolutionCache:
@@ -68,13 +71,15 @@ class ModelResolutionCache:
         ):
             current_vram = get_available_vram()
             installed_models_key = tuple(sorted(get_installed_models_with_sizes().items()))
-            self._env_context_cache = (current_vram, installed_models_key)
+            new_env = (current_vram, installed_models_key)
+            if self._env_context_cache is not None and new_env != self._env_context_cache:
+                logger.debug(
+                    "Environment context changed (vram=%s, models=%d)",
+                    current_vram,
+                    len(installed_models_key),
+                )
+            self._env_context_cache = new_env
             self._env_context_timestamp = now
-            logger.debug(
-                "Refreshed environment context (vram=%s, models=%d)",
-                current_vram,
-                len(installed_models_key),
-            )
 
         return self._env_context_cache
 
@@ -149,10 +154,7 @@ class ModelResolutionCache:
         """
         with self._lock:
             self._check_context()
-            model = self._resolved_creator_models.get(role)
-            if model is None:
-                logger.debug("Creator model cache miss for role=%s", role)
-            return model
+            return self._resolved_creator_models.get(role)
 
     def store_creator_model(self, role: str, model: str) -> None:
         """Store a resolved creator model for a role.
@@ -167,7 +169,6 @@ class ModelResolutionCache:
         """
         with self._lock:
             self._resolved_creator_models[role] = model
-            logger.debug("Stored creator model '%s' for role=%s", model, role)
 
     def get_judge_model(self, role: str) -> str | None:
         """Get cached judge model for a role, if available.
@@ -180,10 +181,7 @@ class ModelResolutionCache:
         """
         with self._lock:
             self._check_context()
-            model = self._resolved_judge_models.get(role)
-            if model is None:
-                logger.debug("Judge model cache miss for role=%s", role)
-            return model
+            return self._resolved_judge_models.get(role)
 
     def store_judge_model(self, role: str, model: str) -> None:
         """Store a resolved judge model for a role.
@@ -198,7 +196,6 @@ class ModelResolutionCache:
         """
         with self._lock:
             self._resolved_judge_models[role] = model
-            logger.debug("Stored judge model '%s' for role=%s", model, role)
 
     def has_warned_conflict(self, conflict_key: str) -> bool:
         """Check if a conflict warning has already been issued.
@@ -210,13 +207,7 @@ class ModelResolutionCache:
             True if the warning was already issued.
         """
         with self._lock:
-            result = conflict_key in self._warned_conflicts
-            logger.debug(
-                "Conflict warning check for '%s': %s",
-                conflict_key,
-                "already warned" if result else "not yet warned",
-            )
-            return result
+            return conflict_key in self._warned_conflicts
 
     def mark_conflict_warned(self, conflict_key: str) -> None:
         """Mark a conflict as having been warned about.
@@ -226,4 +217,3 @@ class ModelResolutionCache:
         """
         with self._lock:
             self._warned_conflicts.add(conflict_key)
-            logger.debug("Marked conflict '%s' as warned", conflict_key)

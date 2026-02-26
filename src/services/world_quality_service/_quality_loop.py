@@ -148,7 +148,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
             entity_type.capitalize(),
         )
 
-    logger.info(
+    logger.debug(
         "Starting quality refinement loop for %s (threshold=%.1f, max_iterations=%d, "
         "review_mode=%s)",
         entity_type,
