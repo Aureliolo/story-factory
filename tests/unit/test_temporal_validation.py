@@ -990,7 +990,9 @@ class TestValidateWorld:
         mock_world_db.list_entities.return_value = [entity]
         mock_world_db.list_relationships.return_value = []
         # Simulate error loading world settings (e.g., table doesn't exist)
-        mock_world_db.get_world_settings.side_effect = Exception("Table not found")
+        import sqlite3
+
+        mock_world_db.get_world_settings.side_effect = sqlite3.OperationalError("Table not found")
 
         # Should not raise - should handle gracefully
         result = validation_service.validate_world(mock_world_db)

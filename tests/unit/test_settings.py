@@ -3611,3 +3611,10 @@ class TestModelCacheTTLValidation:
         settings.model_vram_cache_ttl = 0.0
         with pytest.raises(ValueError, match="model_vram_cache_ttl"):
             settings.validate()
+
+    def test_validate_raises_on_ttl_boolean_type(self):
+        """Should reject boolean values for TTL fields (bool is subclass of int)."""
+        settings = Settings()
+        settings.model_health_cache_ttl = True
+        with pytest.raises(ValueError, match="must be a number"):
+            settings.validate()
