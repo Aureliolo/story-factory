@@ -3136,6 +3136,15 @@ class TestLogLevelValidation:
 class TestGetScaledTimeout:
     """Tests for Settings.get_scaled_timeout() method."""
 
+    @pytest.fixture(autouse=True)
+    def clear_logged_timeout_values(self):
+        """Clear timeout log tracking before and after each test."""
+        from src.settings._settings import _logged_timeout_values
+
+        _logged_timeout_values.clear()
+        yield
+        _logged_timeout_values.clear()
+
     def test_small_model_scales_moderately(self):
         """Small model (~5GB) should get ~150s timeout with 120s base."""
         from unittest.mock import patch
@@ -3337,6 +3346,68 @@ class TestGetScaledTimeout:
 
         # Formula: 120 * (1 + 5/20) = 120 * 1.25 = 150 — not capped (>=5GB)
         assert timeout == 150.0
+
+    def test_timeout_log_dedup_logs_once_then_suppresses(self, caplog):
+        """Timeout debug log should fire once per model, not on every call."""
+        import logging
+
+        from src.settings._types import ModelInfo
+
+        mock_info = ModelInfo(
+            name="dedup-model:8b",
+            size_gb=10.0,
+            vram_required=12,
+            quality=7,
+            speed=5,
+            uncensored=True,
+            description="Test model",
+            tags=["writer"],
+        )
+        with (
+            patch("src.settings._utils.get_model_info", return_value=mock_info),
+            caplog.at_level(logging.DEBUG),
+        ):
+            settings = Settings()
+            settings.ollama_timeout = 120
+            settings.get_scaled_timeout("dedup-model:8b")
+            first_count = sum(1 for msg in caplog.messages if "dedup-model:8b" in msg)
+            settings.get_scaled_timeout("dedup-model:8b")
+            second_count = sum(1 for msg in caplog.messages if "dedup-model:8b" in msg)
+
+        assert first_count == 1
+        assert second_count == 1  # No additional log on second call
+
+    def test_timeout_log_relogs_on_value_change(self, caplog):
+        """Timeout debug log should re-fire when the computed timeout changes."""
+        import logging
+
+        from src.settings._types import ModelInfo
+
+        mock_info = ModelInfo(
+            name="relog-model:8b",
+            size_gb=10.0,
+            vram_required=12,
+            quality=7,
+            speed=5,
+            uncensored=True,
+            description="Test model",
+            tags=["writer"],
+        )
+        with (
+            patch("src.settings._utils.get_model_info", return_value=mock_info),
+            caplog.at_level(logging.DEBUG),
+        ):
+            settings = Settings()
+            settings.ollama_timeout = 120
+            settings.get_scaled_timeout("relog-model:8b")
+            first_count = sum(1 for msg in caplog.messages if "relog-model:8b" in msg)
+            # Change base timeout — computed value changes
+            settings.ollama_timeout = 240
+            settings.get_scaled_timeout("relog-model:8b")
+            second_count = sum(1 for msg in caplog.messages if "relog-model:8b" in msg)
+
+        assert first_count == 1
+        assert second_count == 2  # Re-logged because computed timeout changed
 
 
 class TestRagContextValidation:

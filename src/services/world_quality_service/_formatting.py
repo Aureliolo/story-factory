@@ -25,13 +25,20 @@ def calculate_eta(
         float | None: Estimated remaining time in seconds, or `None` if `completed_times` is empty or `remaining_count` is not greater than zero.
     """
     if not completed_times or remaining_count <= 0:
+        logger.debug(
+            "calculate_eta: skipping (completed_times=%d, remaining=%d)",
+            len(completed_times),
+            remaining_count,
+        )
         return None
     # EMA with alpha=0.3 to weight recent times more heavily
     alpha = 0.3
     avg = completed_times[0]
     for t in completed_times[1:]:
         avg = alpha * t + (1 - alpha) * avg
-    return avg * remaining_count
+    result = avg * remaining_count
+    logger.debug("calculate_eta: avg=%.2fs, remaining=%d, eta=%.2fs", avg, remaining_count, result)
+    return result
 
 
 def format_properties(properties: list[Any] | Any | None) -> str:

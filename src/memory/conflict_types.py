@@ -416,6 +416,9 @@ def classify_relationship(relation_type: str) -> ConflictCategory:
     category = RELATION_CONFLICT_MAPPING.get(normalized)
 
     if category is None:
+        # Note: lru_cache means this block only executes on cache misses.
+        # The _warned_types guard provides a safety net if the cache is
+        # cleared or evicted, ensuring at most one warning per unknown type.
         with _warned_types_lock:
             if normalized not in _warned_types:
                 logger.warning(

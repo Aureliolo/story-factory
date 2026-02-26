@@ -312,9 +312,7 @@ class TestEmbedTextTruncation:
     def test_fallback_context_warning_only_once(self, service, caplog):
         """Logs fallback warning only once per model, not on every call."""
         mock_client = MagicMock()
-        response = MagicMock()
-        response.__getitem__ = lambda self, key: FAKE_EMBEDDING if key == "embedding" else None
-        mock_client.embeddings.return_value = response
+        mock_client.embeddings.return_value = {"embedding": FAKE_EMBEDDING}
 
         with (
             patch.object(service, "_get_client", return_value=mock_client),

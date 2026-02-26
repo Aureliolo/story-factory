@@ -520,13 +520,13 @@ class TestGetModelContextSize:
         assert result2 == 4096
         mock_client.show.assert_called_once()
 
-    def test_get_model_context_size_caches_none_on_error(self):
-        """Test that None is cached when client.show raises an exception.
+    def test_get_model_context_size_caches_none_on_network_error(self):
+        """Test that None is cached when client.show raises a network error.
 
         Caching None prevents repeated API calls on every embed_text() call.
         """
         mock_client = MagicMock()
-        mock_client.show.side_effect = Exception("Connection refused")
+        mock_client.show.side_effect = ConnectionError("Connection refused")
 
         result = get_model_context_size(mock_client, "error-model:8b")
 
@@ -536,9 +536,9 @@ class TestGetModelContextSize:
         assert _model_context_cache["error-model:8b"] is None
 
     def test_get_model_context_size_no_retry_after_cached_none(self):
-        """Test that after exception caches None, subsequent call returns from cache."""
+        """Test that after network error caches None, subsequent call returns from cache."""
         mock_client = MagicMock()
-        mock_client.show.side_effect = Exception("Connection refused")
+        mock_client.show.side_effect = ConnectionError("Connection refused")
 
         get_model_context_size(mock_client, "retry-model:8b")
         mock_client.show.assert_called_once()
@@ -547,6 +547,21 @@ class TestGetModelContextSize:
         result = get_model_context_size(mock_client, "retry-model:8b")
         assert result is None
         mock_client.show.assert_called_once()  # Still only one call
+
+    def test_get_model_context_size_does_not_cache_unexpected_errors(self):
+        """Test that unexpected errors (e.g., ValueError) are NOT cached.
+
+        Unexpected errors may be transient programming issues — allow retry.
+        """
+        mock_client = MagicMock()
+        mock_client.show.return_value = {
+            "model_info": {"llama.context_length": "not_a_number"},
+        }
+
+        result = get_model_context_size(mock_client, "bad-meta-model:8b")
+        assert result is None
+        # Should NOT be cached — next call should retry
+        assert "bad-meta-model:8b" not in _model_context_cache
 
     def test_get_model_context_size_double_check_lock(self):
         """Test double-checked locking when cache is populated during lock acquisition."""
