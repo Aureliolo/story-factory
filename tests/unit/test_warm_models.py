@@ -159,6 +159,37 @@ class TestWarmModels:
             warning_msgs = [r for r in caplog.records if "Failed to warm model" in r.message]
             assert len(warning_msgs) == 2
 
+    def test_get_ollama_client_failure_is_nonfatal(self, mock_services):
+        """Test that get_ollama_client failure does not abort the build."""
+        with patch("src.services.world_service._warmup.get_ollama_client") as mock_get_client:
+            mock_get_client.side_effect = RuntimeError("Invalid host URL")
+
+            # Should not raise — client creation failure is non-fatal
+            _warm_models(mock_services)
+
+    def test_get_ollama_client_failure_logs_warning(self, mock_services, caplog):
+        """Test that get_ollama_client failure emits a warning log."""
+        with patch("src.services.world_service._warmup.get_ollama_client") as mock_get_client:
+            mock_get_client.side_effect = RuntimeError("Invalid host URL")
+
+            with caplog.at_level(logging.WARNING, logger="src.services.world_service._warmup"):
+                _warm_models(mock_services)
+
+            warning_msgs = [r for r in caplog.records if "Failed to warm model" in r.message]
+            assert len(warning_msgs) == 2
+
+    def test_warm_order_creator_then_judge(self, mock_services):
+        """Test that creator model is warmed before judge for deterministic order."""
+        with patch("src.services.world_service._warmup.get_ollama_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_get_client.return_value = mock_client
+
+            _warm_models(mock_services)
+
+            calls = mock_client.chat.call_args_list
+            assert calls[0].kwargs["model"] == "test-creator:8b"
+            assert calls[1].kwargs["model"] == "test-judge:12b"
+
     def test_logs_warning_on_model_resolution_failure(self, mock_services, caplog):
         """Test that model resolution failure emits a warning log."""
         mock_services.world_quality._get_creator_model.side_effect = ValueError(

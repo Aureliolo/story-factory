@@ -1,8 +1,8 @@
 """World Quality Service - multi-model iteration for world building quality.
 
 Implements a generate-judge-refine loop using:
-- Creator model: High temperature (0.9) for creative generation
-- Judge model: Low temperature (0.1) for consistent evaluation
+- Creator model: Higher temperature for creative generation (configurable, default 0.9)
+- Judge model: Lower temperature for consistent evaluation (configurable, default 0.1)
 - Refinement: Incorporates feedback to improve entities
 """
 
@@ -466,11 +466,11 @@ class WorldQualityService(EntityDelegatesMixin):
 
     def invalidate_model_cache(self) -> None:
         """
-        Clear cached model resolution mappings, judge config, and Ollama client.
+        Clear cached model resolution mappings, configs, and Ollama client.
 
         Forces subsequent model-resolution calls to recompute models instead of using cached results.
-        Also clears the cached JudgeConsistencyConfig and Ollama client so settings changes
-        (including timeout and URL) take effect.
+        Also clears the cached JudgeConsistencyConfig, RefinementConfig, and Ollama client so
+        settings changes (including timeout and URL) take effect.
         """
         self._model_cache.invalidate()
         with self._judge_config_lock:

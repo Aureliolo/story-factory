@@ -1741,7 +1741,7 @@ class TestWorldBuildCancellation:
         cancel_event.set()  # Pre-set to trigger immediate cancellation
 
         options = WorldBuildOptions(
-            clear_existing=True,  # This step checks cancellation first
+            clear_existing=True,  # Cancellation checked before warm-up
             generate_structure=True,
             generate_locations=True,
             generate_factions=True,

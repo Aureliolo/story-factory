@@ -21,9 +21,9 @@ def _warm_models(services: ServiceContainer) -> None:
     """Pre-load creator and judge models into Ollama VRAM before the build loop.
 
     Investigation (issue #399 script) measured a ~4.5s cold-start penalty for
-    the first LLM call.  Sending a minimal ``chat(num_predict=1)`` ping loads
-    the model weights and KV-cache, reducing the first real call to warm-call
-    latency (~2s net savings).
+    the first LLM call.  Sending a minimal ``chat(num_predict=1, num_ctx=512)``
+    ping loads the model weights with minimal KV-cache allocation, reducing the
+    first real call to warm-call latency (~2s net savings).
 
     Errors are logged but do not abort the build — the quality loop will
     handle any model loading failures during its own calls.
@@ -39,12 +39,15 @@ def _warm_models(services: ServiceContainer) -> None:
         )
         return
 
-    models_to_warm = list({creator_model, judge_model})  # deduplicate when creator == judge
+    # Preserve order (creator first, then judge if different) for deterministic logs
+    models_to_warm = [creator_model]
+    if judge_model != creator_model:
+        models_to_warm.append(judge_model)
 
     for model in models_to_warm:
-        client = get_ollama_client(wq.settings, model_id=model)
         t0 = time.perf_counter()
         try:
+            client = get_ollama_client(wq.settings, model_id=model)
             client.chat(
                 model=model,
                 messages=[{"role": "user", "content": "hi"}],

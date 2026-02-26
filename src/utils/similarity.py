@@ -349,7 +349,7 @@ class SemanticDuplicateChecker:
             name2: Second name to compare.
 
         Returns:
-            Cosine similarity score between 0 and 1.
+            Cosine similarity score between -1 and 1.
             Returns 0.0 if either embedding fails.
         """
         emb1 = self.get_embedding(name1)

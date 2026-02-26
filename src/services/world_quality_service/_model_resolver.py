@@ -24,7 +24,7 @@ def resolve_model_for_role(service: WorldQualityService, agent_role: str) -> str
 
     Args:
         service: WorldQualityService instance whose settings and mode_service are consulted.
-        agent_role: Agent role to resolve (e.g., "writer", "judge", "validator").
+        agent_role: Agent role to resolve (e.g., "writer", "judge", "architect").
 
     Returns:
         The resolved model ID for the specified agent_role.

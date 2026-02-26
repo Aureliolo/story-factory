@@ -678,6 +678,28 @@ class TestJudgeConfigCaching:
         service.invalidate_model_cache()
         assert service._client is None
 
+    def test_client_thread_safe_single_instance(self, service):
+        """Concurrent client property access should all observe the same cached instance."""
+        import threading
+
+        barrier = threading.Barrier(8)
+        ids: list[int] = []
+        ids_lock = threading.Lock()
+
+        def worker() -> None:
+            barrier.wait()
+            c = service.client
+            with ids_lock:
+                ids.append(id(c))
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(set(ids)) == 1
+
 
 class TestRefinementConfigCaching:
     """Tests for RefinementConfig caching in WorldQualityService."""

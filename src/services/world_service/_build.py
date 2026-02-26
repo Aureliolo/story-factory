@@ -116,6 +116,11 @@ def build_world(
 
     logger.info(f"Starting world build for project {state.id} with options: {options}")
 
+    # Check cancellation before doing warm-up work
+    if options.is_cancelled():
+        logger.info("World build cancelled by user before warm-up")
+        raise GenerationCancelledError("Generation cancelled by user")
+
     # Pre-load creator and judge models to avoid ~4.5s cold-start penalty (~2s net savings)
     _warm_models(services)
 
@@ -396,7 +401,7 @@ def _build_world_entities(
                         )
                     )
                 except Exception:
-                    logger.debug("Sub-step progress callback failed", exc_info=True)
+                    logger.warning("Sub-step progress callback failed", exc_info=True)
 
             rel_progress_cb = _rel_progress_adapter
 
