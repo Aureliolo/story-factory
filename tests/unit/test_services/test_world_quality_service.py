@@ -710,6 +710,28 @@ class TestRefinementConfigCaching:
         config = service.get_config()
         assert config is not None
 
+    def test_refinement_config_thread_safe_single_instance(self, service):
+        """Concurrent get_config() calls should all observe the same cached instance."""
+        import threading
+
+        barrier = threading.Barrier(8)
+        ids: list[int] = []
+        ids_lock = threading.Lock()
+
+        def worker() -> None:
+            barrier.wait()
+            cfg = service.get_config()
+            with ids_lock:
+                ids.append(id(cfg))
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(set(ids)) == 1
+
 
 class TestRecordEntityQuality:
     """Tests for record_entity_quality method."""
