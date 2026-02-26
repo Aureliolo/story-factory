@@ -1,14 +1,15 @@
 """Model warm-up for world build.
 
 Pre-loads creator and judge models into Ollama VRAM before the build loop
-to eliminate cold-start latency (~2s net savings per investigation #399).
+to eliminate cold-start latency (investigation in #399 measured ~4.5s cold-start
+penalty; warm-up itself costs ~2.5s, yielding ~2s net savings).
 """
 
 import logging
 import time
 from typing import TYPE_CHECKING
 
-import ollama
+from src.services.llm_client import get_ollama_client
 
 if TYPE_CHECKING:
     from src.services import ServiceContainer
@@ -27,17 +28,21 @@ def _warm_models(services: ServiceContainer) -> None:
     Errors are logged but do not abort the build — the quality loop will
     handle any model loading failures during its own calls.
     """
-    wq = services.world_quality
-    creator_model = wq._get_creator_model()
-    judge_model = wq._get_judge_model()
-    models_to_warm = list({creator_model, judge_model})  # deduplicate if same
+    try:
+        wq = services.world_quality
+        creator_model = wq._get_creator_model()
+        judge_model = wq._get_judge_model()
+    except Exception:
+        logger.warning(
+            "Failed to resolve models for warm-up (non-fatal, build continues)",
+            exc_info=True,
+        )
+        return
 
-    client = ollama.Client(
-        host=wq.settings.ollama_url,
-        timeout=wq.settings.ollama_generate_timeout,
-    )
+    models_to_warm = list({creator_model, judge_model})  # deduplicate when creator == judge
 
     for model in models_to_warm:
+        client = get_ollama_client(wq.settings, model_id=model)
         t0 = time.perf_counter()
         try:
             client.chat(
@@ -50,7 +55,7 @@ def _warm_models(services: ServiceContainer) -> None:
                 model,
                 time.perf_counter() - t0,
             )
-        except (ollama.ResponseError, Exception) as e:
+        except Exception as e:
             logger.warning(
                 "Failed to warm model '%s' (non-fatal, build continues): %s",
                 model,

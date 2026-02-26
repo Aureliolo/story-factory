@@ -565,4 +565,10 @@ class WorldTimelineComponent:
 
             logger.info("Restored world timeline preferences from localStorage")
 
-        self._render_timeline()
+        try:
+            self._render_timeline()
+        except Exception:
+            logger.error(
+                "Failed to render timeline after applying preferences",
+                exc_info=True,
+            )

@@ -244,6 +244,7 @@ class WorldQualityService(EntityDelegatesMixin):
         self.settings = settings
         self.mode_service = mode_service
         self._client: ollama.Client | None = None
+        self._client_lock = threading.RLock()
         self._analytics_db: ModeDatabase | None = mode_db
         self._judge_config: JudgeConsistencyConfig | None = None
         self._judge_config_lock = threading.RLock()
@@ -409,17 +410,20 @@ class WorldQualityService(EntityDelegatesMixin):
         """
         Provide an Ollama client configured with a timeout scaled to the writer model's size; creates and caches the client on first access.
 
+        Thread-safe: guarded by ``_client_lock``.
+
         Returns:
             ollama.Client: The cached or newly created Ollama client configured with the service host and a timeout derived from the writer model.
         """
-        if self._client is None:
-            # Use writer model for timeout scaling since it's typically the largest
-            writer_model = self.settings.get_model_for_agent("writer")
-            self._client = ollama.Client(
-                host=self.settings.ollama_url,
-                timeout=self.settings.get_scaled_timeout(writer_model),
-            )
-        return self._client
+        with self._client_lock:
+            if self._client is None:
+                # Use writer model for timeout scaling since it's typically the largest
+                writer_model = self.settings.get_model_for_agent("writer")
+                self._client = ollama.Client(
+                    host=self.settings.ollama_url,
+                    timeout=self.settings.get_scaled_timeout(writer_model),
+                )
+            return self._client
 
     def get_config(self) -> RefinementConfig:
         """Get refinement configuration from settings.
@@ -429,6 +433,7 @@ class WorldQualityService(EntityDelegatesMixin):
         """
         with self._refinement_config_lock:
             if self._refinement_config is None:
+                logger.debug("RefinementConfig cache miss — creating from settings")
                 self._refinement_config = RefinementConfig.from_settings(self.settings)
             return self._refinement_config
 
@@ -472,7 +477,8 @@ class WorldQualityService(EntityDelegatesMixin):
             self._judge_config = None
         with self._refinement_config_lock:
             self._refinement_config = None
-        self._client = None
+        with self._client_lock:
+            self._client = None
 
     def _get_creator_model(self, entity_type: str | None = None) -> str:
         """

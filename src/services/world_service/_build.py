@@ -116,7 +116,7 @@ def build_world(
 
     logger.info(f"Starting world build for project {state.id} with options: {options}")
 
-    # Pre-load creator and judge models to eliminate cold-start penalty (~4.5s savings)
+    # Pre-load creator and judge models to avoid ~4.5s cold-start penalty (~2s net savings)
     _warm_models(services)
 
     # Log quality thresholds once at build start (not per-entity)
