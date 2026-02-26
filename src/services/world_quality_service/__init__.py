@@ -253,6 +253,7 @@ class WorldQualityService(EntityDelegatesMixin):
         self._model_cache = ModelResolutionCache(settings, mode_service)
         self._calendar_context: str | None = None
         self._calendar_context_lock = threading.RLock()
+        self._cached_calendar_string: str | None = None
         logger.debug("WorldQualityService initialized successfully")
 
     # ========== Calendar context for downstream entity generation ==========
@@ -273,6 +274,7 @@ class WorldQualityService(EntityDelegatesMixin):
         with self._calendar_context_lock:
             if calendar_dict is None:
                 self._calendar_context = None
+                self._cached_calendar_string = None
                 logger.debug("Cleared calendar context")
                 return
 
@@ -311,6 +313,12 @@ class WorldQualityService(EntityDelegatesMixin):
                     "Do NOT use real-world dates."
                 )
             self._calendar_context = context_text
+            # Pre-format the calendar string so get_calendar_context() avoids
+            # re-acquiring the lock and re-concatenating on every call.
+            if context_text is not None:
+                self._cached_calendar_string = f"\nCALENDAR & TIMELINE:\n{context_text}\n"
+            else:
+                self._cached_calendar_string = None
             if self._calendar_context is None:
                 logger.warning(
                     "Calendar dict provided but no context extracted — calendar may be malformed: %s",
@@ -324,25 +332,28 @@ class WorldQualityService(EntityDelegatesMixin):
     def get_calendar_context(self) -> str:
         """Get formatted calendar context block for entity generation prompts.
 
-        Thread-safe: guarded by ``_calendar_context_lock``.
+        Returns the pre-formatted cached string when available, avoiding
+        redundant lock acquisition and string concatenation.
 
         Returns:
             Calendar context block string. When no calendar is available, returns
             a sentinel block instructing judges to reflect temporal uncertainty.
             Never returns an empty string.
         """
-        with self._calendar_context_lock:
-            if not self._calendar_context:
-                logger.debug("get_calendar_context: returning sentinel calendar context")
-                return (
-                    "\nCALENDAR & TIMELINE:\n"
-                    "No calendar available — temporal scores should reflect this uncertainty.\n"
-                )
+        # Fast path: read the immutable cached string without locking
+        cached = self._cached_calendar_string
+        if cached is not None:
             logger.debug(
-                "get_calendar_context: returning actual calendar context (%d chars)",
-                len(self._calendar_context),
+                "get_calendar_context: returning cached calendar context (%d chars)",
+                len(cached),
             )
-            return f"\nCALENDAR & TIMELINE:\n{self._calendar_context}\n"
+            return cached
+        # Slow path: no calendar has been set yet
+        logger.debug("get_calendar_context: returning sentinel calendar context")
+        return (
+            "\nCALENDAR & TIMELINE:\n"
+            "No calendar available — temporal scores should reflect this uncertainty.\n"
+        )
 
     @property
     def analytics_db(self) -> ModeDatabase:

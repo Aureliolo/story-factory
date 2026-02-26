@@ -20,7 +20,6 @@ from src.services.world_service._warmup import _warm_models
 from src.utils.exceptions import (
     DatabaseClosedError,
     GenerationCancelledError,
-    WorldGenerationError,
 )
 from src.utils.validation import validate_not_none, validate_type
 
@@ -437,10 +436,14 @@ def _build_world_entities(
             )
             counts["events"] = event_count
             logger.info("Generated %d world events", event_count)
-        except GenerationCancelledError:
+        except GenerationCancelledError, DatabaseClosedError:
             raise
-        except (WorldGenerationError, ValueError) as e:
-            logger.warning("Event generation failed (non-fatal), continuing without events: %s", e)
+        except Exception as e:
+            logger.warning(
+                "Event generation failed (non-fatal), continuing without events: %s",
+                e,
+                exc_info=True,
+            )
 
     # Step 9: Validate temporal consistency (non-fatal, before embedding)
     if svc.settings.validate_temporal_consistency:

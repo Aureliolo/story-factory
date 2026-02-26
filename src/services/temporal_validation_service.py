@@ -6,7 +6,11 @@ from enum import StrEnum
 from pydantic import BaseModel, Field
 
 from src.memory.entities import Entity
-from src.memory.timeline_types import EntityLifecycle, extract_lifecycle_from_attributes
+from src.memory.timeline_types import (
+    EntityLifecycle,
+    StoryTimestamp,
+    extract_lifecycle_from_attributes,
+)
 from src.memory.world_calendar import WorldCalendar
 from src.memory.world_database import WorldDatabase
 from src.settings import Settings
@@ -408,7 +412,7 @@ class TemporalValidationService:
         calendar: WorldCalendar,
         result: TemporalValidationResult,
     ) -> None:
-        """Validate that dates match the calendar rules."""
+        """Validate that dates match the calendar rules and era names are consistent."""
         # Validate birth date
         if lifecycle.birth and lifecycle.birth.year is not None:
             is_valid, error_msg = calendar.validate_date(
@@ -429,6 +433,9 @@ class TemporalValidationService:
                 result.warnings.append(warning)
                 logger.warning(f"Temporal warning: {warning.message}")
 
+            # Cross-validate era name against calendar
+            self._check_era_name_mismatch(entity, lifecycle.birth, calendar, "birth", result)
+
         # Validate death date
         if lifecycle.death and lifecycle.death.year is not None:
             is_valid, error_msg = calendar.validate_date(
@@ -448,6 +455,56 @@ class TemporalValidationService:
                 )
                 result.warnings.append(warning)
                 logger.warning(f"Temporal warning: {warning.message}")
+
+            # Cross-validate era name against calendar
+            self._check_era_name_mismatch(entity, lifecycle.death, calendar, "death", result)
+
+    def _check_era_name_mismatch(
+        self,
+        entity: Entity,
+        timestamp: StoryTimestamp,
+        calendar: WorldCalendar,
+        date_label: str,
+        result: TemporalValidationResult,
+    ) -> None:
+        """Compare an entity's stored era_name against the calendar-resolved era.
+
+        Emits an INVALID_ERA warning when the entity carries an era name that
+        does not match what the calendar says for that year.
+
+        Args:
+            entity: The entity being validated.
+            timestamp: The StoryTimestamp with year and optional era_name.
+            calendar: WorldCalendar used to resolve the correct era.
+            date_label: Human-readable label for the date (e.g. "birth", "death").
+            result: TemporalValidationResult to append warnings to.
+        """
+        if timestamp.year is None or not timestamp.era_name:
+            return
+
+        resolved_era = calendar.get_era_for_year(timestamp.year)
+        if resolved_era is None:
+            return
+
+        if timestamp.era_name != resolved_era.name:
+            warning = TemporalValidationIssue(
+                entity_id=entity.id,
+                entity_name=entity.name,
+                entity_type=entity.type,
+                error_type=TemporalErrorType.INVALID_ERA,
+                severity=TemporalErrorSeverity.WARNING,
+                message=(
+                    f"Era name mismatch on {date_label} date: entity says "
+                    f"'{timestamp.era_name}' but calendar resolves year "
+                    f"{timestamp.year} to '{resolved_era.name}'"
+                ),
+                suggestion=(
+                    f"Change era name from '{timestamp.era_name}' to "
+                    f"'{resolved_era.name}' for year {timestamp.year}"
+                ),
+            )
+            result.warnings.append(warning)
+            logger.warning("Temporal warning: %s", warning.message)
 
     def calculate_temporal_consistency_score(self, result: TemporalValidationResult) -> float:
         """Calculate a temporal consistency score (0-10) from validation result.

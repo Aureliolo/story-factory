@@ -1,8 +1,9 @@
 """Model service - handles Ollama model operations."""
 
 import logging
+import time
 from collections.abc import Generator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import ollama
@@ -47,6 +48,7 @@ class OllamaHealth:
     message: str
     version: str | None = None
     available_vram: int | None = None
+    cold_start_models: list[str] = field(default_factory=list)
 
 
 class ModelService:
@@ -69,6 +71,20 @@ class ModelService:
         self._last_health_vram: int | None = None
         self._last_model_count: int | None = None
         self._last_model_count_with_sizes: int | None = None
+
+        # TTL caches for frequently-polled methods
+        self._health_cache: OllamaHealth | None = None
+        self._health_cache_time: float = 0.0
+        self._health_cache_ttl: float = 15.0  # seconds
+
+        self._installed_cache: list[str] | None = None
+        self._installed_cache_time: float = 0.0
+        self._installed_cache_ttl: float = 10.0  # seconds
+
+        self._vram_cache: int | None = None
+        self._vram_cache_time: float = 0.0
+        self._vram_cache_ttl: float = 15.0  # seconds
+
         logger.debug("ModelService initialized successfully")
 
     def _log_health_failure(self, message: str) -> None:
@@ -88,9 +104,20 @@ class ModelService:
     def check_health(self) -> OllamaHealth:
         """Check Ollama service health and connectivity.
 
+        Results are cached for ``_health_cache_ttl`` seconds to avoid
+        redundant API calls from the header refresh loop.
+
         Returns:
             OllamaHealth with status information.
         """
+        now = time.monotonic()
+        if (
+            self._health_cache is not None
+            and (now - self._health_cache_time) < self._health_cache_ttl
+        ):
+            logger.debug("check_health: returning cached result")
+            return self._health_cache
+
         logger.debug(f"check_health called: ollama_url={self.settings.ollama_url}")
         try:
             # Try to list models as a health check
@@ -112,33 +139,72 @@ class ModelService:
                 )
             self._last_health_healthy = True
             self._last_health_vram = vram
-            return OllamaHealth(
+
+            # Detect cold-start models: configured models not currently loaded in VRAM
+            cold_start: list[str] = []
+            try:
+                running = self.get_running_models()
+                running_names = {str(m["name"]) for m in running}
+                # Collect unique non-"auto" models from agent_models + default_model
+                configured: set[str] = set()
+                if self.settings.default_model != "auto":
+                    configured.add(self.settings.default_model)
+                for model_name in self.settings.agent_models.values():
+                    if model_name != "auto":
+                        configured.add(model_name)
+                for model_name in sorted(configured):
+                    if model_name not in running_names:
+                        cold_start.append(model_name)
+            except Exception as e:
+                logger.debug("Cold-start detection failed (non-fatal): %s", e)
+
+            result = OllamaHealth(
                 is_healthy=True,
                 message="Ollama is running",
                 version=None,  # Ollama doesn't expose version easily
                 available_vram=vram,
+                cold_start_models=cold_start,
             )
+            self._health_cache = result
+            self._health_cache_time = now
+            return result
         except ollama.ResponseError as e:
             self._log_health_failure(f"Ollama API error during health check: {e}")
             self._last_health_healthy = False
-            return OllamaHealth(
+            result = OllamaHealth(
                 is_healthy=False,
                 message=f"Ollama API error: {e}",
             )
+            self._health_cache = result
+            self._health_cache_time = now
+            return result
         except (ConnectionError, TimeoutError) as e:
             self._log_health_failure(f"Cannot connect to Ollama at {self.settings.ollama_url}: {e}")
             self._last_health_healthy = False
-            return OllamaHealth(
+            result = OllamaHealth(
                 is_healthy=False,
                 message=f"Cannot connect to Ollama: {e}",
             )
+            self._health_cache = result
+            self._health_cache_time = now
+            return result
 
     def list_installed(self) -> list[str]:
         """List installed Ollama models.
 
+        Results are cached for ``_installed_cache_ttl`` seconds.
+
         Returns:
             List of installed model IDs.
         """
+        now = time.monotonic()
+        if (
+            self._installed_cache is not None
+            and (now - self._installed_cache_time) < self._installed_cache_ttl
+        ):
+            logger.debug("list_installed: returning cached result")
+            return list(self._installed_cache)
+
         logger.debug("list_installed called")
         try:
             client = ollama.Client(
@@ -152,6 +218,8 @@ class ModelService:
                 self._last_model_count = count
             else:
                 logger.debug(f"Found {count} installed models")
+            self._installed_cache = models
+            self._installed_cache_time = now
             return models
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.warning(f"Failed to list models from Ollama: {e}")
@@ -324,6 +392,7 @@ class ModelService:
                 }
 
             logger.info(f"Download completed: {model_id}")
+            self.invalidate_caches()
 
         except ollama.ResponseError as e:
             logger.error(f"Ollama API error pulling model {model_id}: {e}")
@@ -351,10 +420,22 @@ class ModelService:
             )
             client.delete(model_id)
             logger.info(f"Deleted model: {model_id}")
+            self.invalidate_caches()
             return True
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(f"Failed to delete model {model_id}: {e}")
             return False
+
+    def invalidate_caches(self) -> None:
+        """Clear all TTL caches.
+
+        Called after model install/delete to ensure subsequent queries
+        reflect the new state immediately.
+        """
+        self._health_cache = None
+        self._installed_cache = None
+        self._vram_cache = None
+        logger.debug("ModelService caches invalidated")
 
     def check_model_update(self, model_id: str) -> dict[str, Any]:
         """Check if a model has an update available.
@@ -513,12 +594,21 @@ class ModelService:
     def get_vram(self) -> int:
         """Get available VRAM in GB.
 
+        Results are cached for ``_vram_cache_ttl`` seconds.
+
         Returns:
             VRAM in gigabytes.
         """
+        now = time.monotonic()
+        if self._vram_cache is not None and (now - self._vram_cache_time) < self._vram_cache_ttl:
+            logger.debug("get_vram: returning cached result (%dGB)", self._vram_cache)
+            return self._vram_cache
+
         logger.debug("get_vram called")
         vram = get_available_vram()
         logger.debug(f"Available VRAM: {vram}GB")
+        self._vram_cache = vram
+        self._vram_cache_time = now
         return vram
 
     def get_recommended_model(self, role: str | None = None) -> str:

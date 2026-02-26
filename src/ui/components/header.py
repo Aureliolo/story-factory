@@ -111,6 +111,11 @@ class Header:
             if health.is_healthy:
                 ui.icon("check_circle", size="xs").classes("text-green-500")
                 self._status_label = ui.label(f"{vram}GB").classes("text-xs text-green-500")
+                if health.cold_start_models:
+                    cold_names = ", ".join(health.cold_start_models)
+                    ui.icon("hourglass_empty", size="xs").classes("text-yellow-500").tooltip(
+                        f"Cold start: {cold_names} not loaded in VRAM"
+                    )
             else:
                 ui.icon("error", size="xs").classes("text-red-500")
                 self._status_label = ui.label("Offline").classes("text-xs text-red-500")

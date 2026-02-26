@@ -267,14 +267,24 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
 
                 except WorldGenerationError as e:
                     error_msg = summarize_llm_error(e, max_length=200)
-                    errors.append(error_msg)
-                    consecutive_failures += 1
-                    logger.error(
-                        "Failed to generate %s (task %d): %s",
-                        entity_type,
-                        task_idx + 1,
-                        error_msg,
-                    )
+                    if "duplicate" in error_msg.lower():
+                        logger.warning(
+                            "Duplicate %s from parallel worker (task %d): %s",
+                            entity_type,
+                            task_idx + 1,
+                            error_msg,
+                        )
+                        # Don't count duplicates as consecutive failures —
+                        # they're expected race outcomes in parallel generation
+                    else:
+                        errors.append(error_msg)
+                        consecutive_failures += 1
+                        logger.error(
+                            "Failed to generate %s (task %d): %s",
+                            entity_type,
+                            task_idx + 1,
+                            error_msg,
+                        )
 
                 except Exception as e:
                     error_msg = summarize_llm_error(e, max_length=200)

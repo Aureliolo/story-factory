@@ -948,6 +948,8 @@ class TestModelServiceStateChangeLogging:
             model_service.check_health()
             caplog.clear()
 
+            # Invalidate TTL cache so the second call actually hits the API
+            model_service.invalidate_caches()
             model_service.check_health()
 
             info_records = [r for r in caplog.records if r.levelno == logging.INFO]
@@ -970,6 +972,8 @@ class TestModelServiceStateChangeLogging:
             model_service.check_health()
             caplog.clear()
 
+            # Invalidate TTL cache so the second call actually hits the API
+            model_service.invalidate_caches()
             mock_vram.return_value = 16
             model_service.check_health()
 
@@ -1004,6 +1008,8 @@ class TestModelServiceStateChangeLogging:
             model_service.check_health()
             caplog.clear()
 
+            # Invalidate TTL cache so the second call actually hits the API
+            model_service.invalidate_caches()
             model_service.check_health()
 
             warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
@@ -1026,6 +1032,8 @@ class TestModelServiceStateChangeLogging:
             model_service.check_health()
             caplog.clear()
 
+            # Invalidate TTL cache so the second call actually hits the API
+            model_service.invalidate_caches()
             model_service.check_health()
 
             warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
@@ -1048,6 +1056,8 @@ class TestModelServiceStateChangeLogging:
             model_service.check_health()
             caplog.clear()
 
+            # Invalidate TTL cache so the second call actually hits the API
+            model_service.invalidate_caches()
             # Second call succeeds (recovery)
             mock_instance.list.side_effect = None
             mock_instance.list.return_value = MagicMock(models=[])
@@ -1088,6 +1098,8 @@ class TestModelServiceStateChangeLogging:
             model_service.list_installed()
             caplog.clear()
 
+            # Invalidate TTL cache so the second call actually hits the API
+            model_service.invalidate_caches()
             model_service.list_installed()
 
             info_records = [r for r in caplog.records if r.levelno == logging.INFO]
@@ -1111,6 +1123,8 @@ class TestModelServiceStateChangeLogging:
             model_service.list_installed()
             caplog.clear()
 
+            # Invalidate TTL cache so the second call actually hits the API
+            model_service.invalidate_caches()
             mock_model2 = MagicMock()
             mock_model2.model = "mistral:7b"
             mock_instance.list.return_value = MagicMock(models=[mock_model1, mock_model2])

@@ -318,7 +318,7 @@ class Settings:
         default_factory=PER_ENTITY_QUALITY_DEFAULTS.copy
     )
     world_quality_creator_temp: float = 0.9  # Temperature for creative generation
-    world_quality_judge_temp: float = 0.1  # Temperature for quality judgment
+    world_quality_judge_temp: float = 0.3  # Temperature for quality judgment
     world_quality_refinement_temp: float = 0.7  # Temperature for refinement passes
     world_quality_early_stopping_patience: int = 2  # Stop after N consecutive score degradations
 

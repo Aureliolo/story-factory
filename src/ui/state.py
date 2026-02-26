@@ -15,7 +15,7 @@ from src.utils.exceptions import BackgroundTaskActiveError
 logger = logging.getLogger(__name__)
 
 # Cache TTL in seconds for project list (avoids magic number)
-_PROJECT_LIST_CACHE_TTL = 2.0
+_PROJECT_LIST_CACHE_TTL = 30.0
 
 
 class ActionType(Enum):

@@ -218,6 +218,7 @@ def _generated_data_to_world_calendar(result: GeneratedCalendarData) -> WorldCal
 
     # Match era_start_year to the era matching current_era_name for consistency
     era_start_year = 1
+    current_era_obj = None
     if eras:
         # Try exact match first
         current_era_obj = next((era for era in eras if era.name == result.era_name), None)
@@ -254,8 +255,19 @@ def _generated_data_to_world_calendar(result: GeneratedCalendarData) -> WorldCal
     else:
         logger.warning("Calendar has no eras — using fallback era_start_year=1")
 
+    # Coerce era_name to match the resolved era's canonical name so that
+    # downstream entities inherit the correct spelling/casing.
+    resolved_era_name = result.era_name
+    if current_era_obj and current_era_obj.name != result.era_name:
+        logger.warning(
+            "Coercing calendar era_name from '%s' to matched era '%s' for consistency",
+            result.era_name,
+            current_era_obj.name,
+        )
+        resolved_era_name = current_era_obj.name
+
     return WorldCalendar(
-        current_era_name=result.era_name,
+        current_era_name=resolved_era_name,
         era_abbreviation=result.era_abbreviation,
         era_start_year=era_start_year,
         months=months,

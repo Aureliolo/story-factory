@@ -35,20 +35,18 @@ class CharacterQualityScores(BaseQualityScores):
     @property
     def average(self) -> float:
         """
-        Mean of the character's six quality dimensions.
+        Mean of the character's core quality dimensions.
+
+        Excludes ``temporal_plausibility`` from the average because it is
+        routinely over-scored by the judge LLM, inflating the aggregate.
+        Temporal plausibility is still validated via the ``dimension_minimum``
+        floor check.
 
         Returns:
             average (float): Mean of `depth`, `goal_clarity` (alias `goals`), `flaws`,
-                `uniqueness`, `arc_potential`, and `temporal_plausibility`.
+                `uniqueness`, and `arc_potential`.
         """
-        return (
-            self.depth
-            + self.goals
-            + self.flaws
-            + self.uniqueness
-            + self.arc_potential
-            + self.temporal_plausibility
-        ) / 6.0
+        return (self.depth + self.goals + self.flaws + self.uniqueness + self.arc_potential) / 5.0
 
     def to_dict(self) -> dict[str, float | str]:
         """
@@ -123,19 +121,17 @@ class LocationQualityScores(BaseQualityScores):
     @property
     def average(self) -> float:
         """
-        Compute the mean of the location's quality dimensions.
+        Compute the mean of the location's core quality dimensions.
+
+        Excludes ``temporal_plausibility`` (checked via ``dimension_minimum``).
 
         Returns:
             average (float): Mean of `atmosphere`, `significance`, `story_relevance`,
-                `distinctiveness`, and `temporal_plausibility`.
+                and `distinctiveness`.
         """
         return (
-            self.atmosphere
-            + self.significance
-            + self.story_relevance
-            + self.distinctiveness
-            + self.temporal_plausibility
-        ) / 5.0
+            self.atmosphere + self.significance + self.story_relevance + self.distinctiveness
+        ) / 4.0
 
     def to_dict(self) -> dict[str, float | str]:
         """
@@ -197,19 +193,17 @@ class FactionQualityScores(BaseQualityScores):
     @property
     def average(self) -> float:
         """
-        Compute the mean of the faction's five quality dimensions.
+        Compute the mean of the faction's core quality dimensions.
+
+        Excludes ``temporal_plausibility`` (checked via ``dimension_minimum``).
 
         Returns:
             average (float): Mean of coherence, influence, conflict_potential,
-                distinctiveness, and temporal_plausibility.
+                and distinctiveness.
         """
         return (
-            self.coherence
-            + self.influence
-            + self.conflict_potential
-            + self.distinctiveness
-            + self.temporal_plausibility
-        ) / 5.0
+            self.coherence + self.influence + self.conflict_potential + self.distinctiveness
+        ) / 4.0
 
     def to_dict(self) -> dict[str, float | str]:
         """
@@ -274,19 +268,17 @@ class ItemQualityScores(BaseQualityScores):
     @property
     def average(self) -> float:
         """
-        Compute the mean quality score across the item's five dimensions.
+        Compute the mean quality score across the item's core dimensions.
+
+        Excludes ``temporal_plausibility`` (checked via ``dimension_minimum``).
 
         Returns:
             float: Mean of `significance`, `uniqueness`, `narrative_potential`,
-                `integration`, and `temporal_plausibility`.
+                and `integration`.
         """
         return (
-            self.significance
-            + self.uniqueness
-            + self.narrative_potential
-            + self.integration
-            + self.temporal_plausibility
-        ) / 5.0
+            self.significance + self.uniqueness + self.narrative_potential + self.integration
+        ) / 4.0
 
     def to_dict(self) -> dict[str, float | str]:
         """
@@ -349,19 +341,15 @@ class ConceptQualityScores(BaseQualityScores):
     @property
     def average(self) -> float:
         """
-        Return the mean of the concept's five quality dimensions.
+        Return the mean of the concept's core quality dimensions.
+
+        Excludes ``temporal_plausibility`` (checked via ``dimension_minimum``).
 
         Returns:
             The average score (0 to 10) across relevance, depth, manifestation,
-            resonance, and temporal_plausibility.
+            and resonance.
         """
-        return (
-            self.relevance
-            + self.depth
-            + self.manifestation
-            + self.resonance
-            + self.temporal_plausibility
-        ) / 5.0
+        return (self.relevance + self.depth + self.manifestation + self.resonance) / 4.0
 
     def to_dict(self) -> dict[str, float | str]:
         """
@@ -421,20 +409,20 @@ class EventQualityScores(BaseQualityScores):
 
     @property
     def average(self) -> float:
-        """Compute the mean of the event's five quality dimensions.
+        """Compute the mean of the event's core quality dimensions.
+
+        Excludes ``temporal_plausibility`` (checked via ``dimension_minimum``).
 
         Returns:
-            average (float): Mean of significance, temporal_plausibility,
-                causal_coherence, narrative_potential, and entity_integration.
+            average (float): Mean of significance, causal_coherence,
+                narrative_potential, and entity_integration.
         """
-        avg = (
+        return (
             self.significance
-            + self.temporal_plausibility
             + self.causal_coherence
             + self.narrative_potential
             + self.entity_integration
-        ) / 5.0
-        return avg
+        ) / 4.0
 
     def to_dict(self) -> dict[str, float | str]:
         """Serialize the event quality scores into a dictionary for storage.
