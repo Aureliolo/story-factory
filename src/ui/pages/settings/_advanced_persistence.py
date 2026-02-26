@@ -93,6 +93,11 @@ def save_to_settings(page: SettingsPage) -> None:
             "world_quality_dimension_minimum",
             float,
         ),
+        (
+            "_hail_mary_min_attempts_input",
+            "world_quality_hail_mary_min_attempts",
+            int,
+        ),
         # Judge consistency settings
         ("_judge_consistency_switch", "judge_consistency_enabled", None),
         ("_judge_multi_call_switch", "judge_multi_call_enabled", None),

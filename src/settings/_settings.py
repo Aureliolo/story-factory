@@ -332,6 +332,7 @@ class Settings:
     world_quality_early_stopping_variance_tolerance: float = 0.3  # Score variance tolerance
     world_quality_score_plateau_tolerance: float = 0.1  # Max score diff for plateau detection
     world_quality_dimension_minimum: float = 6.0  # Any dimension below this forces refinement
+    world_quality_hail_mary_min_attempts: int = 5  # Min attempts before hail-mary win-rate gate
 
     # Circuit breaker settings (#175)
     circuit_breaker_enabled: bool = True  # Enable circuit breaker for LLM calls

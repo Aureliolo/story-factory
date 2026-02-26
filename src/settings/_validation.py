@@ -357,6 +357,12 @@ def _validate_world_quality(settings: Settings) -> None:
             f"got {settings.world_quality_early_stopping_patience}"
         )
 
+    if not 1 <= settings.world_quality_hail_mary_min_attempts <= 100:
+        raise ValueError(
+            f"world_quality_hail_mary_min_attempts must be between 1 and 100, "
+            f"got {settings.world_quality_hail_mary_min_attempts}"
+        )
+
     for temp_name, temp_value in [
         ("world_quality_creator_temp", settings.world_quality_creator_temp),
         ("world_quality_judge_temp", settings.world_quality_judge_temp),

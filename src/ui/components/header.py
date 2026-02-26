@@ -38,6 +38,7 @@ class Header:
         self.current_path = current_path
         self._project_select: Select | None = None
         self._status_label: Label | None = None
+        self._status_icon: Any = None
         self._cold_start_icon: Any = None
 
     def build(self) -> None:
@@ -110,7 +111,7 @@ class Header:
             vram = self.services.model.get_vram()
 
             if health.is_healthy:
-                ui.icon("check_circle", size="xs").classes("text-green-500")
+                self._status_icon = ui.icon("check_circle", size="xs").classes("text-green-500")
                 self._status_label = ui.label(f"{vram}GB").classes("text-xs text-green-500")
                 if health.cold_start_models:
                     cold_names = ", ".join(health.cold_start_models)
@@ -126,7 +127,7 @@ class Header:
                     )
                     self._cold_start_icon.visible = False
             else:
-                ui.icon("error", size="xs").classes("text-red-500")
+                self._status_icon = ui.icon("error", size="xs").classes("text-red-500")
                 self._status_label = ui.label("Offline").classes("text-xs text-red-500")
                 # Create hidden placeholder so refresh_status can toggle visibility
                 # without checking for None or re-creating the element
@@ -208,9 +209,17 @@ class Header:
             if health.is_healthy:
                 self._status_label.text = f"{vram}GB"
                 self._status_label.classes(replace="text-xs text-green-500")
+                if self._status_icon:
+                    self._status_icon._props["name"] = "check_circle"
+                    self._status_icon.classes(replace="text-green-500")
+                    self._status_icon.update()
             else:
                 self._status_label.text = "Offline"
                 self._status_label.classes(replace="text-xs text-red-500")
+                if self._status_icon:
+                    self._status_icon._props["name"] = "error"
+                    self._status_icon.classes(replace="text-red-500")
+                    self._status_icon.update()
 
             # Update cold-start indicator
             if self._cold_start_icon:

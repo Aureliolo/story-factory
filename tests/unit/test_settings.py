@@ -2051,6 +2051,24 @@ class TestMissingValidationCoverage:
         ):
             settings.validate()
 
+    def test_validate_raises_on_invalid_hail_mary_min_attempts_low(self):
+        """Should raise ValueError for hail_mary_min_attempts below 1."""
+        settings = Settings()
+        settings.world_quality_hail_mary_min_attempts = 0
+        with pytest.raises(
+            ValueError, match="world_quality_hail_mary_min_attempts must be between"
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_hail_mary_min_attempts_high(self):
+        """Should raise ValueError for hail_mary_min_attempts above 100."""
+        settings = Settings()
+        settings.world_quality_hail_mary_min_attempts = 101
+        with pytest.raises(
+            ValueError, match="world_quality_hail_mary_min_attempts must be between"
+        ):
+            settings.validate()
+
     # --- Per-entity quality thresholds ---
 
     def test_validate_per_entity_thresholds_default(self):

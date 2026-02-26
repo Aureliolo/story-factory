@@ -127,6 +127,7 @@ class TestBackgroundTaskContextManager:
 
         with pytest.raises(KeyboardInterrupt):
             with state.background_task("build"):
+                assert _is_busy(state)
                 raise KeyboardInterrupt
 
         assert not _is_busy(state)
@@ -325,8 +326,11 @@ class TestProjectListCache:
         """Test that cache expires after TTL and triggers refresh."""
         from unittest.mock import patch
 
+        from src.ui.state import _PROJECT_LIST_CACHE_TTL
+
         state = AppState()
         call_count = 0
+        start_time = 1000.0
 
         def fetch_projects():
             """Fetch mock projects with incrementing ID."""
@@ -335,21 +339,21 @@ class TestProjectListCache:
             return [{"id": str(call_count)}]
 
         with patch("src.ui.state.time") as mock_time:
-            # First call at time 1000.0
-            mock_time.time.return_value = 1000.0
+            # First call
+            mock_time.time.return_value = start_time
             result1 = state.get_cached_projects(fetch_projects)
             initial_call_count = call_count
             assert initial_call_count == 1
             assert result1[0]["id"] == "1"
 
-            # Second call at 15s (within 30s TTL) - should return cached
-            mock_time.time.return_value = 1015.0
+            # Second call within TTL - should return cached
+            mock_time.time.return_value = start_time + _PROJECT_LIST_CACHE_TTL / 2
             result2 = state.get_cached_projects(fetch_projects)
             assert call_count == initial_call_count  # Same count, cache hit
             assert result2 is result1
 
-            # Third call at 31s (beyond 30s TTL) - should refresh
-            mock_time.time.return_value = 1031.0
+            # Third call beyond TTL - should refresh
+            mock_time.time.return_value = start_time + _PROJECT_LIST_CACHE_TTL + 1
             result3 = state.get_cached_projects(fetch_projects)
             assert call_count == initial_call_count + 1  # Incremented, cache miss
             assert result3[0]["id"] == "2"

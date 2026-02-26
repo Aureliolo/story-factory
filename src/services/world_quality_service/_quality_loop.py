@@ -558,7 +558,8 @@ def quality_refinement_loop[T, S: BaseQualityScores](
         if not skip_hail_mary:
             try:
                 win_rate = svc.analytics_db.get_hail_mary_win_rate(
-                    entity_type=entity_type, min_attempts=5
+                    entity_type=entity_type,
+                    min_attempts=config.hail_mary_min_attempts,
                 )
                 if isinstance(win_rate, (int, float)) and win_rate < 0.20:
                     skip_hail_mary = True

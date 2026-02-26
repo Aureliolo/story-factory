@@ -411,6 +411,12 @@ class RefinementConfig(BaseModel):
         description="Per-dimension minimum floor — any dimension below this forces refinement "
         "(0.0 disables the check)",
     )
+    hail_mary_min_attempts: int = Field(
+        default=5,
+        ge=1,
+        le=100,
+        description="Minimum recorded hail-mary attempts before the win-rate gate activates",
+    )
 
     def get_threshold(self, entity_type: str) -> float:
         """Get quality threshold for a specific entity type.
@@ -536,6 +542,7 @@ class RefinementConfig(BaseModel):
                 - world_quality_early_stopping_variance_tolerance
                 - world_quality_score_plateau_tolerance
                 - world_quality_dimension_minimum
+                - world_quality_hail_mary_min_attempts
 
         Returns:
             RefinementConfig: Configuration populated from the corresponding settings attributes.
@@ -564,6 +571,7 @@ class RefinementConfig(BaseModel):
             early_stopping_variance_tolerance=settings.world_quality_early_stopping_variance_tolerance,
             score_plateau_tolerance=settings.world_quality_score_plateau_tolerance,
             dimension_minimum=settings.world_quality_dimension_minimum,
+            hail_mary_min_attempts=settings.world_quality_hail_mary_min_attempts,
         )
 
 

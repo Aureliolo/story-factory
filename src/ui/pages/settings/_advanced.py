@@ -734,6 +734,20 @@ def build_refinement_stopping_section(page: SettingsPage) -> None:
                     width="w-16",
                 )
 
+            with ui.column().classes("gap-1"):
+                ui.label("HM Min.").classes("text-xs text-gray-500")
+                page._hail_mary_min_attempts_input = page._build_number_input(
+                    value=page.settings.world_quality_hail_mary_min_attempts,
+                    min_val=1,
+                    max_val=100,
+                    step=1,
+                    tooltip_text=(
+                        "Minimum recorded hail-mary attempts before the "
+                        "win-rate gate activates (1-100)"
+                    ),
+                    width="w-16",
+                )
+
     logger.debug("Refinement & stopping section built")
 
 
