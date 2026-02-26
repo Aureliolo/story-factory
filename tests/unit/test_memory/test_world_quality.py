@@ -1430,3 +1430,38 @@ class TestEventQualityScores:
                 significance=8.0,
                 # Missing other required fields
             )  # type: ignore[call-arg]
+
+
+class TestBaseQualityScoresEdgeCases:
+    """Edge-case tests for BaseQualityScores generic implementations."""
+
+    def test_average_returns_zero_when_no_numeric_fields(self):
+        """Average should return 0.0 for a subclass with no numeric scoring fields."""
+        from src.memory.world_quality._models import BaseQualityScores
+
+        class EmptyScores(BaseQualityScores):
+            """Subclass with no numeric fields for edge-case testing."""
+
+        scores = EmptyScores()
+        assert scores.average == 0.0
+
+    def test_to_dict_returns_average_and_feedback_only_when_no_fields(self):
+        """to_dict should return average and feedback when no numeric fields."""
+        from src.memory.world_quality._models import BaseQualityScores
+
+        class EmptyScores(BaseQualityScores):
+            """Subclass with no numeric fields for edge-case testing."""
+
+        scores = EmptyScores(feedback="test")
+        result = scores.to_dict()
+        assert result == {"average": 0.0, "feedback": "test"}
+
+    def test_weak_dimensions_empty_when_no_fields(self):
+        """weak_dimensions should return empty list when no numeric fields."""
+        from src.memory.world_quality._models import BaseQualityScores
+
+        class EmptyScores(BaseQualityScores):
+            """Subclass with no numeric fields for edge-case testing."""
+
+        scores = EmptyScores()
+        assert scores.weak_dimensions() == []

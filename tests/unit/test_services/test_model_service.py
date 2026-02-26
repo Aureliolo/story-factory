@@ -1456,6 +1456,7 @@ class TestTTLCacheExpiration:
         monotonic_values = iter([100.0, 100.5, 200.0])  # start, within TTL, past TTL
 
         def mock_monotonic():
+            """Return predetermined time values to simulate TTL expiration."""
             nonlocal call_count
             call_count += 1
             return next(monotonic_values)

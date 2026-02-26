@@ -637,9 +637,45 @@ class TestGenerateBatchParallel:
 
         # Should see both recovery and early termination messages
         recovery_msgs = [m for m in caplog.messages if "Attempting recovery" in m]
-        termination_msgs = [m for m in caplog.messages if "early termination" in m]
+        termination_msgs = [
+            m for m in caplog.messages if "early termination" in m and "consecutive failures" in m
+        ]
         assert len(recovery_msgs) == MAX_BATCH_SHUFFLE_RETRIES
         assert len(termination_msgs) == 1
+
+    def test_duplicate_name_error_not_counted_as_failure(self, mock_svc, caplog):
+        """DuplicateNameError should be logged as warning, not counted as consecutive failure."""
+        from src.utils.exceptions import DuplicateNameError
+
+        call_count = 0
+        lock = threading.Lock()
+
+        def fail_then_succeed(i):
+            """First call raises DuplicateNameError, rest succeed."""
+            nonlocal call_count
+            with lock:
+                call_count += 1
+                current = call_count
+            if current == 1:
+                raise DuplicateNameError("Name already exists")
+            return {"name": f"Entity-{i}"}, _make_char_scores(8.5), 1
+
+        with caplog.at_level(logging.WARNING):
+            results = _generate_batch_parallel(
+                svc=mock_svc,
+                count=3,
+                entity_type="test",
+                generate_fn=fail_then_succeed,
+                get_name=lambda e: e["name"],
+                quality_threshold=7.5,
+                max_workers=2,
+            )
+
+        # Should still produce results despite the duplicate
+        assert len(results) >= 1
+        # DuplicateNameError should be logged as a warning, not an error
+        duplicate_msgs = [m for m in caplog.messages if "Duplicate" in m]
+        assert len(duplicate_msgs) >= 1
 
 
 # ---------------------------------------------------------------------------
