@@ -3425,3 +3425,13 @@ class TestMinimumScoreCalendar:
             feedback="Test",
         )
         assert scores.minimum_score == 7.5
+
+    def test_minimum_score_raises_on_broken_model(self):
+        """minimum_score raises ValueError when to_dict() has no numeric dimensions."""
+        scores = _make_scores(8.0)
+        # Patch to_dict to return only metadata keys (simulating a broken model)
+        with patch.object(
+            type(scores), "to_dict", return_value={"average": 8.0, "feedback": "Test"}
+        ):
+            with pytest.raises(ValueError, match="no numeric scoring dimensions"):
+                _ = scores.minimum_score
