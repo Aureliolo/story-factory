@@ -711,6 +711,35 @@ class TestCollectLateResults:
         assert len(results) == 0
         assert len(errors) == 1
 
+    def test_on_success_called_for_late_results(self):
+        """on_success hook is invoked for each successful late result."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        success_calls: list[dict] = []
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(lambda: ({"name": "Late"}, _make_char_scores(8.0), 1))
+            future.result()
+
+            pending: dict = {future: (0, 0.0)}
+            results: list = []
+            completed_times: list[float] = []
+            errors: list[str] = []
+
+            _collect_late_results(
+                pending,
+                results,
+                completed_times,
+                errors,
+                "test",
+                lambda e: e["name"],
+                lambda e: success_calls.append(e),
+            )
+
+        assert len(results) == 1
+        assert len(success_calls) == 1
+        assert success_calls[0] == {"name": "Late"}
+
 
 # ---------------------------------------------------------------------------
 # generate_relationships_with_quality integration tests
