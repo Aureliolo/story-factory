@@ -28,6 +28,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Never dismiss warnings.** If `ruff check`, `pytest`, or any other tool produces warnings — investigate and fix them, even if they appear unrelated to the current task. Never say "these are pre-existing" or "not from our changes" as justification for ignoring them. The only acceptable response to a warning is fixing it or explaining why it's a false positive with evidence.
 
+**Always create a PR for issue work.** When implementing changes for a GitHub issue, always create a branch and open a pull request at the end. Do not wait to be asked — completing issue work means the PR is ready for review.
+
 ## Project Overview
 
 Story Factory is a local AI-powered multi-agent system for generating stories using Ollama. Five specialized agents (Interviewer, Architect, Writer, Editor, Continuity Checker) collaborate through an iterative write-edit-check loop.

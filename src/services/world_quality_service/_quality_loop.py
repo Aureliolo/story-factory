@@ -12,7 +12,12 @@ import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, cast
 
-from src.memory.world_quality import BaseQualityScores, RefinementConfig, RefinementHistory
+from src.memory.world_quality import (
+    SCORE_METADATA_KEYS,
+    BaseQualityScores,
+    RefinementConfig,
+    RefinementHistory,
+)
 from src.utils.exceptions import WorldGenerationError
 
 if TYPE_CHECKING:
@@ -28,10 +33,8 @@ logger = logging.getLogger(__name__)
 _STRUCTURAL_DEFICIT_DIMENSION = "temporal_plausibility"
 _STRUCTURAL_DEFICIT_THRESHOLD = 4.0
 
-# Keys returned by BaseQualityScores.to_dict() that are metadata, not scoring
-# dimensions.  Excluded from dimension-specific scoring checks: zero-score
-# anomaly detection and hail-mary weakest-dimension gating.
-_SCORE_METADATA_KEYS = {"average", "feedback"}
+# Alias for backward compatibility within this module.
+_SCORE_METADATA_KEYS = SCORE_METADATA_KEYS
 
 
 def _detect_zero_score_dims(scores: BaseQualityScores) -> list[str]:
@@ -371,7 +374,10 @@ def quality_refinement_loop[T, S: BaseQualityScores](
             # Threshold check — round to 1 decimal so the comparison matches
             # the %.1f log display (e.g. 7.46 rounds to 7.5, passes >= 7.5).
             rounded_score = round(scores.average, 1)
-            if rounded_score >= entity_threshold:
+            dimension_floor = config.dimension_minimum
+            below_floor = scores.minimum_score < dimension_floor if dimension_floor > 0.0 else False
+
+            if rounded_score >= entity_threshold and not below_floor:
                 logger.info(
                     "%s '%s' met quality threshold (%.1f >= %.1f)",
                     entity_type.capitalize(),
@@ -390,6 +396,16 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                     max_iterations=config.max_iterations,
                 )
                 return entity, scores, scoring_rounds
+            elif rounded_score >= entity_threshold and below_floor:
+                logger.info(
+                    "%s '%s' average %.1f met threshold but dimension floor violated "
+                    "(min=%.1f < %.1f) — continuing refinement",
+                    entity_type.capitalize(),
+                    get_name(entity),
+                    scores.average,
+                    scores.minimum_score,
+                    dimension_floor,
+                )
 
             # Score-plateau early-stop: consecutive identical scores (#328)
             if (
@@ -487,7 +503,25 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     # Hail-mary: when threshold not met and config allows multiple iterations,
     # try one fresh creation to see if it beats the best refinement result.
     best_entity_data = history.get_best_entity()
-    threshold_met_pre_hail_mary = round(history.peak_score, 1) >= entity_threshold
+
+    # Check dimension floor for the best iteration (same check as in-loop).
+    dimension_floor = config.dimension_minimum
+    best_floor_met = True
+    if best_entity_data and dimension_floor > 0.0 and history.best_iteration:
+        best_record_scores = history.iterations[history.best_iteration - 1].scores
+        best_min_score = min(
+            (
+                v
+                for k, v in best_record_scores.items()
+                if isinstance(v, (int, float)) and k not in _SCORE_METADATA_KEYS
+            ),
+            default=0.0,
+        )
+        best_floor_met = best_min_score >= dimension_floor
+
+    threshold_met_pre_hail_mary = (
+        round(history.peak_score, 1) >= entity_threshold and best_floor_met
+    )
 
     if not threshold_met_pre_hail_mary and config.max_iterations > 1:
         # Gate: skip hail-mary when failure is structural (temporal context deficit).
@@ -646,7 +680,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
         )
 
     if best_entity_data:
-        threshold_met = round(history.peak_score, 1) >= entity_threshold
+        threshold_met = round(history.peak_score, 1) >= entity_threshold and best_floor_met
         if not threshold_met:
             history.below_threshold_admitted = True
             logger.warning(

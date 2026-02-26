@@ -194,7 +194,7 @@ Rate each dimension 0-10:
 - depth: Philosophical richness
 - manifestation: How well it can appear in story
 - resonance: Emotional impact potential
-- temporal_plausibility: Timeline consistency, era-appropriate placement
+- temporal_plausibility: VERIFY against CALENDAR above — emergence/prominence period MUST fall within defined era ranges. Score 8-10 ONLY if temporal references align with calendar eras AND are self-consistent. Score 5-7 if time references exist but era alignment is ambiguous. Score 2-4 if temporal references conflict with defined eras. If the CALENDAR block states "No calendar available", score exactly 3.0 (insufficient context to verify).
 
 Provide specific, actionable feedback for improvement in the feedback field.
 

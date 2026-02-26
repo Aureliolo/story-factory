@@ -517,13 +517,14 @@ class TestCalendarContext:
         WorldQualityService.set_calendar_context(svc, None)
         assert svc._calendar_context is None
 
-    def test_get_calendar_context_returns_empty_when_none(self):
-        """Test that get_calendar_context returns empty string when no context set."""
+    def test_get_calendar_context_returns_sentinel_when_none(self):
+        """Test that get_calendar_context returns sentinel when no context set."""
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = None
         svc._calendar_context_lock = threading.RLock()
         result = WorldQualityService.get_calendar_context(svc)
-        assert result == ""
+        assert "No calendar available" in result
+        assert "CALENDAR & TIMELINE" in result
 
     def test_get_calendar_context_returns_formatted_block(self, sample_calendar_dict):
         """Test that get_calendar_context returns a formatted prompt block."""

@@ -325,6 +325,31 @@ def _validate_world_quality(settings: Settings) -> None:
     # Validate per-entity quality thresholds
     _validate_world_quality_thresholds(settings)
 
+    if not 0.0 <= settings.world_quality_dimension_minimum <= 10.0:
+        raise ValueError(
+            f"world_quality_dimension_minimum must be between 0.0 and 10.0, "
+            f"got {settings.world_quality_dimension_minimum}"
+        )
+
+    if settings.world_quality_dimension_minimum > settings.world_quality_threshold:
+        raise ValueError(
+            f"world_quality_dimension_minimum ({settings.world_quality_dimension_minimum}) "
+            f"cannot exceed world_quality_threshold ({settings.world_quality_threshold})"
+        )
+
+    if settings.world_quality_thresholds:
+        min_per_entity = min(settings.world_quality_thresholds.values())
+        if settings.world_quality_dimension_minimum > min_per_entity:
+            lowest_entity = min(
+                settings.world_quality_thresholds,
+                key=lambda k: settings.world_quality_thresholds[k],
+            )
+            raise ValueError(
+                f"world_quality_dimension_minimum ({settings.world_quality_dimension_minimum}) "
+                f"cannot exceed the lowest per-entity threshold "
+                f"({min_per_entity} for '{lowest_entity}')"
+            )
+
     if not 1 <= settings.world_quality_early_stopping_patience <= 10:
         raise ValueError(
             f"world_quality_early_stopping_patience must be between 1 and 10, "

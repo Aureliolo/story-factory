@@ -679,6 +679,20 @@ def build_refinement_stopping_section(page: SettingsPage) -> None:
                     width="w-16",
                 )
 
+            with ui.column().classes("gap-1"):
+                ui.label("Dim. Floor").classes("text-xs text-gray-500")
+                page._dimension_minimum_input = page._build_number_input(
+                    value=page.settings.world_quality_dimension_minimum,
+                    min_val=0.0,
+                    max_val=10.0,
+                    step=0.5,
+                    tooltip_text=(
+                        "Per-dimension minimum floor — any dimension below this forces "
+                        "refinement even if average meets threshold (0.0 disables)"
+                    ),
+                    width="w-16",
+                )
+
     logger.debug("Refinement & stopping section built")
 
 
@@ -859,6 +873,11 @@ def save_to_settings(page: SettingsPage) -> None:
             "world_quality_score_plateau_tolerance",
             float,
         ),
+        (
+            "_dimension_minimum_input",
+            "world_quality_dimension_minimum",
+            float,
+        ),
         # Judge consistency settings
         ("_judge_consistency_switch", "judge_consistency_enabled", None),
         ("_judge_multi_call_switch", "judge_multi_call_enabled", None),
@@ -948,6 +967,7 @@ def refresh_from_settings(page: SettingsPage) -> None:
             "world_quality_early_stopping_variance_tolerance",
         ),
         ("_score_plateau_tolerance_input", "world_quality_score_plateau_tolerance"),
+        ("_dimension_minimum_input", "world_quality_dimension_minimum"),
         # Judge consistency settings
         ("_judge_consistency_switch", "judge_consistency_enabled"),
         ("_judge_multi_call_switch", "judge_multi_call_enabled"),

@@ -10,7 +10,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.utils.exceptions import StoryFactoryError
+
 logger = logging.getLogger(__name__)
+
+# Keys returned by BaseQualityScores.to_dict() that are metadata, not scoring
+# dimensions.  Used by minimum_score and the quality loop's dimension checks.
+SCORE_METADATA_KEYS: frozenset[str] = frozenset({"average", "feedback"})
 
 
 class IterationRecord(BaseModel):
@@ -270,6 +276,35 @@ class BaseQualityScores(BaseModel, ABC):
             list[str]: Names of dimensions with scores below `threshold`.
         """
 
+    @property
+    def minimum_score(self) -> float:
+        """Lowest score across all dimensions.
+
+        Excludes metadata keys (``average``, ``feedback``) so only actual
+        scoring dimensions are considered.
+
+        Raises:
+            StoryFactoryError: If no numeric scoring dimensions are found,
+                indicating a bug in the score model's ``to_dict()`` implementation.
+        """
+        scores = {
+            k: v
+            for k, v in self.to_dict().items()
+            if isinstance(v, (int, float)) and k not in SCORE_METADATA_KEYS
+        }
+        if not scores:
+            logger.error(
+                "minimum_score found no numeric dimensions in %s.to_dict() — "
+                "score model is likely broken. Keys: %s",
+                type(self).__name__,
+                list(self.to_dict().keys()),
+            )
+            raise StoryFactoryError(
+                f"{type(self).__name__}.to_dict() returned no numeric scoring dimensions. "
+                f"This indicates a bug in the score model implementation."
+            )
+        return min(scores.values())
+
 
 class RefinementConfig(BaseModel):
     """Configuration for the quality refinement loop."""
@@ -321,6 +356,13 @@ class RefinementConfig(BaseModel):
         ge=0.0,
         le=1.0,
         description="Max score difference to consider consecutive iterations as plateaued",
+    )
+    dimension_minimum: float = Field(
+        default=6.0,
+        ge=0.0,
+        le=10.0,
+        description="Per-dimension minimum floor — any dimension below this forces refinement "
+        "(0.0 disables the check)",
     )
 
     def get_threshold(self, entity_type: str) -> float:
@@ -446,6 +488,7 @@ class RefinementConfig(BaseModel):
                 - world_quality_early_stopping_min_iterations
                 - world_quality_early_stopping_variance_tolerance
                 - world_quality_score_plateau_tolerance
+                - world_quality_dimension_minimum
 
         Returns:
             RefinementConfig: Configuration populated from the corresponding settings attributes.
@@ -473,6 +516,7 @@ class RefinementConfig(BaseModel):
             early_stopping_min_iterations=settings.world_quality_early_stopping_min_iterations,
             early_stopping_variance_tolerance=settings.world_quality_early_stopping_variance_tolerance,
             score_plateau_tolerance=settings.world_quality_score_plateau_tolerance,
+            dimension_minimum=settings.world_quality_dimension_minimum,
         )
 
 

@@ -166,10 +166,10 @@ class TestWorldCalendar:
         assert error == ""
 
     def test_validate_date_invalid_year(self, sample_calendar: WorldCalendar) -> None:
-        """Test validating a date before era start."""
+        """Test validating a date before all defined eras."""
         is_valid, error = sample_calendar.validate_date(0)
         assert is_valid is False
-        assert "before era start" in error
+        assert "outside all defined eras" in error
 
     def test_validate_date_invalid_month(self, sample_calendar: WorldCalendar) -> None:
         """Test validating an invalid month."""
@@ -285,3 +285,108 @@ class TestWorldCalendarEdgeCases:
         is_valid, error_msg = calendar.validate_date(50, month=5, day=15)
         assert not is_valid
         assert "month metadata missing" in error_msg
+
+    def test_validate_date_multi_era_valid(self) -> None:
+        """A date in a prior era (not the current one) should pass validation."""
+        calendar = WorldCalendar(
+            current_era_name="Modern Age",
+            era_abbreviation="MA",
+            era_start_year=1001,
+            months=[CalendarMonth(name="Month1", days=30)],
+            days_per_week=7,
+            day_names=["D1"],
+            current_story_year=1200,
+            eras=[
+                HistoricalEra(name="Ancient Age", start_year=1, end_year=500),
+                HistoricalEra(name="Middle Age", start_year=501, end_year=1000),
+                HistoricalEra(name="Modern Age", start_year=1001),
+            ],
+        )
+        # Year 250 is in "Ancient Age" — should pass
+        is_valid, error = calendar.validate_date(250, month=1, day=15)
+        assert is_valid is True
+        assert error == ""
+
+    def test_validate_date_outside_all_eras(self) -> None:
+        """A date before ALL eras should fail."""
+        calendar = WorldCalendar(
+            current_era_name="Third Era",
+            era_abbreviation="TE",
+            era_start_year=500,
+            months=[CalendarMonth(name="Month1", days=30)],
+            days_per_week=7,
+            day_names=["D1"],
+            current_story_year=1500,
+            eras=[
+                HistoricalEra(name="First Era", start_year=500, end_year=999),
+                HistoricalEra(name="Second Era", start_year=1000, end_year=1399),
+                HistoricalEra(name="Third Era", start_year=1400),
+            ],
+        )
+        # Year 100 is before all defined eras — should fail
+        is_valid, error = calendar.validate_date(100)
+        assert is_valid is False
+        assert "outside all defined eras" in error
+        assert "earliest era starts at 500" in error
+
+    def test_validate_date_in_current_era(self) -> None:
+        """A date in the ongoing/current era should pass."""
+        calendar = WorldCalendar(
+            current_era_name="Golden Age",
+            era_abbreviation="GA",
+            era_start_year=800,
+            months=[CalendarMonth(name="Month1", days=30)],
+            days_per_week=7,
+            day_names=["D1"],
+            current_story_year=1000,
+            eras=[
+                HistoricalEra(name="Dark Age", start_year=1, end_year=799),
+                HistoricalEra(name="Golden Age", start_year=800),  # Ongoing
+            ],
+        )
+        # Year 950 is in the ongoing "Golden Age" — should pass
+        is_valid, error = calendar.validate_date(950, month=1, day=10)
+        assert is_valid is True
+        assert error == ""
+
+    def test_validate_date_no_eras_fallback(self) -> None:
+        """When eras list is empty, fallback to era_start_year."""
+        calendar = WorldCalendar(
+            current_era_name="Solo Era",
+            era_abbreviation="SE",
+            era_start_year=100,
+            months=[CalendarMonth(name="Month1", days=30)],
+            days_per_week=7,
+            day_names=["D1"],
+            current_story_year=500,
+            eras=[],  # No eras defined
+        )
+        # Year 50 is before era_start_year — should fail via fallback
+        is_valid, error = calendar.validate_date(50)
+        assert is_valid is False
+        assert "before era start (100)" in error
+
+        # Year 200 is after era_start_year — should pass
+        is_valid, error = calendar.validate_date(200, month=1, day=1)
+        assert is_valid is True
+        assert error == ""
+
+    def test_validate_date_gap_between_eras(self) -> None:
+        """A date falling in a gap between eras should fail."""
+        calendar = WorldCalendar(
+            current_era_name="New Age",
+            era_abbreviation="NA",
+            era_start_year=600,
+            months=[CalendarMonth(name="Month1", days=30)],
+            days_per_week=7,
+            day_names=["D1"],
+            current_story_year=700,
+            eras=[
+                HistoricalEra(name="Old Age", start_year=1, end_year=500),
+                HistoricalEra(name="New Age", start_year=600),  # Gap: 501-599
+            ],
+        )
+        # Year 550 falls in the gap between eras — should fail
+        is_valid, error = calendar.validate_date(550)
+        assert is_valid is False
+        assert "outside all defined eras" in error

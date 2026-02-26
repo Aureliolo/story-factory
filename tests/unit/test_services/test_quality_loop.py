@@ -19,13 +19,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.memory.world_quality import (
+    CalendarQualityScores,
     CharacterQualityScores,
     FactionQualityScores,
     RefinementConfig,
     RefinementHistory,
 )
 from src.services.world_quality_service._quality_loop import quality_refinement_loop
-from src.utils.exceptions import WorldGenerationError
+from src.utils.exceptions import StoryFactoryError, WorldGenerationError
 
 
 def _all_thresholds(value: float) -> dict[str, float]:
@@ -1623,12 +1624,14 @@ class TestRefinementConfigGetThreshold:
         mock_settings.world_quality_early_stopping_min_iterations = 2
         mock_settings.world_quality_early_stopping_variance_tolerance = 0.3
         mock_settings.world_quality_score_plateau_tolerance = 0.2
+        mock_settings.world_quality_dimension_minimum = 6.0
 
         config = RefinementConfig.from_settings(mock_settings)
 
         assert config.get_threshold("character") == 7.5
         assert config.get_threshold("item") == 8.0
         assert config.score_plateau_tolerance == 0.2
+        assert config.dimension_minimum == 6.0
 
 
 class TestScorePlateauEarlyStop:
@@ -2232,12 +2235,14 @@ class TestZeroScoreAnomalyDetection:
         """Score of 0.5 (not 0.0) should be accepted without re-judging."""
         # Threshold is set below the average (6.75) so the loop exits after one
         # judge call — confirming 0.5 is NOT treated as a parse-failure anomaly.
+        # dimension_minimum=0.0 disables the floor (0.5 is a valid score, not a floor concern).
         config = RefinementConfig(
             quality_threshold=5.0,
             quality_thresholds=_all_thresholds(5.0),
             max_iterations=3,
             early_stopping_patience=10,
             early_stopping_min_iterations=10,
+            dimension_minimum=0.0,
         )
 
         entity = {"name": "Hero"}
@@ -3096,3 +3101,337 @@ class TestAnalyticsDbUnexpectedErrors:
 
         assert result_entity is not None
         assert any("failed to record hail-mary analytics" in msg for msg in caplog.messages)
+
+
+def _make_mixed_scores(
+    *,
+    depth: float = 8.0,
+    goals: float = 8.0,
+    flaws: float = 8.0,
+    uniqueness: float = 8.0,
+    arc_potential: float = 8.0,
+    temporal_plausibility: float = 8.0,
+    feedback: str = "Test",
+) -> CharacterQualityScores:
+    """Create CharacterQualityScores with individually controllable dimensions."""
+    return CharacterQualityScores(
+        depth=depth,
+        goals=goals,
+        flaws=flaws,
+        uniqueness=uniqueness,
+        arc_potential=arc_potential,
+        temporal_plausibility=temporal_plausibility,
+        feedback=feedback,
+    )
+
+
+class TestMinimumScoreProperty:
+    """Tests for BaseQualityScores.minimum_score property."""
+
+    def test_minimum_score_all_equal(self):
+        """When all dimensions are equal, minimum_score returns that value."""
+        scores = _make_scores(7.5)
+        assert scores.minimum_score == 7.5
+
+    def test_minimum_score_mixed_dimensions(self):
+        """minimum_score returns the lowest dimension value."""
+        scores = _make_mixed_scores(
+            depth=9.0,
+            goals=8.0,
+            flaws=5.0,
+            uniqueness=7.0,
+            arc_potential=8.0,
+            temporal_plausibility=6.0,
+        )
+        assert scores.minimum_score == 5.0
+
+    def test_minimum_score_excludes_average_and_feedback(self):
+        """minimum_score should not consider 'average' or 'feedback' keys."""
+        scores = _make_mixed_scores(
+            depth=7.0,
+            goals=7.0,
+            flaws=7.0,
+            uniqueness=7.0,
+            arc_potential=7.0,
+            temporal_plausibility=7.0,
+        )
+        # average is 7.0, feedback is "Test" — neither should affect minimum_score
+        assert scores.minimum_score == 7.0
+
+    def test_minimum_score_single_low_dimension(self):
+        """A single low dimension should be returned as the minimum."""
+        scores = _make_mixed_scores(
+            depth=9.0,
+            goals=9.0,
+            flaws=9.0,
+            uniqueness=9.0,
+            arc_potential=9.0,
+            temporal_plausibility=3.0,
+        )
+        assert scores.minimum_score == 3.0
+
+
+class TestDimensionFloor:
+    """Tests for per-dimension minimum floor in the quality refinement loop."""
+
+    def test_dimension_floor_blocks_passing(self, mock_svc):
+        """Average >= threshold but min dim < floor → does NOT pass on first judge.
+
+        Entity should continue to refinement. The refine_fn produces a
+        slightly different entity each time so the unchanged-output early
+        stop doesn't kick in. With max_iterations=3, the loop should judge
+        at least twice because the first judge is blocked by the floor.
+        """
+        config = RefinementConfig(
+            quality_threshold=7.5,
+            quality_thresholds=_all_thresholds(7.5),
+            max_iterations=3,
+            early_stopping_patience=5,
+            early_stopping_min_iterations=3,
+            dimension_minimum=6.0,
+        )
+
+        # Average = (9+9+9+9+9+3)/6 = 8.0 >= 7.5, but min dim = 3.0 < 6.0
+        low_dim_scores = _make_mixed_scores(
+            depth=9.0,
+            goals=9.0,
+            flaws=9.0,
+            uniqueness=9.0,
+            arc_potential=9.0,
+            temporal_plausibility=3.0,
+        )
+
+        entity = {"name": "FloorTest"}
+        judge_calls = 0
+        refine_call = 0
+
+        def judge_fn(e):
+            """Return scores with one dimension below floor."""
+            nonlocal judge_calls
+            judge_calls += 1
+            return low_dim_scores
+
+        def refine_fn(e, s, i):
+            """Return a different entity each time to avoid unchanged-output detection."""
+            nonlocal refine_call
+            refine_call += 1
+            return {"name": "FloorTest", "version": refine_call}
+
+        _result_entity, _result_scores, scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entity,
+            judge_fn=judge_fn,
+            refine_fn=refine_fn,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Should have been judged more than once (first judge didn't pass due to floor)
+        assert judge_calls >= 2
+        assert scoring_rounds >= 2
+
+    def test_dimension_floor_zero_disabled(self, mock_svc):
+        """Floor=0.0 disables the check — passes with any dimension values."""
+        config = RefinementConfig(
+            quality_threshold=7.5,
+            quality_thresholds=_all_thresholds(7.5),
+            max_iterations=5,
+            early_stopping_patience=2,
+            dimension_minimum=0.0,
+        )
+
+        # Average = (9+9+9+9+9+3)/6 = 8.0 >= 7.5, min dim = 3.0
+        # With floor=0.0, the floor check is disabled → passes immediately
+        scores = _make_mixed_scores(
+            depth=9.0,
+            goals=9.0,
+            flaws=9.0,
+            uniqueness=9.0,
+            arc_potential=9.0,
+            temporal_plausibility=3.0,
+        )
+
+        entity = {"name": "DisabledFloor"}
+
+        result_entity, _result_scores, scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entity,
+            judge_fn=lambda e: scores,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        assert result_entity == entity
+        assert scoring_rounds == 1  # Passed on first judge
+
+    def test_dimension_floor_all_above(self, mock_svc):
+        """All dims above floor + average above threshold → passes immediately."""
+        config = RefinementConfig(
+            quality_threshold=7.5,
+            quality_thresholds=_all_thresholds(7.5),
+            max_iterations=5,
+            early_stopping_patience=2,
+            dimension_minimum=6.0,
+        )
+
+        # All dimensions >= 6.0, average = 8.0 >= 7.5 → passes
+        scores = _make_mixed_scores(
+            depth=8.0,
+            goals=8.0,
+            flaws=8.0,
+            uniqueness=8.0,
+            arc_potential=8.0,
+            temporal_plausibility=8.0,
+        )
+
+        entity = {"name": "AllAbove"}
+
+        result_entity, result_scores, scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entity,
+            judge_fn=lambda e: scores,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        assert result_entity == entity
+        assert result_scores is scores
+        assert scoring_rounds == 1  # Passed on first judge
+
+    def test_dimension_floor_exact_boundary(self, mock_svc):
+        """Dims exactly at floor value should pass (strict < comparison)."""
+        config = RefinementConfig(
+            quality_threshold=7.5,
+            quality_thresholds=_all_thresholds(7.5),
+            max_iterations=5,
+            early_stopping_patience=2,
+            dimension_minimum=6.0,
+        )
+
+        # Use scores that pass threshold AND are exactly at floor:
+        scores_passing = _make_mixed_scores(
+            depth=9.0,
+            goals=9.0,
+            flaws=9.0,
+            uniqueness=9.0,
+            arc_potential=9.0,
+            temporal_plausibility=6.0,  # exactly at floor
+        )
+
+        entity = {"name": "BoundaryFloor"}
+
+        result_entity, _result_scores, scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entity,
+            judge_fn=lambda e: scores_passing,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        assert result_entity == entity
+        assert scoring_rounds == 1  # Passed on first judge — 6.0 is NOT < 6.0
+
+    def test_dimension_floor_log_message(self, mock_svc, caplog):
+        """Floor violation should log 'dimension floor violated' message."""
+        config = RefinementConfig(
+            quality_threshold=7.5,
+            quality_thresholds=_all_thresholds(7.5),
+            max_iterations=2,
+            early_stopping_patience=5,
+            early_stopping_min_iterations=2,
+            dimension_minimum=6.0,
+        )
+
+        scores = _make_mixed_scores(
+            depth=9.0,
+            goals=9.0,
+            flaws=9.0,
+            uniqueness=9.0,
+            arc_potential=9.0,
+            temporal_plausibility=3.0,
+        )
+
+        entity = {"name": "LogTest"}
+        refine_call = 0
+
+        def refine_fn(e, s, i):
+            """Return different entity each time."""
+            nonlocal refine_call
+            refine_call += 1
+            return {"name": "LogTest", "v": refine_call}
+
+        with caplog.at_level(logging.INFO):
+            quality_refinement_loop(
+                entity_type="character",
+                create_fn=lambda retries: entity,
+                judge_fn=lambda e: scores,
+                refine_fn=refine_fn,
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
+
+        assert any("dimension floor violated" in msg for msg in caplog.messages)
+
+
+class TestMinimumScoreCalendar:
+    """Test minimum_score with CalendarQualityScores to verify cross-subclass support."""
+
+    def test_calendar_scores_minimum(self):
+        """CalendarQualityScores.minimum_score returns the lowest of its 4 dimensions."""
+        scores = CalendarQualityScores(
+            internal_consistency=9.0,
+            thematic_fit=4.0,
+            completeness=8.0,
+            uniqueness=7.0,
+            feedback="Test",
+        )
+        assert scores.minimum_score == 4.0
+
+    def test_calendar_scores_all_equal(self):
+        """When all CalendarQualityScores dimensions are equal, returns that value."""
+        scores = CalendarQualityScores(
+            internal_consistency=7.5,
+            thematic_fit=7.5,
+            completeness=7.5,
+            uniqueness=7.5,
+            feedback="Test",
+        )
+        assert scores.minimum_score == 7.5
+
+    def test_minimum_score_raises_on_broken_model(self):
+        """minimum_score raises StoryFactoryError when to_dict() has no numeric dimensions."""
+        scores = _make_scores(8.0)
+        # Patch to_dict to return only metadata keys (simulating a broken model)
+        with patch.object(
+            type(scores), "to_dict", return_value={"average": 8.0, "feedback": "Test"}
+        ):
+            with pytest.raises(StoryFactoryError, match="no numeric scoring dimensions"):
+                _ = scores.minimum_score

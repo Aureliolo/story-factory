@@ -327,11 +327,21 @@ class WorldQualityService(EntityDelegatesMixin):
         Thread-safe: guarded by ``_calendar_context_lock``.
 
         Returns:
-            Calendar context block string, or empty string if no calendar available.
+            Calendar context block string. When no calendar is available, returns
+            a sentinel block instructing judges to reflect temporal uncertainty.
+            Never returns an empty string.
         """
         with self._calendar_context_lock:
             if not self._calendar_context:
-                return ""
+                logger.debug("get_calendar_context: returning sentinel calendar context")
+                return (
+                    "\nCALENDAR & TIMELINE:\n"
+                    "No calendar available — temporal scores should reflect this uncertainty.\n"
+                )
+            logger.debug(
+                "get_calendar_context: returning actual calendar context (%d chars)",
+                len(self._calendar_context),
+            )
             return f"\nCALENDAR & TIMELINE:\n{self._calendar_context}\n"
 
     @property

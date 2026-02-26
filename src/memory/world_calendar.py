@@ -196,6 +196,10 @@ class WorldCalendar(BaseModel):
     ) -> tuple[bool, str]:
         """Validate a date against the calendar rules.
 
+        When eras are defined, delegates to ``get_era_for_year()`` to check
+        whether the year falls within any defined era.  When no eras are
+        defined, falls back to a simple check against ``era_start_year``.
+
         Args:
             year: Year to validate.
             month: Optional month (1-based).
@@ -204,9 +208,30 @@ class WorldCalendar(BaseModel):
         Returns:
             Tuple of (is_valid, error_message).
         """
-        # Year validation
-        if year < self.era_start_year:
-            return False, f"Year {year} is before era start ({self.era_start_year})"
+        # Year validation — use era-aware check when eras are defined
+        if self.eras:
+            era = self.get_era_for_year(year)
+            if era is None:
+                # Year doesn't fall within ANY defined era
+                earliest = min(e.start_year for e in self.eras)
+                logger.warning(
+                    "Date validation failed: year=%d outside all defined eras (earliest=%d)",
+                    year,
+                    earliest,
+                )
+                return (
+                    False,
+                    f"Year {year} is outside all defined eras (earliest era starts at {earliest})",
+                )
+        else:
+            # No eras defined — fall back to current era start
+            if year < self.era_start_year:
+                logger.warning(
+                    "Date validation failed: year=%d before era start=%d (no eras configured)",
+                    year,
+                    self.era_start_year,
+                )
+                return False, f"Year {year} is before era start ({self.era_start_year})"
 
         # Month validation - use month_count for consistency with empty months fallback
         if month is not None:
