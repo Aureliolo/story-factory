@@ -1759,6 +1759,40 @@ class TestWorldBuildCancellation:
                 options,
             )
 
+    def test_build_world_cancellation_during_build_step(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test that cancellation during a build step (after warm-up) raises error."""
+        import threading
+
+        from src.utils.exceptions import GenerationCancelledError
+
+        # Cancel fires after warm-up completes, during the clear_existing step
+        cancel_event = threading.Event()
+
+        original_warm = mock_services.world_quality._get_creator_model.return_value
+
+        def set_cancel_after_warm(*_args, **_kwargs):
+            """Set cancellation after warm-up model resolution succeeds."""
+            cancel_event.set()
+            return original_warm
+
+        mock_services.world_quality._get_creator_model.side_effect = set_cancel_after_warm
+
+        options = WorldBuildOptions(
+            clear_existing=True,
+            generate_structure=True,
+            cancellation_event=cancel_event,
+        )
+
+        with pytest.raises(GenerationCancelledError, match="Generation cancelled"):
+            world_service.build_world(
+                sample_story_state,
+                mock_world_db,
+                mock_services,
+                options,
+            )
+
     def test_cancel_check_passed_to_factions(
         self, world_service, sample_story_state, mock_world_db, mock_services
     ):
