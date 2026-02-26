@@ -644,6 +644,33 @@ class TestEmbedRelationship:
         assert result is False
         mock_db.upsert_embedding.assert_not_called()
 
+    def test_embed_relationship_truncates_long_description(self, service, mock_db, caplog):
+        """Description is truncated while preserving entity names when it exceeds budget."""
+        long_rel = Relationship(
+            id="rel-long",
+            source_id="ent-001",
+            target_id="ent-002",
+            relation_type="allied_with",
+            description="x" * 5000,  # Very long description
+        )
+        mock_client = MagicMock()
+        mock_embed_text = MagicMock(return_value=FAKE_EMBEDDING)
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch("src.services.embedding_service.get_model_context_size", return_value=128),
+            patch("src.services.embedding_service.get_embedding_prefix", return_value=""),
+            patch.object(service, "embed_text", mock_embed_text),
+            caplog.at_level(logging.WARNING),
+        ):
+            result = service.embed_relationship(mock_db, long_rel, "Alice", "Bob")
+
+        assert result is True
+        # The text passed to embed_text should be shorter than 5000 chars
+        embedded_text = mock_embed_text.call_args[0][0]
+        assert len(embedded_text) < 5000
+        assert embedded_text.startswith("Alice allied_with Bob: ")
+        assert any("Truncating relationship description" in r.message for r in caplog.records)
+
 
 # ---------------------------------------------------------------------------
 # embed_event tests

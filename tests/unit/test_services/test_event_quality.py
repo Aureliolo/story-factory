@@ -271,7 +271,7 @@ class TestJudgeEventQuality:
         assert scores.causal_coherence == 8.0
         assert scores.narrative_potential == 8.5
         assert scores.entity_integration == 7.0
-        assert scores.average == pytest.approx(7.8)
+        assert scores.average == pytest.approx(7.875)
 
     @patch("src.services.world_quality_service._event.generate_structured")
     def test_judge_event_quality_error_raises(self, mock_generate_structured, service, story_state):

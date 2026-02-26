@@ -1336,3 +1336,139 @@ class TestModelServiceLogModelLoadState:
         assert not warn_records
         info_records = [r for r in caplog.records if r.levelno == logging.INFO]
         assert any("1 model(s) loaded" in r.message for r in info_records)
+
+
+class TestTTLCaching:
+    """Tests for TTL caching on check_health, list_installed, and get_vram."""
+
+    def test_check_health_returns_cached_within_ttl(self, model_service):
+        """Test that check_health returns cached result within TTL."""
+        with patch("src.services.model_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            with patch("src.services.model_service.get_available_vram", return_value=24):
+                with patch.object(model_service, "get_running_models", return_value=[]):
+                    result1 = model_service.check_health()
+                    result2 = model_service.check_health()
+
+        assert result1 is result2
+        # Client should only be created once (cached on second call)
+        assert mock_client.call_count == 1
+
+    def test_list_installed_returns_cached_within_ttl(self, model_service):
+        """Test that list_installed returns cached result within TTL."""
+        with patch("src.services.model_service.ollama.Client") as mock_client:
+            mock_response = MagicMock()
+            mock_model = MagicMock()
+            mock_model.model = "test-model:8b"
+            mock_response.models = [mock_model]
+            mock_instance = MagicMock()
+            mock_instance.list.return_value = mock_response
+            mock_client.return_value = mock_instance
+
+            result1 = model_service.list_installed()
+            result2 = model_service.list_installed()
+
+        assert result1 == result2
+        # Client should only be created once (cached on second call)
+        assert mock_client.call_count == 1
+
+    def test_get_vram_returns_cached_within_ttl(self, model_service):
+        """Test that get_vram returns cached result within TTL."""
+        with patch("src.services.model_service.get_available_vram", return_value=24) as mock_vram:
+            result1 = model_service.get_vram()
+            result2 = model_service.get_vram()
+
+        assert result1 == result2 == 24
+        assert mock_vram.call_count == 1
+
+    def test_invalidate_caches_clears_all(self, model_service):
+        """Test that invalidate_caches clears all cached data."""
+        with patch("src.services.model_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_response = MagicMock()
+            mock_model = MagicMock()
+            mock_model.model = "test-model:8b"
+            mock_response.models = [mock_model]
+            mock_instance.list.return_value = mock_response
+
+            with patch("src.services.model_service.get_available_vram", return_value=24):
+                with patch.object(model_service, "get_running_models", return_value=[]):
+                    model_service.check_health()
+                    model_service.list_installed()
+                    model_service.get_vram()
+
+                    model_service.invalidate_caches()
+
+                    # After invalidation, next calls should hit the actual methods
+                    with patch.object(model_service, "get_running_models", return_value=[]):
+                        model_service.check_health()
+                    model_service.list_installed()
+                    model_service.get_vram()
+
+        # Client created twice for health and twice for list (2 each)
+        assert mock_client.call_count == 4
+
+
+class TestColdStartDetection:
+    """Tests for cold-start model detection in check_health."""
+
+    def test_detects_cold_start_with_default_model(self, model_service):
+        """Test cold-start detection when default_model is configured but not running."""
+        model_service.settings.default_model = "my-model:8b"
+        with patch("src.services.model_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            with patch("src.services.model_service.get_available_vram", return_value=24):
+                with patch.object(model_service, "get_running_models", return_value=[]):
+                    result = model_service.check_health()
+
+        assert result.cold_start_models == ["my-model:8b"]
+
+    def test_detects_cold_start_with_agent_models(self, model_service):
+        """Test cold-start detection when agent_models have non-auto values."""
+        model_service.settings.agent_models = {
+            "writer": "writer-model:8b",
+            "editor": "auto",
+        }
+        running = [{"name": "other-model:8b"}]
+        with patch("src.services.model_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            with patch("src.services.model_service.get_available_vram", return_value=24):
+                with patch.object(model_service, "get_running_models", return_value=running):
+                    result = model_service.check_health()
+
+        assert "writer-model:8b" in result.cold_start_models
+
+    def test_no_cold_start_when_model_is_running(self, model_service):
+        """Test no cold-start reported when configured model is already running."""
+        model_service.settings.default_model = "my-model:8b"
+        running = [{"name": "my-model:8b"}]
+        with patch("src.services.model_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            with patch("src.services.model_service.get_available_vram", return_value=24):
+                with patch.object(model_service, "get_running_models", return_value=running):
+                    result = model_service.check_health()
+
+        assert result.cold_start_models == []
+
+    def test_cold_start_detection_failure_is_non_fatal(self, model_service, caplog):
+        """Test that cold-start detection failure doesn't break health check."""
+        with patch("src.services.model_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            with patch("src.services.model_service.get_available_vram", return_value=24):
+                with patch.object(
+                    model_service,
+                    "get_running_models",
+                    side_effect=RuntimeError("connection failed"),
+                ):
+                    with caplog.at_level(logging.DEBUG, logger="src.services.model_service"):
+                        result = model_service.check_health()
+
+        assert result.is_healthy is True
+        assert result.cold_start_models == []
+        assert any("Cold-start detection failed" in r.message for r in caplog.records)

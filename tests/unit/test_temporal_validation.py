@@ -12,7 +12,7 @@ from src.memory.timeline_types import (
     _parse_year,
     extract_lifecycle_from_attributes,
 )
-from src.memory.world_calendar import CalendarMonth, WorldCalendar
+from src.memory.world_calendar import CalendarMonth, HistoricalEra, WorldCalendar
 from src.services.temporal_validation_service import (
     TemporalErrorSeverity,
     TemporalErrorType,
@@ -1341,3 +1341,89 @@ class TestSentinelYearRejection:
     def test_sentinel_years_frozenset_contents(self) -> None:
         """Test SENTINEL_YEARS contains exactly the expected values."""
         assert SENTINEL_YEARS == frozenset({-1, 0, 9999})
+
+
+class TestEraMismatchDetection:
+    """Tests for _check_era_name_mismatch in temporal validation."""
+
+    @pytest.fixture
+    def calendar_with_eras(self) -> WorldCalendar:
+        """Create a calendar with historical eras for era mismatch testing."""
+        return WorldCalendar(
+            current_era_name="Third Age",
+            era_abbreviation="TA",
+            era_start_year=1,
+            months=[CalendarMonth(name="Firstmoon", days=31)],
+            days_per_week=7,
+            day_names=["Day1", "Day2", "Day3", "Day4", "Day5", "Day6", "Day7"],
+            current_story_year=500,
+            eras=[
+                HistoricalEra(name="First Age", start_year=1, end_year=100),
+                HistoricalEra(name="Second Age", start_year=101, end_year=300),
+                HistoricalEra(name="Third Age", start_year=301, end_year=None),
+            ],
+        )
+
+    def test_era_mismatch_detected(self, validation_service, calendar_with_eras):
+        """Test that era name mismatch produces INVALID_ERA warning."""
+        entity = Entity(id="ent-001", name="Hero", type="character")
+        timestamp = StoryTimestamp(year=50, era_name="Wrong Era")
+        result = TemporalValidationResult(entity_count=1)
+
+        validation_service._check_era_name_mismatch(
+            entity, timestamp, calendar_with_eras, "birth", result
+        )
+
+        assert len(result.warnings) == 1
+        assert result.warnings[0].error_type == TemporalErrorType.INVALID_ERA
+        assert "Wrong Era" in result.warnings[0].message
+        assert "First Age" in result.warnings[0].message
+
+    def test_no_mismatch_when_era_matches(self, validation_service, calendar_with_eras):
+        """Test no warning when entity era matches calendar era."""
+        entity = Entity(id="ent-001", name="Hero", type="character")
+        timestamp = StoryTimestamp(year=50, era_name="First Age")
+        result = TemporalValidationResult(entity_count=1)
+
+        validation_service._check_era_name_mismatch(
+            entity, timestamp, calendar_with_eras, "birth", result
+        )
+
+        assert len(result.warnings) == 0
+
+    def test_skips_when_year_is_none(self, validation_service, calendar_with_eras):
+        """Test early return when timestamp has no year."""
+        entity = Entity(id="ent-001", name="Hero", type="character")
+        timestamp = StoryTimestamp(year=None, era_name="First Age")
+        result = TemporalValidationResult(entity_count=1)
+
+        validation_service._check_era_name_mismatch(
+            entity, timestamp, calendar_with_eras, "birth", result
+        )
+
+        assert len(result.warnings) == 0
+
+    def test_skips_when_era_name_is_empty(self, validation_service, calendar_with_eras):
+        """Test early return when timestamp has no era_name."""
+        entity = Entity(id="ent-001", name="Hero", type="character")
+        timestamp = StoryTimestamp(year=50, era_name="")
+        result = TemporalValidationResult(entity_count=1)
+
+        validation_service._check_era_name_mismatch(
+            entity, timestamp, calendar_with_eras, "birth", result
+        )
+
+        assert len(result.warnings) == 0
+
+    def test_skips_when_era_not_resolved(self, validation_service, calendar_with_eras):
+        """Test early return when calendar can't resolve era for year."""
+        entity = Entity(id="ent-001", name="Hero", type="character")
+        # Year -500 is outside all era ranges
+        timestamp = StoryTimestamp(year=-500, era_name="Ancient Era")
+        result = TemporalValidationResult(entity_count=1)
+
+        validation_service._check_era_name_mismatch(
+            entity, timestamp, calendar_with_eras, "birth", result
+        )
+
+        assert len(result.warnings) == 0
