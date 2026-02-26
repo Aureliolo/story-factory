@@ -653,7 +653,9 @@ def generate_relationships_with_quality(
     Uses parallel generation (up to ``llm_max_concurrent_requests`` workers)
     with a thread-safe deduplication list. Each worker gets a point-in-time
     snapshot of existing relationships; the ``_is_duplicate_relationship()``
-    check in the quality loop catches any duplicates from stale snapshots.
+    check in the quality refinement loop rejects duplicates from the snapshot,
+    and the atomic ``append_if_new_pair()`` dedup catches any duplicates that
+    concurrent workers may produce from identical snapshots.
 
     Args:
         svc: WorldQualityService instance.
@@ -678,6 +680,14 @@ def generate_relationships_with_quality(
     safe_rels = _ThreadSafeRelsList(existing_rels)
     max_workers = min(svc.settings.llm_max_concurrent_requests, count)
 
+    def _on_relationship_success(r: dict[str, Any]) -> None:
+        """Atomic dedup: reject if a concurrent worker already produced this pair."""
+        accepted = safe_rels.append_if_new_pair((r["source"], r["target"], r["relation_type"]))
+        if not accepted:
+            raise WorldGenerationError(
+                f"Duplicate relationship from parallel worker: {r['source']} -> {r['target']}"
+            )
+
     return _generate_batch_parallel(
         svc=svc,
         count=count,
@@ -686,7 +696,7 @@ def generate_relationships_with_quality(
             story_state, entity_names, safe_rels.snapshot()
         ),
         get_name=lambda r: f"{r['source']} -> {r['target']}",
-        on_success=lambda r: safe_rels.append((r["source"], r["target"], r["relation_type"])),
+        on_success=_on_relationship_success,
         cancel_check=cancel_check,
         progress_callback=progress_callback,
         max_workers=max_workers,

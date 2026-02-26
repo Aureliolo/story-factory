@@ -1,8 +1,8 @@
 """Tests for parallel batch generation (_generate_batch_parallel, _ThreadSafeRelsList)."""
 
+import concurrent.futures as cf
 import logging
 import threading
-import time
 from unittest.mock import MagicMock
 
 import pytest
@@ -10,6 +10,7 @@ import pytest
 from src.memory.world_quality import CharacterQualityScores, RelationshipQualityScores
 from src.services.world_quality_service._batch import generate_relationships_with_quality
 from src.services.world_quality_service._batch_parallel import (
+    _collect_late_results,
     _generate_batch_parallel,
     _ThreadSafeRelsList,
 )
@@ -17,7 +18,11 @@ from src.utils.exceptions import WorldGenerationError
 
 
 def _make_char_scores(avg: float, feedback: str = "Test") -> CharacterQualityScores:
-    """Create CharacterQualityScores where all dimensions equal avg."""
+    """Create CharacterQualityScores where all dimensions equal avg.
+
+    Used as a generic BaseQualityScores stand-in for testing the type-agnostic
+    ``_generate_batch_parallel`` function.
+    """
     return CharacterQualityScores(
         depth=avg,
         goals=avg,
@@ -149,6 +154,59 @@ class TestThreadSafeRelsList:
             assert len(snap) >= 1
             assert snap[0] == ("initial", "pair", "ally")
 
+        # Snapshot lengths should be monotonically non-decreasing
+        # (the underlying list only grows, and the reader is single-threaded)
+        snapshot_lengths = [len(s) for s in snapshots]
+        for i in range(1, len(snapshot_lengths)):
+            assert snapshot_lengths[i] >= snapshot_lengths[i - 1], (
+                f"Snapshot lengths not monotonic: {snapshot_lengths}"
+            )
+
+    # --- append_if_new_pair tests ---
+
+    def test_append_if_new_pair_adds_new(self):
+        """New pair is appended and returns True."""
+        safe = _ThreadSafeRelsList([("A", "B", "ally")])
+        assert safe.append_if_new_pair(("C", "D", "rival")) is True
+        assert len(safe) == 2
+
+    def test_append_if_new_pair_rejects_exact_duplicate(self):
+        """Exact same pair (same direction) returns False and does not append."""
+        safe = _ThreadSafeRelsList([("A", "B", "ally")])
+        assert safe.append_if_new_pair(("A", "B", "rival")) is False
+        assert len(safe) == 1
+
+    def test_append_if_new_pair_rejects_reversed_pair(self):
+        """Reversed pair (B, A) is treated as duplicate of (A, B)."""
+        safe = _ThreadSafeRelsList([("A", "B", "ally")])
+        assert safe.append_if_new_pair(("B", "A", "enemy")) is False
+        assert len(safe) == 1
+
+    def test_append_if_new_pair_concurrent_dedup(self):
+        """Concurrent append_if_new_pair for same pair: exactly one wins."""
+        safe = _ThreadSafeRelsList([])
+        barrier = threading.Barrier(2)
+        results: list[bool] = []
+        lock = threading.Lock()
+
+        def worker() -> None:
+            """Try to atomically add the same pair."""
+            barrier.wait()
+            accepted = safe.append_if_new_pair(("X", "Y", "ally"))
+            with lock:
+                results.append(accepted)
+
+        t1 = threading.Thread(target=worker)
+        t2 = threading.Thread(target=worker)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        assert results.count(True) == 1
+        assert results.count(False) == 1
+        assert len(safe) == 1
+
 
 # ---------------------------------------------------------------------------
 # _generate_batch_parallel tests
@@ -218,13 +276,10 @@ class TestGenerateBatchParallel:
 
     def test_cancel_stops_new_submissions(self, mock_svc):
         """cancel_check returning True stops submitting new tasks."""
-        generated_count = 0
         cancel_after = 2
 
         def gen_fn(i: int):
-            """Track generation count."""
-            nonlocal generated_count
-            generated_count += 1
+            """Generate an entity."""
             return ({"name": f"E{i}"}, _make_char_scores(8.0), 1)
 
         call_count = 0
@@ -246,8 +301,9 @@ class TestGenerateBatchParallel:
             max_workers=2,
         )
 
-        # Should have generated fewer than 10 entities
-        assert len(results) < 10
+        # With max_workers=2 and cancel after 2 cancel_check calls:
+        # 2 seeded tasks complete, then cancel fires on next _submit_next.
+        assert len(results) == 2
 
     def test_progress_callbacks_called(self, mock_svc):
         """Progress callback receives updates for each entity."""
@@ -306,15 +362,18 @@ class TestGenerateBatchParallel:
 
     def test_partial_results_on_mixed_success_failure(self, mock_svc, caplog):
         """Mixed success/failure returns partial results and logs warning."""
+        lock = threading.Lock()
         call_count = 0
 
         def mixed_fn(_i):
-            """Alternate success/failure."""
+            """Alternate success/failure with thread-safe counter."""
             nonlocal call_count
-            call_count += 1
-            if call_count % 2 == 0:
+            with lock:
+                call_count += 1
+                current = call_count
+            if current % 2 == 0:
                 raise WorldGenerationError("Intermittent failure")
-            return ({"name": f"E{call_count}"}, _make_char_scores(8.0), 1)
+            return ({"name": f"E{current}"}, _make_char_scores(8.0), 1)
 
         with caplog.at_level(logging.WARNING):
             results = _generate_batch_parallel(
@@ -333,13 +392,16 @@ class TestGenerateBatchParallel:
 
     def test_consecutive_failures_trigger_early_termination(self, mock_svc, caplog):
         """MAX_CONSECUTIVE_BATCH_FAILURES consecutive errors triggers early stop."""
+        lock = threading.Lock()
         call_count = 0
 
         def gen_fn(_i):
             """First succeeds, then all fail."""
             nonlocal call_count
-            call_count += 1
-            if call_count == 1:
+            with lock:
+                call_count += 1
+                current = call_count
+            if current == 1:
                 return ({"name": "First"}, _make_char_scores(8.0), 1)
             raise WorldGenerationError("Persistent failure")
 
@@ -366,13 +428,10 @@ class TestGenerateBatchParallel:
     def test_actual_parallelism(self, mock_svc):
         """Verify that tasks actually run in parallel (not sequentially)."""
         barrier = threading.Barrier(2, timeout=5)
-        generation_times: list[float] = []
 
         def slow_fn(_i):
             """Use a barrier to prove two tasks run concurrently."""
-            start = time.time()
             barrier.wait()  # Both threads must reach this before continuing
-            generation_times.append(time.time() - start)
             return ({"name": "Parallel"}, _make_char_scores(8.0), 1)
 
         results = _generate_batch_parallel(
@@ -403,6 +462,255 @@ class TestGenerateBatchParallel:
 
         assert any("Batch widget summary" in msg for msg in caplog.messages)
 
+    # --- New tests for exception handling (items 1, 3) ---
+
+    def test_cancelled_error_handled_gracefully(self, mock_svc, caplog):
+        """CancelledError from a future is handled without crashing the batch."""
+        lock = threading.Lock()
+        call_count = 0
+
+        def gen_fn(_i):
+            """Second call raises CancelledError to simulate a cancelled future."""
+            nonlocal call_count
+            with lock:
+                call_count += 1
+                current = call_count
+            if current == 2:
+                raise cf.CancelledError()
+            return ({"name": f"E{current}"}, _make_char_scores(8.0), 1)
+
+        with caplog.at_level(logging.WARNING):
+            results = _generate_batch_parallel(
+                svc=mock_svc,
+                count=3,
+                entity_type="test",
+                generate_fn=gen_fn,
+                get_name=lambda e: e["name"],
+                quality_threshold=7.5,
+                max_workers=2,
+            )
+
+        # Should have results from the non-cancelled calls
+        assert len(results) >= 1
+        # CancelledError should be logged as a warning
+        assert any("cancelled" in msg.lower() for msg in caplog.messages)
+
+    def test_unexpected_error_handled_as_failure(self, mock_svc, caplog):
+        """Non-WorldGenerationError from generate_fn is caught and logged."""
+        lock = threading.Lock()
+        call_count = 0
+
+        def gen_fn(_i):
+            """Second call raises RuntimeError (unexpected exception)."""
+            nonlocal call_count
+            with lock:
+                call_count += 1
+                current = call_count
+            if current == 2:
+                raise RuntimeError("Unexpected internal error")
+            return ({"name": f"E{current}"}, _make_char_scores(8.0), 1)
+
+        with caplog.at_level(logging.ERROR):
+            results = _generate_batch_parallel(
+                svc=mock_svc,
+                count=4,
+                entity_type="test",
+                generate_fn=gen_fn,
+                get_name=lambda e: e["name"],
+                quality_threshold=7.5,
+                max_workers=2,
+            )
+
+        # Should have results from the non-failing calls
+        assert len(results) >= 1
+        # Should log the unexpected error
+        assert any("Unexpected error" in msg for msg in caplog.messages)
+
+    def test_on_success_failure_rejects_entity(self, mock_svc, caplog):
+        """If on_success raises WorldGenerationError, entity is not in results."""
+        lock = threading.Lock()
+        call_count = 0
+
+        def gen_fn(_i):
+            """Generate entities with unique names."""
+            nonlocal call_count
+            with lock:
+                call_count += 1
+                current = call_count
+            return ({"name": f"E{current}"}, _make_char_scores(8.0), 1)
+
+        def rejecting_on_success(entity):
+            """Reject entity E2."""
+            if entity["name"] == "E2":
+                raise WorldGenerationError("Duplicate detected")
+
+        with caplog.at_level(logging.ERROR):
+            results = _generate_batch_parallel(
+                svc=mock_svc,
+                count=4,
+                entity_type="test",
+                generate_fn=gen_fn,
+                get_name=lambda e: e["name"],
+                on_success=rejecting_on_success,
+                quality_threshold=7.5,
+                max_workers=2,
+            )
+
+        # E2 should NOT be in results (on_success rejected it before results.append)
+        result_names = [e["name"] for e, _ in results]
+        assert "E2" not in result_names
+        # Should still have the other entities
+        assert len(results) >= 1
+
+    # --- New test for quality_threshold=None (item 18) ---
+
+    def test_quality_threshold_none_resolves_from_config(self, mock_svc):
+        """quality_threshold=None resolves via svc.get_config().get_threshold()."""
+        mock_svc.get_config.return_value.get_threshold.return_value = 6.0
+
+        results = _generate_batch_parallel(
+            svc=mock_svc,
+            count=2,
+            entity_type="widget",
+            generate_fn=lambda _i: ({"name": "W"}, _make_char_scores(8.0), 1),
+            get_name=lambda e: e["name"],
+            quality_threshold=None,
+            max_workers=2,
+        )
+
+        assert len(results) == 2
+        mock_svc.get_config.return_value.get_threshold.assert_called_with("widget")
+
+    # --- New test for shuffle/recovery full cycle (item 19) ---
+
+    def test_recovery_then_termination(self, mock_svc, caplog):
+        """Recovery resets consecutive failures; second round of failures terminates."""
+        from src.services.world_quality_service._batch import MAX_BATCH_SHUFFLE_RETRIES
+
+        def always_fail(_i):
+            """Every call fails."""
+            raise WorldGenerationError("Persistent failure")
+
+        with caplog.at_level(logging.WARNING):
+            with pytest.raises(WorldGenerationError, match="Failed to generate any"):
+                _generate_batch_parallel(
+                    svc=mock_svc,
+                    count=30,
+                    entity_type="test",
+                    generate_fn=always_fail,
+                    get_name=lambda e: e["name"],
+                    quality_threshold=7.5,
+                    max_workers=2,
+                )
+
+        # Should see both recovery and early termination messages
+        recovery_msgs = [m for m in caplog.messages if "Attempting recovery" in m]
+        termination_msgs = [m for m in caplog.messages if "early termination" in m]
+        assert len(recovery_msgs) == MAX_BATCH_SHUFFLE_RETRIES
+        assert len(termination_msgs) == 1
+
+
+# ---------------------------------------------------------------------------
+# _collect_late_results tests
+# ---------------------------------------------------------------------------
+
+
+class TestCollectLateResults:
+    """Tests for _collect_late_results function."""
+
+    def test_collects_successful_late_results(self):
+        """Successful futures are collected into results during early termination."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(lambda: ({"name": "Late"}, _make_char_scores(8.0), 1))
+            # Wait for the future to complete before testing
+            future.result()
+
+            pending: dict = {future: (0, 0.0)}
+            results: list = []
+            completed_times: list[float] = []
+            errors: list[str] = []
+
+            _collect_late_results(
+                pending,
+                results,
+                completed_times,
+                errors,
+                "test",
+                lambda e: e["name"],
+                None,
+            )
+
+        assert len(results) == 1
+        assert results[0][0] == {"name": "Late"}
+        assert len(errors) == 0
+
+    def test_skips_cancelled_futures(self):
+        """Cancelled futures are skipped without error."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            # Submit and immediately cancel (may or may not succeed)
+            future = executor.submit(lambda: None)
+            future.result()  # Wait for completion first
+            # Create a mock cancelled future
+            cancelled_future = MagicMock()
+            cancelled_future.cancelled.return_value = True
+
+            pending: dict = {cancelled_future: (0, 0.0)}
+            results: list = []
+            completed_times: list[float] = []
+            errors: list[str] = []
+
+            _collect_late_results(
+                pending,
+                results,
+                completed_times,
+                errors,
+                "test",
+                lambda e: e["name"],
+                None,
+            )
+
+        assert len(results) == 0
+        assert len(errors) == 0
+
+    def test_handles_failed_late_futures(self, caplog):
+        """Failed late futures are logged and added to errors."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        def fail():
+            """Raise an error."""
+            raise WorldGenerationError("Late failure")
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(fail)
+            # Wait for it to finish (it will store the exception)
+            try:
+                future.result()
+            except WorldGenerationError:
+                pass
+
+            pending: dict = {future: (0, 0.0)}
+            results: list = []
+            completed_times: list[float] = []
+            errors: list[str] = []
+
+            with caplog.at_level(logging.DEBUG):
+                _collect_late_results(
+                    pending,
+                    results,
+                    completed_times,
+                    errors,
+                    "test",
+                    lambda e: e["name"],
+                    None,
+                )
+
+        assert len(results) == 0
+        assert len(errors) == 1
+
 
 # ---------------------------------------------------------------------------
 # generate_relationships_with_quality integration tests
@@ -419,14 +727,24 @@ class TestGenerateRelationshipsWithQuality:
         story_state = MagicMock(spec=StoryState)
         story_state.id = "test-story"
 
-        rel = {
-            "source": "Alice",
-            "target": "Bob",
-            "relation_type": "ally",
-            "description": "Friends",
-        }
+        rels = [
+            {
+                "source": "Alice",
+                "target": "Bob",
+                "relation_type": "ally",
+                "description": "Friends",
+            },
+            {
+                "source": "Alice",
+                "target": "Carol",
+                "relation_type": "rival",
+                "description": "Rivals",
+            },
+        ]
         scores = _make_rel_scores(8.0)
-        mock_svc.generate_relationship_with_quality = MagicMock(return_value=(rel, scores, 1))
+        mock_svc.generate_relationship_with_quality = MagicMock(
+            side_effect=[(rels[0], scores, 1), (rels[1], scores, 1)]
+        )
 
         results = generate_relationships_with_quality(
             svc=mock_svc,
@@ -446,17 +764,20 @@ class TestGenerateRelationshipsWithQuality:
         story_state = MagicMock(spec=StoryState)
         story_state.id = "test-story"
 
+        lock = threading.Lock()
         call_count = 0
 
         def mock_generate(story, names, rels):
-            """Generate unique relationships, checking rels grows."""
+            """Generate unique relationships with thread-safe counter."""
             nonlocal call_count
-            call_count += 1
+            with lock:
+                call_count += 1
+                current = call_count
             rel = {
-                "source": f"E{call_count}",
-                "target": f"F{call_count}",
+                "source": f"E{current}",
+                "target": f"F{current}",
                 "relation_type": "ally",
-                "description": f"Rel {call_count}",
+                "description": f"Rel {current}",
             }
             return (rel, _make_rel_scores(8.0), 1)
 
@@ -500,3 +821,60 @@ class TestGenerateRelationshipsWithQuality:
         )
 
         assert len(results) == 1
+
+    def test_duplicate_from_parallel_worker_rejected(self, mock_svc, caplog):
+        """Duplicate relationship from concurrent worker is rejected by atomic dedup."""
+        from src.memory.story_state import StoryState
+
+        story_state = MagicMock(spec=StoryState)
+        story_state.id = "test-story"
+
+        # All calls return the same pair — second call should be rejected
+        # by append_if_new_pair, third call returns a different pair
+        lock = threading.Lock()
+        call_count = 0
+
+        def mock_generate(story, names, rels):
+            """Return same pair for first two calls, different pair for third."""
+            nonlocal call_count
+            with lock:
+                call_count += 1
+                current = call_count
+            if current <= 2:
+                return (
+                    {
+                        "source": "Alice",
+                        "target": "Bob",
+                        "relation_type": "ally",
+                        "description": "Same pair",
+                    },
+                    _make_rel_scores(8.0),
+                    1,
+                )
+            return (
+                {
+                    "source": "Alice",
+                    "target": "Carol",
+                    "relation_type": "rival",
+                    "description": "Different pair",
+                },
+                _make_rel_scores(8.0),
+                1,
+            )
+
+        mock_svc.generate_relationship_with_quality = mock_generate
+
+        with caplog.at_level(logging.ERROR):
+            results = generate_relationships_with_quality(
+                svc=mock_svc,
+                story_state=story_state,
+                entity_names=["Alice", "Bob", "Carol"],
+                existing_rels=[],
+                count=3,  # count > 2 so a replacement task is submitted after duplicate
+            )
+
+        # One duplicate was rejected, but the third call returned a unique pair
+        assert len(results) == 2
+        # Should have unique pairs in results
+        pairs = {(r["source"], r["target"]) for r, _ in results}
+        assert len(pairs) == 2
