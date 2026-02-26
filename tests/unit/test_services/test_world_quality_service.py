@@ -687,6 +687,7 @@ class TestJudgeConfigCaching:
         ids_lock = threading.Lock()
 
         def worker() -> None:
+            """Access client from a thread and record its id."""
             barrier.wait()
             c = service.client
             with ids_lock:
@@ -741,6 +742,7 @@ class TestRefinementConfigCaching:
         ids_lock = threading.Lock()
 
         def worker() -> None:
+            """Access config from a thread and record its id."""
             barrier.wait()
             cfg = service.get_config()
             with ids_lock:

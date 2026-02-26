@@ -2792,6 +2792,40 @@ class TestWP1WP2SettingsValidation:
         ):
             settings.validate()
 
+    def test_dimension_minimum_validation(self):
+        """Should raise ValueError for dimension_minimum out of range."""
+        settings = Settings()
+        settings.world_quality_dimension_minimum = -1.0
+        with pytest.raises(
+            ValueError,
+            match=r"world_quality_dimension_minimum must be between 0\.0 and 10\.0",
+        ):
+            settings.validate()
+
+        settings2 = Settings()
+        settings2.world_quality_dimension_minimum = 11.0
+        with pytest.raises(
+            ValueError,
+            match=r"world_quality_dimension_minimum must be between 0\.0 and 10\.0",
+        ):
+            settings2.validate()
+
+    def test_dimension_minimum_exceeds_threshold(self):
+        """Should raise ValueError when dimension_minimum exceeds quality threshold."""
+        settings = Settings()
+        settings.world_quality_dimension_minimum = 9.0
+        settings.world_quality_threshold = 7.5
+        with pytest.raises(
+            ValueError,
+            match=r"world_quality_dimension_minimum.*cannot exceed world_quality_threshold",
+        ):
+            settings.validate()
+
+    def test_dimension_minimum_default_value(self):
+        """Default dimension_minimum should be 6.0."""
+        settings = Settings()
+        assert settings.world_quality_dimension_minimum == 6.0
+
     def test_validate_raises_on_invalid_circuit_breaker_failure_threshold(self):
         """Should raise ValueError for circuit breaker failure_threshold out of range."""
         settings = Settings()

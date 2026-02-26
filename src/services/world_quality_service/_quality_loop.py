@@ -371,7 +371,10 @@ def quality_refinement_loop[T, S: BaseQualityScores](
             # Threshold check — round to 1 decimal so the comparison matches
             # the %.1f log display (e.g. 7.46 rounds to 7.5, passes >= 7.5).
             rounded_score = round(scores.average, 1)
-            if rounded_score >= entity_threshold:
+            dimension_floor = config.dimension_minimum
+            below_floor = scores.minimum_score < dimension_floor if dimension_floor > 0.0 else False
+
+            if rounded_score >= entity_threshold and not below_floor:
                 logger.info(
                     "%s '%s' met quality threshold (%.1f >= %.1f)",
                     entity_type.capitalize(),
@@ -390,6 +393,16 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                     max_iterations=config.max_iterations,
                 )
                 return entity, scores, scoring_rounds
+            elif rounded_score >= entity_threshold and below_floor:
+                logger.info(
+                    "%s '%s' average %.1f met threshold but dimension floor violated "
+                    "(min=%.1f < %.1f) — continuing refinement",
+                    entity_type.capitalize(),
+                    get_name(entity),
+                    scores.average,
+                    scores.minimum_score,
+                    dimension_floor,
+                )
 
             # Score-plateau early-stop: consecutive identical scores (#328)
             if (

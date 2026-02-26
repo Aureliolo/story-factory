@@ -331,7 +331,10 @@ class WorldQualityService(EntityDelegatesMixin):
         """
         with self._calendar_context_lock:
             if not self._calendar_context:
-                return ""
+                return (
+                    "\nCALENDAR & TIMELINE:\n"
+                    "No calendar available — temporal scores should reflect this uncertainty.\n"
+                )
             return f"\nCALENDAR & TIMELINE:\n{self._calendar_context}\n"
 
     @property

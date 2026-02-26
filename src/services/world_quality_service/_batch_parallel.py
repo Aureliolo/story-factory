@@ -36,6 +36,7 @@ class _ThreadSafeRelsList:
     """
 
     def __init__(self, initial: list[tuple[str, str, str]]) -> None:
+        """Initialize with an existing relationship list to deduplicate against."""
         self._lock = threading.Lock()
         self._data: list[tuple[str, str, str]] = list(initial)
 

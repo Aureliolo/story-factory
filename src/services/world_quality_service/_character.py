@@ -299,7 +299,7 @@ Rate each dimension 0-10:
 - flaws: Meaningful vulnerabilities that drive conflict
 - uniqueness: Distinctiveness from genre archetypes
 - arc_potential: Room for transformation and growth
-- temporal_plausibility: Timeline consistency, era-appropriate placement
+- temporal_plausibility: VERIFY against CALENDAR above — birth/death years MUST fall within a defined era's [start_year, end_year] range. Score 8-10 ONLY if all dates match a valid era AND era names are consistent. Score 5-7 if dates are present but era alignment is unclear. Score 2-4 if dates fall outside all defined era ranges or conflict with the calendar. If no CALENDAR section above, score 3.0 (insufficient context to verify).
 
 Provide specific, actionable feedback for improvement in the feedback field.
 

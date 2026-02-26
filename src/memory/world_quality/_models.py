@@ -270,6 +270,24 @@ class BaseQualityScores(BaseModel, ABC):
             list[str]: Names of dimensions with scores below `threshold`.
         """
 
+    @property
+    def minimum_score(self) -> float:
+        """Lowest score across all dimensions.
+
+        Excludes metadata keys (``average``, ``feedback``) so only actual
+        scoring dimensions are considered.  Returns 0.0 when no numeric
+        dimensions are found (defensive — should never happen for valid
+        score models).
+        """
+        from src.services.world_quality_service._quality_loop import _SCORE_METADATA_KEYS
+
+        scores = {
+            k: v
+            for k, v in self.to_dict().items()
+            if isinstance(v, (int, float)) and k not in _SCORE_METADATA_KEYS
+        }
+        return min(scores.values()) if scores else 0.0
+
 
 class RefinementConfig(BaseModel):
     """Configuration for the quality refinement loop."""
@@ -321,6 +339,12 @@ class RefinementConfig(BaseModel):
         ge=0.0,
         le=1.0,
         description="Max score difference to consider consecutive iterations as plateaued",
+    )
+    dimension_minimum: float = Field(
+        default=6.0,
+        ge=0.0,
+        le=10.0,
+        description="Per-dimension minimum floor — any dimension below this forces refinement",
     )
 
     def get_threshold(self, entity_type: str) -> float:
@@ -446,6 +470,7 @@ class RefinementConfig(BaseModel):
                 - world_quality_early_stopping_min_iterations
                 - world_quality_early_stopping_variance_tolerance
                 - world_quality_score_plateau_tolerance
+                - world_quality_dimension_minimum
 
         Returns:
             RefinementConfig: Configuration populated from the corresponding settings attributes.
@@ -473,6 +498,7 @@ class RefinementConfig(BaseModel):
             early_stopping_min_iterations=settings.world_quality_early_stopping_min_iterations,
             early_stopping_variance_tolerance=settings.world_quality_early_stopping_variance_tolerance,
             score_plateau_tolerance=settings.world_quality_score_plateau_tolerance,
+            dimension_minimum=settings.world_quality_dimension_minimum,
         )
 
 
