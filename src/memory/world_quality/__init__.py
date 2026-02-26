@@ -15,6 +15,7 @@ from src.memory.world_quality._entity_scores import (
     LocationQualityScores,
 )
 from src.memory.world_quality._models import (
+    SCORE_METADATA_KEYS,
     BaseQualityScores,
     IterationRecord,
     JudgeConsistencyConfig,
@@ -29,6 +30,7 @@ from src.memory.world_quality._story_scores import (
 )
 
 __all__ = [
+    "SCORE_METADATA_KEYS",
     "BaseQualityScores",
     "CalendarQualityScores",
     "ChapterQualityScores",

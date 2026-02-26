@@ -12,6 +12,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
 
+# Keys returned by BaseQualityScores.to_dict() that are metadata, not scoring
+# dimensions.  Used by minimum_score and the quality loop's dimension checks.
+SCORE_METADATA_KEYS = {"average", "feedback"}
+
 
 class IterationRecord(BaseModel):
     """Record of a single refinement iteration for analytics."""
@@ -275,18 +279,29 @@ class BaseQualityScores(BaseModel, ABC):
         """Lowest score across all dimensions.
 
         Excludes metadata keys (``average``, ``feedback``) so only actual
-        scoring dimensions are considered.  Returns 0.0 when no numeric
-        dimensions are found (defensive — should never happen for valid
-        score models).
-        """
-        from src.services.world_quality_service._quality_loop import _SCORE_METADATA_KEYS
+        scoring dimensions are considered.
 
+        Raises:
+            ValueError: If no numeric scoring dimensions are found, indicating
+                a bug in the score model's ``to_dict()`` implementation.
+        """
         scores = {
             k: v
             for k, v in self.to_dict().items()
-            if isinstance(v, (int, float)) and k not in _SCORE_METADATA_KEYS
+            if isinstance(v, (int, float)) and k not in SCORE_METADATA_KEYS
         }
-        return min(scores.values()) if scores else 0.0
+        if not scores:
+            logger.error(
+                "minimum_score found no numeric dimensions in %s.to_dict() — "
+                "score model is likely broken. Keys: %s",
+                type(self).__name__,
+                list(self.to_dict().keys()),
+            )
+            raise ValueError(
+                f"{type(self).__name__}.to_dict() returned no numeric scoring dimensions. "
+                f"This indicates a bug in the score model implementation."
+            )
+        return min(scores.values())
 
 
 class RefinementConfig(BaseModel):
@@ -344,7 +359,8 @@ class RefinementConfig(BaseModel):
         default=6.0,
         ge=0.0,
         le=10.0,
-        description="Per-dimension minimum floor — any dimension below this forces refinement",
+        description="Per-dimension minimum floor — any dimension below this forces refinement "
+        "(0.0 disables the check)",
     )
 
     def get_threshold(self, entity_type: str) -> float:

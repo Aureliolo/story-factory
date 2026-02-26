@@ -196,7 +196,7 @@ Rate each dimension 0-10:
 - narrative_significance: Plot or symbolic meaning
 - story_relevance: Connections to themes and characters
 - distinctiveness: Memorable, unique qualities
-- temporal_plausibility: VERIFY against CALENDAR above — founding/establishment dates MUST fall within a defined era's [start_year, end_year] range. Score 8-10 ONLY if temporal references match valid eras AND are self-consistent. Score 5-7 if time references exist but era alignment is ambiguous. Score 2-4 if dates conflict with defined era ranges. If no CALENDAR section above, score 3.0 (insufficient context to verify).
+- temporal_plausibility: VERIFY against CALENDAR above — all temporal dates (including founding and destruction) MUST fall within defined era [start_year, end_year] ranges, and chronology must be self-consistent (e.g., destruction_year >= founding_year when both exist). Score 8-10 ONLY if all temporal references satisfy these checks. Score 5-7 if time references exist but era alignment is ambiguous. Score 2-4 if any date conflicts with defined era ranges or chronology. If the CALENDAR block states "No calendar available", score exactly 3.0 (insufficient context to verify).
 
 Provide specific improvement feedback in the feedback field.
 

@@ -2826,6 +2826,29 @@ class TestWP1WP2SettingsValidation:
         settings = Settings()
         assert settings.world_quality_dimension_minimum == 6.0
 
+    def test_dimension_minimum_equal_to_threshold_is_valid(self):
+        """dimension_minimum == quality_threshold should pass validation."""
+        settings = Settings()
+        settings.world_quality_dimension_minimum = 7.5
+        settings.world_quality_threshold = 7.5
+        # Should not raise — equal is allowed (only strict > is rejected)
+        settings.validate()
+
+    def test_dimension_minimum_exceeds_per_entity_threshold(self):
+        """Should raise ValueError when dimension_minimum exceeds lowest per-entity threshold."""
+        settings = Settings()
+        settings.world_quality_dimension_minimum = 6.0
+        settings.world_quality_threshold = 7.5
+        settings.world_quality_thresholds = {
+            **settings.world_quality_thresholds,
+            "item": 5.0,  # Below dimension_minimum
+        }
+        with pytest.raises(
+            ValueError,
+            match=r"world_quality_dimension_minimum.*cannot exceed the lowest per-entity threshold",
+        ):
+            settings.validate()
+
     def test_validate_raises_on_invalid_circuit_breaker_failure_threshold(self):
         """Should raise ValueError for circuit breaker failure_threshold out of range."""
         settings = Settings()
