@@ -282,13 +282,18 @@ class BaseQualityScores(BaseModel):
         """Calculate average score across non-excluded dimensions.
 
         Dimensions listed in ``_EXCLUDED_FROM_AVERAGE`` are omitted from the
-        mean but are still validated via the ``dimension_minimum`` floor check.
+        mean but are still checked against the ``dimension_minimum`` floor
+        by the quality refinement loop.
         """
         fields = self._score_fields()
         included = [
             val for name, _display, val in fields if name not in self._EXCLUDED_FROM_AVERAGE
         ]
         if not included:
+            logger.warning(
+                "%s: all dimensions excluded from average — returning 0.0",
+                type(self).__name__,
+            )
             return 0.0
         return sum(included) / len(included)
 

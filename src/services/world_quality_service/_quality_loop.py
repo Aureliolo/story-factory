@@ -568,11 +568,6 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                         history.entity_name,
                         win_rate * 100,
                     )
-            except AttributeError, TypeError:
-                logger.debug(
-                    "Could not query hail-mary win rate for %s, proceeding with hail-mary",
-                    entity_type,
-                )
             except Exception:
                 logger.warning(
                     "Hail-mary win-rate query failed for %s, proceeding with hail-mary",
@@ -618,12 +613,6 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                                 won=hail_mary_won,
                                 best_score=history.peak_score,
                                 hail_mary_score=fresh_scores.average,
-                            )
-                        except AttributeError:
-                            logger.debug(
-                                "Could not record hail-mary attempt for %s (analytics_db "
-                                "unavailable)",
-                                entity_type,
                             )
                         except Exception:
                             logger.warning(

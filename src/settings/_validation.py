@@ -646,7 +646,9 @@ def _validate_model_cache_ttls(settings: Settings) -> None:
         ("model_installed_cache_ttl", settings.model_installed_cache_ttl),
         ("model_vram_cache_ttl", settings.model_vram_cache_ttl),
     ]:
-        if not 1.0 <= value <= 300.0:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{name} must be a number, got {type(value).__name__}")
+        if not 1.0 <= float(value) <= 300.0:
             raise ValueError(f"{name} must be between 1.0 and 300.0 seconds, got {value}")
 
 

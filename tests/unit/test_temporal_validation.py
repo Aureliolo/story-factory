@@ -328,7 +328,7 @@ class TestTemporalValidationService:
         self, validation_service: TemporalValidationService
     ) -> None:
         """Test score calculation with no issues."""
-        result = TemporalValidationResult(errors=[], warnings=[], is_valid=True)
+        result = TemporalValidationResult(errors=[], warnings=[])
         score = validation_service.calculate_temporal_consistency_score(result)
         assert score == 10.0
 

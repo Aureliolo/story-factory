@@ -128,6 +128,12 @@ class Header:
             else:
                 ui.icon("error", size="xs").classes("text-red-500")
                 self._status_label = ui.label("Offline").classes("text-xs text-red-500")
+                # Create hidden placeholder so refresh_status can toggle visibility
+                # without checking for None or re-creating the element
+                self._cold_start_icon = (
+                    ui.icon("hourglass_empty", size="xs").classes("text-yellow-500").tooltip("")
+                )
+                self._cold_start_icon.visible = False
 
     async def _on_project_change(self, e: Any) -> None:
         """Handle project selection change."""

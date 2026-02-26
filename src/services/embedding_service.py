@@ -316,6 +316,11 @@ class EmbeddingService:
             client = self._get_client()
             context_limit = get_model_context_size(client, model)
         if context_limit is None:
+            logger.debug(
+                "Context size unavailable for embedding model in embed_relationship, "
+                "falling back to %d tokens",
+                _FALLBACK_CONTEXT_TOKENS,
+            )
             context_limit = _FALLBACK_CONTEXT_TOKENS
         max_chars = (context_limit - _EMBEDDING_CONTEXT_MARGIN_TOKENS) * _CHARS_PER_TOKEN_ESTIMATE
 

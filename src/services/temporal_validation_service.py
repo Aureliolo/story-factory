@@ -1,6 +1,7 @@
 """Temporal validation service - validates temporal consistency of world entities."""
 
 import logging
+import sqlite3
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
@@ -187,8 +188,8 @@ class TemporalValidationService:
             if world_settings and world_settings.calendar:
                 calendar = world_settings.calendar
                 logger.debug(f"Loaded calendar for validation: {calendar.current_era_name}")
-        except Exception as e:
-            logger.debug(f"Could not load world calendar (table may not exist): {e}")
+        except (sqlite3.Error, KeyError, ValueError) as e:
+            logger.warning("Could not load world calendar: %s", e)
 
         # Validate each entity
         for entity in all_entities:

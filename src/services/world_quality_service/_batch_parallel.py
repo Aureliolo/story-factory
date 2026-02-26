@@ -160,6 +160,7 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
     consecutive_failures = 0
     shuffles_remaining = MAX_BATCH_SHUFFLE_RETRIES
     completed_count = 0
+    duplicates_found = 0
 
     logger.info(
         "Starting parallel %s generation: %d entities with max_workers=%d",
@@ -183,7 +184,7 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
                 True if a task was submitted, False otherwise.
             """
             nonlocal next_index
-            if next_index >= count:
+            if next_index >= count + duplicates_found:
                 return False
             if cancel_check and cancel_check():
                 return False
@@ -267,7 +268,10 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
 
                 except DuplicateNameError as e:
                     # Don't count duplicates as consecutive failures —
-                    # they're expected race outcomes in parallel generation
+                    # they're expected race outcomes in parallel generation.
+                    # Extend the submission bound so a replacement task
+                    # is submitted, keeping the final result count on target.
+                    duplicates_found += 1
                     logger.warning(
                         "Duplicate %s from parallel worker (task %d): %s",
                         entity_type,

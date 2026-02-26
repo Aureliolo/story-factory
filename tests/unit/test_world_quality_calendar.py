@@ -438,6 +438,28 @@ class TestGeneratedDataToWorldCalendar:
         calendar = _generated_data_to_world_calendar(data)
         assert calendar.era_start_year == 100
 
+    def test_era_name_coerced_to_canonical_casing(self, caplog):
+        """Test that current_era_name is coerced to the matched era's canonical name.
+
+        When the LLM returns era_name="dark age" but the historical era is
+        "Dark Age", the resolved calendar should use "Dark Age" (the canonical
+        spelling) rather than the LLM's casing.
+        """
+        data = GeneratedCalendarData(
+            era_name="dark age",  # Different casing from the era list
+            era_abbreviation="DA",
+            current_year=500,
+            months=[{"name": "Frostmoon", "days": 30}],
+            day_names=["Day1"],
+            historical_eras=[
+                {"name": "Dark Age", "start_year": 100, "end_year": None, "description": ""},
+            ],
+        )
+        calendar = _generated_data_to_world_calendar(data)
+        # The coercion logic should replace "dark age" with "Dark Age"
+        assert calendar.current_era_name == "Dark Age"
+        assert "Coercing calendar era_name" in caplog.text
+
     def test_era_lookup_ongoing_fallback(self):
         """Test that ongoing era (end_year=None) is used when name doesn't match."""
         data = GeneratedCalendarData(

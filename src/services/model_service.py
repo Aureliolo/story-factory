@@ -29,8 +29,8 @@ class _TTLCached[T]:
     """TTL cache for a single value with time-based invalidation.
 
     Used by :class:`ModelService` to avoid redundant Ollama API calls from
-    the header refresh loop.  Not thread-safe — callers are responsible for
-    external synchronization if needed.
+    the header refresh loop.  Not thread-safe — relies on the single-threaded
+    NiceGUI event loop for safe access from UI refresh callbacks.
     """
 
     __slots__ = ("_time", "_value", "ttl")
@@ -129,8 +129,9 @@ class ModelService:
     def check_health(self) -> OllamaHealth:
         """Check Ollama service health and connectivity.
 
-        Results are cached for ``_health_cache_ttl`` seconds to avoid
-        redundant API calls from the header refresh loop.
+        Results are cached for ``settings.model_health_cache_ttl`` seconds
+        to avoid redundant API calls from the header refresh loop.
+        Unhealthy results are **not** cached so recovery is detected immediately.
 
         Returns:
             OllamaHealth with status information.
@@ -178,7 +179,7 @@ class ModelService:
                 for model_name in sorted(configured):
                     if model_name not in running_names:
                         cold_start.append(model_name)
-            except (ollama.ResponseError, ConnectionError, TimeoutError, AttributeError) as e:
+            except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
                 logger.warning("Cold-start detection failed (non-fatal): %s", e)
 
             result = OllamaHealth(
@@ -193,26 +194,25 @@ class ModelService:
         except ollama.ResponseError as e:
             self._log_health_failure(f"Ollama API error during health check: {e}")
             self._last_health_healthy = False
-            result = OllamaHealth(
+            # Error result intentionally NOT cached — next call will retry,
+            # allowing the UI to detect recovery immediately.
+            return OllamaHealth(
                 is_healthy=False,
                 message=f"Ollama API error: {e}",
             )
-            self._health_cache.set(result, now)
-            return result
         except (ConnectionError, TimeoutError) as e:
             self._log_health_failure(f"Cannot connect to Ollama at {self.settings.ollama_url}: {e}")
             self._last_health_healthy = False
-            result = OllamaHealth(
+            # Error result intentionally NOT cached — next call will retry.
+            return OllamaHealth(
                 is_healthy=False,
                 message=f"Cannot connect to Ollama: {e}",
             )
-            self._health_cache.set(result, now)
-            return result
 
     def list_installed(self) -> list[str]:
         """List installed Ollama models.
 
-        Results are cached for ``_installed_cache_ttl`` seconds.
+        Results are cached for ``settings.model_installed_cache_ttl`` seconds.
 
         Returns:
             List of installed model IDs.
@@ -613,7 +613,7 @@ class ModelService:
     def get_vram(self) -> int:
         """Get available VRAM in GB.
 
-        Results are cached for ``_vram_cache_ttl`` seconds.
+        Results are cached for ``settings.model_vram_cache_ttl`` seconds.
 
         Returns:
             VRAM in gigabytes.

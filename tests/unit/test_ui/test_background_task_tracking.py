@@ -97,6 +97,41 @@ class TestBackgroundTaskCounter:
         assert not _is_busy(state)
 
 
+class TestBackgroundTaskContextManager:
+    """Tests for the background_task context manager."""
+
+    def test_ends_task_on_normal_exit(self):
+        """Test that background_task calls end_background_task on normal exit."""
+        state = AppState()
+
+        with state.background_task("build"):
+            assert _is_busy(state)
+
+        assert not _is_busy(state)
+
+    def test_ends_task_on_exception(self):
+        """Test that background_task calls end_background_task even when the body raises."""
+        state = AppState()
+
+        with pytest.raises(RuntimeError, match="boom"):
+            with state.background_task("build"):
+                assert _is_busy(state)
+                raise RuntimeError("boom")
+
+        # Counter must be back to zero despite the exception
+        assert not _is_busy(state)
+
+    def test_ends_task_on_keyboard_interrupt(self):
+        """Test that background_task calls end_background_task on KeyboardInterrupt."""
+        state = AppState()
+
+        with pytest.raises(KeyboardInterrupt):
+            with state.background_task("build"):
+                raise KeyboardInterrupt
+
+        assert not _is_busy(state)
+
+
 class TestSetProjectGuard:
     """Tests for set_project raising when busy."""
 

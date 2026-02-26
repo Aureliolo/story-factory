@@ -1,6 +1,8 @@
-"""Advanced settings - save and refresh logic for persistence/undo-redo.
+"""Save and refresh logic for advanced settings persistence and undo/redo.
 
-Extracted from _advanced.py to stay within the 1000-line file size limit.
+Delegates between UI widgets and the settings model for world generation,
+story structure, data integrity, advanced LLM, and relationship validation
+settings.
 """
 
 import logging
@@ -157,6 +159,13 @@ def refresh_from_settings(page: SettingsPage) -> None:
         page._quality_max_iterations_input.value = settings.world_quality_max_iterations
     if hasattr(page, "_quality_patience_input"):
         page._quality_patience_input.value = settings.world_quality_early_stopping_patience
+
+    # Story structure settings (chapter counts)
+    if hasattr(page, "_chapter_inputs"):
+        for key, input_widget in page._chapter_inputs.items():
+            attr = f"chapters_{key}"
+            if hasattr(settings, attr):
+                input_widget.value = getattr(settings, attr)
 
     # Data integrity settings
     if hasattr(page, "_entity_version_retention_input"):

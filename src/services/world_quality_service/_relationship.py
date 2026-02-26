@@ -251,8 +251,6 @@ def generate_relationship_with_quality(
         first_pass_rate = svc.analytics_db.get_first_pass_rate(
             entity_type="relationship", min_records=20
         )
-    except AttributeError, TypeError:
-        logger.debug("Relationship auto-pass check skipped: analytics API unavailable")
     except (sqlite3.Error, OSError) as e:
         logger.warning(
             "Relationship auto-pass check failed (database error: %s); "
@@ -268,9 +266,9 @@ def generate_relationship_with_quality(
             exc_info=True,
         )
     if isinstance(first_pass_rate, (int, float)):
-        logger.debug("Relationship first-pass rate: %.0f%% (min_records=20)", first_pass_rate * 100)
+        logger.info("Relationship first-pass rate: %.0f%% (min_records=20)", first_pass_rate * 100)
     else:
-        logger.debug("Relationship first-pass rate: unavailable (min_records=20)")
+        logger.info("Relationship first-pass rate: unavailable (min_records=20)")
     if isinstance(first_pass_rate, (int, float)) and first_pass_rate >= 0.95:
         # Derive auto-pass scores from the configured threshold so they stay
         # consistent with the quality loop's threshold comparison.

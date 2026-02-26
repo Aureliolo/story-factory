@@ -6,7 +6,8 @@ characters, locations, factions, items, concepts, events, and calendars.
 Each subclass inherits generic ``average``, ``to_dict``, and ``weak_dimensions``
 from :class:`BaseQualityScores`.  Subclasses that set ``_EXCLUDED_FROM_AVERAGE``
 exclude inflated dimensions (e.g. ``temporal_plausibility``) from the average
-while still validating them via the ``dimension_minimum`` floor check.
+while still being subject to the ``dimension_minimum`` floor check performed
+externally by the quality refinement loop.
 """
 
 import logging

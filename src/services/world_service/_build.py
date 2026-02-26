@@ -184,7 +184,11 @@ def build_world(
             except GenerationCancelledError, DatabaseClosedError, MemoryError, RecursionError:
                 raise
             except Exception as e:
-                logger.warning("Calendar generation failed (non-fatal), continuing without: %s", e)
+                logger.warning(
+                    "Calendar generation failed (non-fatal), continuing without: %s",
+                    e,
+                    exc_info=True,
+                )
 
         # Steps 2-10: entity generation (inside try/finally for calendar context cleanup)
         _build_world_entities(

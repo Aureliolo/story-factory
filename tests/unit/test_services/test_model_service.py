@@ -115,6 +115,20 @@ class TestModelServicePullModel:
             assert results[0]["error"] is True
             assert "error" in results[0]["status"].lower()
 
+    def test_invalidates_caches_after_successful_pull(self, model_service):
+        """Test that pull_model calls invalidate_caches after download completes."""
+        with patch("src.services.model_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_instance.pull.return_value = [
+                {"status": "success", "completed": 1000, "total": 1000},
+            ]
+            model_service.invalidate_caches = MagicMock()
+
+            list(model_service.pull_model("test-model"))
+
+            model_service.invalidate_caches.assert_called_once()
+
     def test_handles_none_values_in_progress(self, model_service):
         """Test pull_model handles None values for total/completed without crashing.
 
@@ -240,6 +254,29 @@ class TestModelServiceDeleteModel:
             result = model_service.delete_model("test-model")
 
             assert result is False
+
+    def test_invalidates_caches_on_success(self, model_service):
+        """Test that delete_model calls invalidate_caches after successful deletion."""
+        with patch("src.services.model_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            model_service.invalidate_caches = MagicMock()
+
+            model_service.delete_model("test-model")
+
+            model_service.invalidate_caches.assert_called_once()
+
+    def test_does_not_invalidate_caches_on_failure(self, model_service):
+        """Test that delete_model does NOT call invalidate_caches when deletion fails."""
+        with patch("src.services.model_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_instance.delete.side_effect = ConnectionError("Failed")
+            model_service.invalidate_caches = MagicMock()
+
+            model_service.delete_model("test-model")
+
+            model_service.invalidate_caches.assert_not_called()
 
 
 class TestModelServiceTestModel:
