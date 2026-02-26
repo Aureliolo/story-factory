@@ -34,6 +34,7 @@ class Character(BaseModel):
     birth_year: int | None = None
     death_year: int | None = None
     birth_era: str | None = None
+    death_era: str | None = None
     temporal_notes: str = ""
 
     @field_validator("personality_traits", mode="before")
@@ -55,8 +56,8 @@ class Character(BaseModel):
         that may contain invalid arc_progress data.
 
         Using field_validator instead of model_validator ensures this runs before
-        Pydantic validates dict[int, str] keys, which is critical for instructor
-        library compatibility.
+        Pydantic validates dict[int, str] keys, which is critical for
+        grammar-constrained JSON output via Ollama's format parameter.
         """
         if not isinstance(v, dict):
             return {}
@@ -707,11 +708,12 @@ class StoryState(BaseModel):
 
 
 # ============================================================================
-# List Wrapper Models for Instructor Integration
+# List Wrapper Models for Structured Output
 # ============================================================================
-# These wrapper models are used with the Instructor library to enforce
-# JSON schema validation when generating lists of Pydantic models.
-# Instructor requires a single Pydantic model, so we wrap lists.
+# These wrapper models are used with generate_structured() (native Ollama
+# format parameter) to enforce JSON schema validation when generating lists
+# of Pydantic models. The Ollama format parameter requires a single Pydantic
+# model, so we wrap lists.
 
 
 class CharacterList(BaseModel):
@@ -755,6 +757,7 @@ class CharacterCreation(BaseModel):
     birth_year: int | None = None
     death_year: int | None = None
     birth_era: str | None = None
+    death_era: str | None = None
     temporal_notes: str = ""
 
     @field_validator("personality_traits", mode="before")

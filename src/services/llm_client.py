@@ -32,12 +32,17 @@ _model_context_cache_lock = threading.Lock()
 def get_model_context_size(client: ollama.Client, model: str) -> int | None:
     """Query and cache the context size for a model.
 
+    Results are cached for the process lifetime. Network and model errors
+    cache None permanently to prevent repeated API calls on every
+    embed_text() invocation. Unexpected errors are not cached, allowing
+    the next call to retry.
+
     Args:
         client: Ollama client instance.
         model: Model identifier.
 
     Returns:
-        Context size in tokens, or None if unavailable.
+        Context size in tokens, or None if unavailable (may be cached permanently).
     """
     if model in _model_context_cache:
         return _model_context_cache[model]
@@ -60,9 +65,34 @@ def get_model_context_size(client: ollama.Client, model: str) -> int | None:
             if context_length:
                 logger.debug("Model %s context size: %d tokens", model, context_length)
             return context_length
+        except (
+            ConnectionError,
+            TimeoutError,
+            httpx.TimeoutException,
+            httpx.TransportError,
+        ) as e:
+            # Cache None for network errors — prevents hammering Ollama on every
+            # embed_text() call when the server is down.
+            _model_context_cache[model] = None
+            logger.warning(
+                "Could not query context size for model %s (network error, "
+                "cached as unavailable for this session): %s",
+                model,
+                e,
+            )
+            return None
+        except ollama.ResponseError as e:
+            # Cache None — model doesn't support metadata query
+            _model_context_cache[model] = None
+            logger.debug("Model %s does not support context size query: %s", model, e)
+            return None
         except Exception as e:
-            # Don't cache on transient errors — let the next call retry
-            logger.debug("Could not query context size for model %s: %s", model, e)
+            # Don't cache unexpected errors — let next call retry
+            logger.warning(
+                "Unexpected error querying context size for model %s: %s",
+                model,
+                e,
+            )
             return None
 
 

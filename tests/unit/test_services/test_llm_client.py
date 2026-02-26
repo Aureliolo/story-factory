@@ -520,19 +520,93 @@ class TestGetModelContextSize:
         assert result2 == 4096
         mock_client.show.assert_called_once()
 
-    def test_get_model_context_size_returns_none_on_error(self):
-        """Test that None is returned when client.show raises an exception.
+    def test_get_model_context_size_caches_none_on_network_error(self):
+        """Test that None is cached when client.show raises a network error.
 
-        Transient errors should NOT be cached so the next call can retry.
+        Caching None prevents repeated API calls on every embed_text() call.
         """
         mock_client = MagicMock()
-        mock_client.show.side_effect = Exception("Connection refused")
+        mock_client.show.side_effect = ConnectionError("Connection refused")
 
         result = get_model_context_size(mock_client, "error-model:8b")
 
         assert result is None
-        # Transient errors must not be cached — the key should be absent
-        assert "error-model:8b" not in _model_context_cache
+        # None should be cached so subsequent calls don't retry
+        assert "error-model:8b" in _model_context_cache
+        assert _model_context_cache["error-model:8b"] is None
+
+    def test_get_model_context_size_no_retry_after_cached_none(self):
+        """Test that after network error caches None, subsequent call returns from cache."""
+        mock_client = MagicMock()
+        mock_client.show.side_effect = ConnectionError("Connection refused")
+
+        get_model_context_size(mock_client, "retry-model:8b")
+        mock_client.show.assert_called_once()
+
+        # Second call should return cached None without calling show() again
+        result = get_model_context_size(mock_client, "retry-model:8b")
+        assert result is None
+        mock_client.show.assert_called_once()  # Still only one call
+
+    def test_get_model_context_size_does_not_cache_unexpected_errors(self):
+        """Test that unexpected errors (e.g., ValueError) are NOT cached.
+
+        Unexpected errors may be transient programming issues — allow retry.
+        """
+        mock_client = MagicMock()
+        mock_client.show.return_value = {
+            "model_info": {"llama.context_length": "not_a_number"},
+        }
+
+        result = get_model_context_size(mock_client, "bad-meta-model:8b")
+        assert result is None
+        # Should NOT be cached — next call should retry
+        assert "bad-meta-model:8b" not in _model_context_cache
+
+    def test_get_model_context_size_caches_none_on_response_error(self):
+        """Test that ollama.ResponseError is cached as None (model doesn't support query)."""
+        mock_client = MagicMock()
+        mock_client.show.side_effect = ollama.ResponseError("model not found")
+
+        result = get_model_context_size(mock_client, "missing-model:8b")
+        assert result is None
+        # ResponseError should be cached — model genuinely doesn't support it
+        assert "missing-model:8b" in _model_context_cache
+        assert _model_context_cache["missing-model:8b"] is None
+
+    def test_get_model_context_size_caches_none_on_timeout_error(self):
+        """Test that TimeoutError is cached as None (network error)."""
+        mock_client = MagicMock()
+        mock_client.show.side_effect = TimeoutError("Connection timed out")
+
+        result = get_model_context_size(mock_client, "timeout-model:8b")
+        assert result is None
+        assert "timeout-model:8b" in _model_context_cache
+        assert _model_context_cache["timeout-model:8b"] is None
+
+    def test_get_model_context_size_caches_none_on_httpx_timeout(self):
+        """Test that httpx.TimeoutException is cached as None (network error)."""
+        import httpx
+
+        mock_client = MagicMock()
+        mock_client.show.side_effect = httpx.ReadTimeout("Read timed out")
+
+        result = get_model_context_size(mock_client, "httpx-timeout-model:8b")
+        assert result is None
+        assert "httpx-timeout-model:8b" in _model_context_cache
+        assert _model_context_cache["httpx-timeout-model:8b"] is None
+
+    def test_get_model_context_size_caches_none_on_httpx_transport_error(self):
+        """Test that httpx.TransportError is cached as None (network error)."""
+        import httpx
+
+        mock_client = MagicMock()
+        mock_client.show.side_effect = httpx.RemoteProtocolError("Server disconnected")
+
+        result = get_model_context_size(mock_client, "httpx-transport-model:8b")
+        assert result is None
+        assert "httpx-transport-model:8b" in _model_context_cache
+        assert _model_context_cache["httpx-transport-model:8b"] is None
 
     def test_get_model_context_size_double_check_lock(self):
         """Test double-checked locking when cache is populated during lock acquisition."""

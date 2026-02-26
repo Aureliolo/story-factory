@@ -33,6 +33,7 @@ def build_character_lifecycle(char: Character) -> dict[str, Any]:
         char.birth_year is not None
         or char.death_year is not None
         or char.birth_era is not None
+        or char.death_era is not None
         or char.temporal_notes
     )
     if not has_data:
@@ -49,8 +50,13 @@ def build_character_lifecycle(char: Character) -> dict[str, Any]:
             birth["era_name"] = char.birth_era
         lifecycle["birth"] = birth
 
-    if char.death_year is not None:
-        lifecycle["death"] = {"year": char.death_year}
+    if char.death_year is not None or char.death_era is not None:
+        death: dict[str, Any] = {}
+        if char.death_year is not None:
+            death["year"] = char.death_year
+        if char.death_era is not None:
+            death["era_name"] = char.death_era
+        lifecycle["death"] = death
 
     if char.temporal_notes:
         lifecycle["temporal_notes"] = char.temporal_notes

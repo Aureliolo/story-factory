@@ -26,7 +26,7 @@ def calculate_eta(
     """
     if not completed_times or remaining_count <= 0:
         logger.debug(
-            "calculate_eta: no estimate (completed_times=%d, remaining=%d)",
+            "calculate_eta: skipping (completed_times=%d, remaining=%d)",
             len(completed_times),
             remaining_count,
         )
@@ -36,14 +36,9 @@ def calculate_eta(
     avg = completed_times[0]
     for t in completed_times[1:]:
         avg = alpha * t + (1 - alpha) * avg
-    eta = avg * remaining_count
-    logger.debug(
-        "calculate_eta: avg=%.2fs, remaining=%d, eta=%.2fs",
-        avg,
-        remaining_count,
-        eta,
-    )
-    return eta
+    result = avg * remaining_count
+    logger.debug("calculate_eta: avg=%.2fs, remaining=%d, eta=%.2fs", avg, remaining_count, result)
+    return result
 
 
 def format_properties(properties: list[Any] | Any | None) -> str:

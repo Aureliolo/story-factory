@@ -6,6 +6,7 @@ These models define the structure for:
 - Conflict metrics and analysis results
 """
 
+import functools
 import logging
 import threading
 from enum import StrEnum
@@ -213,6 +214,9 @@ _WORD_TO_RELATION: dict[str, str] = {
     "colleague": "works_with",
     "follows": "follows",
     # Rivalry signals
+    "hostile": "enemy_of",
+    "contempt": "despises",
+    "hatred": "hates",
     "enemy": "enemy_of",
     "enemies": "enemies_with",
     "rival": "rivals",
@@ -234,6 +238,12 @@ _WORD_TO_RELATION: dict[str, str] = {
     "destroy": "destroys",
     "fight": "fights",
     # Tension signals
+    "distrustful": "distrusts",
+    "annoyance": "resents",
+    "suspicious": "suspects",
+    "questioning": "challenges",
+    "stealing": "manipulates",
+    "grudge": "resents",
     "fears": "fears",
     "fear": "fears",
     "wary": "wary_of",
@@ -258,6 +268,7 @@ _WORD_TO_RELATION: dict[str, str] = {
 }
 
 
+@functools.lru_cache(maxsize=256)
 def normalize_relation_type(raw_type: str) -> str:
     """Normalize a free-form relationship type to the controlled vocabulary.
 
@@ -267,7 +278,10 @@ def normalize_relation_type(raw_type: str) -> str:
     3. If pipe-delimited, take the first recognized part.
     4. If a known type appears as a substring, extract and return it
        (prefers longer matches to avoid partial hits).
-    5. Otherwise return the normalized string unchanged.
+    5. Split on underscores and check individual words against _WORD_TO_RELATION.
+       When multiple words match, the highest-conflict-priority category wins
+       (RIVALRY > TENSION > ALLIANCE > NEUTRAL).
+    6. Otherwise return the normalized string unchanged.
 
     Args:
         raw_type: Raw relationship type string from the LLM or legacy data.
@@ -364,6 +378,7 @@ _warned_types: set[str] = set()
 _warned_types_lock = threading.Lock()
 
 
+@functools.lru_cache(maxsize=256)
 def classify_relationship(relation_type: str) -> ConflictCategory:
     """
     Map a relationship type string to its corresponding ConflictCategory.
@@ -404,6 +419,9 @@ def classify_relationship(relation_type: str) -> ConflictCategory:
     category = RELATION_CONFLICT_MAPPING.get(normalized)
 
     if category is None:
+        # Note: lru_cache means this block only executes on cache misses.
+        # The _warned_types guard provides a safety net if the cache is
+        # cleared or evicted, ensuring at most one warning per unknown type.
         with _warned_types_lock:
             if normalized not in _warned_types:
                 logger.warning(

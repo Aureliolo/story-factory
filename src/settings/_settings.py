@@ -9,6 +9,7 @@ import logging
 import os
 import shutil
 import tempfile
+import threading
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any, ClassVar
@@ -27,6 +28,12 @@ from src.settings._utils import get_installed_models_with_sizes
 
 # Configure module logger
 logger = logging.getLogger(__name__)
+
+# Track models and their last-logged timeout values. Re-logs when the computed
+# timeout changes (e.g., user adjusts ollama_timeout in settings).
+# Protected by _logged_timeout_values_lock for thread-safety.
+_logged_timeout_values: dict[str, float] = {}
+_logged_timeout_values_lock = threading.Lock()
 
 # Default per-entity quality thresholds — used by migration to populate empty dicts.
 # Primary types (character-concept) are displayed prominently in the Settings UI.
@@ -871,5 +878,9 @@ class Settings:
         if size_gb < self.small_model_size_threshold_gb:
             scaled = min(scaled, self.small_model_timeout_cap)
 
-        logger.debug(f"Timeout for {model_id}: {scaled:.0f}s (size={size_gb:.1f}GB)")
+        with _logged_timeout_values_lock:
+            prev = _logged_timeout_values.get(model_id)
+            if prev is None or prev != scaled:
+                logger.debug(f"Timeout for {model_id}: {scaled:.0f}s (size={size_gb:.1f}GB)")
+                _logged_timeout_values[model_id] = scaled
         return scaled
