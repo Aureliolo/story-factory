@@ -247,6 +247,8 @@ class WorldQualityService(EntityDelegatesMixin):
         self._analytics_db: ModeDatabase | None = mode_db
         self._judge_config: JudgeConsistencyConfig | None = None
         self._judge_config_lock = threading.RLock()
+        self._refinement_config: RefinementConfig | None = None
+        self._refinement_config_lock = threading.RLock()
         self._model_cache = ModelResolutionCache(settings, mode_service)
         self._calendar_context: str | None = None
         self._calendar_context_lock = threading.RLock()
@@ -420,8 +422,15 @@ class WorldQualityService(EntityDelegatesMixin):
         return self._client
 
     def get_config(self) -> RefinementConfig:
-        """Get refinement configuration from src.settings."""
-        return RefinementConfig.from_settings(self.settings)
+        """Get refinement configuration from settings.
+
+        Returns cached instance on subsequent calls. Cleared by invalidate_model_cache().
+        Thread-safe: guarded by ``_refinement_config_lock``.
+        """
+        with self._refinement_config_lock:
+            if self._refinement_config is None:
+                self._refinement_config = RefinementConfig.from_settings(self.settings)
+            return self._refinement_config
 
     def get_judge_config(self) -> JudgeConsistencyConfig:
         """
@@ -461,6 +470,8 @@ class WorldQualityService(EntityDelegatesMixin):
         self._model_cache.invalidate()
         with self._judge_config_lock:
             self._judge_config = None
+        with self._refinement_config_lock:
+            self._refinement_config = None
         self._client = None
 
     def _get_creator_model(self, entity_type: str | None = None) -> str:

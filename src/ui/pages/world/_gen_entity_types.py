@@ -462,7 +462,11 @@ async def _generate_events(
                 continue
 
             timestamp_in_story = build_event_timestamp(event)
-            participants = resolve_event_participants(event, all_entities)
+            participants = resolve_event_participants(
+                event,
+                all_entities,
+                threshold=page.services.world_quality.settings.fuzzy_match_threshold,
+            )
             consequences = event.get("consequences", [])
 
             page.state.world_db.add_event(

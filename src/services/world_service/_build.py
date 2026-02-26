@@ -16,6 +16,7 @@ from src.services.world_service._lifecycle_helpers import (
 )
 from src.services.world_service._name_matching import _find_entity_by_name
 from src.services.world_service._orphan_recovery import _recover_orphans
+from src.services.world_service._warmup import _warm_models
 from src.utils.exceptions import (
     DatabaseClosedError,
     GenerationCancelledError,
@@ -114,6 +115,23 @@ def build_world(
             )
 
     logger.info(f"Starting world build for project {state.id} with options: {options}")
+
+    # Pre-load creator and judge models to eliminate cold-start penalty (~4.5s savings)
+    _warm_models(services)
+
+    # Log quality thresholds once at build start (not per-entity)
+    config = services.world_quality.get_config()
+    logger.info(
+        "Quality loop config: max_iterations=%d, default_threshold=%.1f, "
+        "creator_temp=%.1f, judge_temp=%.1f, early_stop_patience=%d",
+        config.max_iterations,
+        config.quality_threshold,
+        config.creator_temperature,
+        config.judge_temperature,
+        config.early_stopping_patience,
+    )
+    if config.quality_thresholds:
+        logger.info("Per-entity thresholds: %s", config.quality_thresholds)
 
     # Persist world template ID to state if provided
     if options.world_template:

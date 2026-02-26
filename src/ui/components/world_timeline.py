@@ -185,10 +185,9 @@ class WorldTimelineComponent:
                 .style(f"height: {self.height}px;")
             )
 
-            # Initial render
-            self._render_timeline()
-
-        # Restore persisted preferences from localStorage
+        # Defer initial render to _apply_prefs to avoid double-render (#399).
+        # _apply_prefs always calls _render_timeline() — once with stored prefs
+        # or once with defaults when no prefs exist.
         load_prefs_deferred(_PAGE_KEY, self._apply_prefs)
 
     def set_world_db(self, world_db: WorldDatabase | None) -> None:
@@ -536,36 +535,34 @@ class WorldTimelineComponent:
     def _apply_prefs(self, prefs: dict) -> None:
         """Apply loaded preferences to timeline state and UI widgets.
 
+        Always renders the timeline — this is the single render entry point
+        called after build() to avoid double-render (#399).
+
         Args:
             prefs: Dict of field→value from localStorage.
         """
-        if not prefs:
-            return
+        if prefs:
+            valid_types = {"character", "faction", "location", "item", "concept", "event"}
 
-        valid_types = {"character", "faction", "location", "item", "concept", "event"}
-        changed = False
+            if "filter_types" in prefs and isinstance(prefs["filter_types"], list):
+                loaded = [t for t in prefs["filter_types"] if t in valid_types]
+                if loaded != self._filter_types:
+                    self._filter_types = loaded
+                    for etype, cb in self._filter_checkboxes.items():
+                        cb.value = etype in self._filter_types
+                    # Sync _include_events from filter_types to keep checkbox consistent
+                    events_in_types = "event" in self._filter_types
+                    if events_in_types != self._include_events:
+                        self._include_events = events_in_types
+                        if self._events_checkbox:
+                            self._events_checkbox.value = self._include_events
 
-        if "filter_types" in prefs and isinstance(prefs["filter_types"], list):
-            loaded = [t for t in prefs["filter_types"] if t in valid_types]
-            if loaded != self._filter_types:
-                self._filter_types = loaded
-                changed = True
-                for etype, cb in self._filter_checkboxes.items():
-                    cb.value = etype in self._filter_types
-                # Sync _include_events from filter_types to keep checkbox consistent
-                events_in_types = "event" in self._filter_types
-                if events_in_types != self._include_events:
-                    self._include_events = events_in_types
+            if "include_events" in prefs and isinstance(prefs["include_events"], bool):
+                if prefs["include_events"] != self._include_events:
+                    self._include_events = prefs["include_events"]
                     if self._events_checkbox:
                         self._events_checkbox.value = self._include_events
 
-        if "include_events" in prefs and isinstance(prefs["include_events"], bool):
-            if prefs["include_events"] != self._include_events:
-                self._include_events = prefs["include_events"]
-                changed = True
-                if self._events_checkbox:
-                    self._events_checkbox.value = self._include_events
-
-        if changed:
             logger.info("Restored world timeline preferences from localStorage")
-            self._render_timeline()
+
+        self._render_timeline()

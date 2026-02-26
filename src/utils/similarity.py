@@ -308,7 +308,6 @@ class SemanticDuplicateChecker:
 
         with self._lock:
             if normalized in self._cache:
-                logger.debug("Cache hit for embedding: '%s...'", text[:30])
                 return self._cache[normalized]
 
         # Generate embedding

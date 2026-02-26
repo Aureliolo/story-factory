@@ -728,10 +728,8 @@ class WorldService:
                 and self._health_cache_key == cache_key
                 and (now - self._health_cache_time) < _HEALTH_CACHE_TTL_SECONDS
             ):
-                logger.debug("Health metrics cache hit (age=%.1fs)", now - self._health_cache_time)
                 return self._health_cache
 
-            logger.debug("Health metrics cache miss — recomputing")
             result = _health.get_world_health_metrics(
                 self, world_db, quality_threshold, temporal_validation=self._temporal_validation
             )

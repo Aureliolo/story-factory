@@ -89,17 +89,13 @@ def get_creator_model(service: WorldQualityService, entity_type: str | None = No
     # Check cache (validates context automatically)
     cached = service._model_cache.get_creator_model(agent_role)
     if cached is not None:
-        logger.debug("Using cached creator model '%s' for role=%s", cached, agent_role)
         return cached
 
     # Resolve and store the model
     model = resolve_model_for_role(service, agent_role)
     service._model_cache.store_creator_model(agent_role, model)
-    logger.debug(
-        "Resolved and cached creator model '%s' for entity_type=%s (role=%s)",
-        model,
-        entity_type,
-        agent_role,
+    logger.info(
+        "Resolved creator model '%s' for entity_type=%s (role=%s)", model, entity_type, agent_role
     )
     return model
 
@@ -129,7 +125,6 @@ def get_judge_model(service: WorldQualityService, entity_type: str | None = None
     # Check cache (validates context automatically)
     cached = service._model_cache.get_judge_model(agent_role)
     if cached is not None:
-        logger.debug("Using cached judge model '%s' for role=%s", cached, agent_role)
         return cached
 
     # Resolve the model
@@ -172,10 +167,7 @@ def get_judge_model(service: WorldQualityService, entity_type: str | None = None
 
     # Store the resolved model (including any swapped alternative)
     service._model_cache.store_judge_model(agent_role, model)
-    logger.debug(
-        "Resolved and cached judge model '%s' for entity_type=%s (role=%s)",
-        model,
-        entity_type,
-        agent_role,
+    logger.info(
+        "Resolved judge model '%s' for entity_type=%s (role=%s)", model, entity_type, agent_role
     )
     return model

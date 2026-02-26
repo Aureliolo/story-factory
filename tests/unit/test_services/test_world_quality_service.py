@@ -679,6 +679,38 @@ class TestJudgeConfigCaching:
         assert service._client is None
 
 
+class TestRefinementConfigCaching:
+    """Tests for RefinementConfig caching in WorldQualityService."""
+
+    def test_refinement_config_cached_on_second_call(self, service):
+        """get_config() returns the same cached instance on repeated calls."""
+        config1 = service.get_config()
+        config2 = service.get_config()
+        assert config1 is config2
+
+    def test_refinement_config_cleared_on_invalidate(self, service):
+        """invalidate_model_cache() clears the cached RefinementConfig."""
+        config1 = service.get_config()
+        assert service._refinement_config is not None
+
+        service.invalidate_model_cache()
+        assert service._refinement_config is None
+
+        # Next call creates a fresh config
+        config2 = service.get_config()
+        assert config2 is not config1
+
+    def test_invalidate_before_any_get_config(self, service):
+        """invalidate_model_cache() is a no-op when _refinement_config was never populated."""
+        assert service._refinement_config is None  # initial state
+        service.invalidate_model_cache()  # must not raise
+        assert service._refinement_config is None
+
+        # Subsequent get_config still creates a fresh config
+        config = service.get_config()
+        assert config is not None
+
+
 class TestRecordEntityQuality:
     """Tests for record_entity_quality method."""
 

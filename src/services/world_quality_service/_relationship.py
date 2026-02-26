@@ -59,9 +59,7 @@ def _classify_relation_type_with_llm(svc: WorldQualityService, raw_type: str) ->
         if cache_key in _llm_classification_cache:
             cached = _llm_classification_cache[cache_key]
             if cached == "":
-                logger.debug("LLM classification negative cache hit for '%s'", raw_type)
                 return None
-            logger.debug("LLM classification cache hit: '%s' -> '%s'", raw_type, cached)
             return cached
 
     type_list = ", ".join(VALID_RELATIONSHIP_TYPES)
