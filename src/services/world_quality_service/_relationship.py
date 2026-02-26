@@ -555,9 +555,9 @@ THEMES: {", ".join(brief.themes)}
 {calendar_context}
 AVAILABLE ENTITIES: {", ".join(entity_names)}
 
-FORBIDDEN ENTITY PAIRS (you MUST NOT use any of these pairs in either direction):
-{existing_pairs_block}{unused_pairs_block}
-{required_entity_block}
+FORBIDDEN ENTITY PAIRS - THESE ALREADY EXIST (selecting any is an ERROR that wastes resources):
+{existing_pairs_block}
+{required_entity_block}{"" if not unused_pairs_block else unused_pairs_block + chr(10) + chr(10) + "You MUST choose a pair from the AVAILABLE UNUSED PAIRS list above." + chr(10)}
 Create a relationship with:
 1. Tension - conflict potential
 2. Complex dynamics - power balance, history

@@ -650,6 +650,11 @@ def generate_relationships_with_quality(
 ) -> list[tuple[dict[str, Any], RelationshipQualityScores]]:
     """Generate multiple relationships with quality refinement.
 
+    Uses parallel generation (up to ``llm_max_concurrent_requests`` workers)
+    with a thread-safe deduplication list. Each worker gets a point-in-time
+    snapshot of existing relationships; the ``_is_duplicate_relationship()``
+    check in the quality loop catches any duplicates from stale snapshots.
+
     Args:
         svc: WorldQualityService instance.
         story_state: Current story state.
@@ -665,18 +670,26 @@ def generate_relationships_with_quality(
     Raises:
         WorldGenerationError: If no relationships could be generated.
     """
-    rels: list[tuple[str, str, str]] = existing_rels.copy()
-    return _generate_batch(
+    from src.services.world_quality_service._batch_parallel import (
+        _generate_batch_parallel,
+        _ThreadSafeRelsList,
+    )
+
+    safe_rels = _ThreadSafeRelsList(existing_rels)
+    max_workers = min(svc.settings.llm_max_concurrent_requests, count)
+
+    return _generate_batch_parallel(
         svc=svc,
         count=count,
         entity_type="relationship",
         generate_fn=lambda _i: svc.generate_relationship_with_quality(
-            story_state, entity_names, rels
+            story_state, entity_names, safe_rels.snapshot()
         ),
         get_name=lambda r: f"{r['source']} -> {r['target']}",
-        on_success=lambda r: rels.append((r["source"], r["target"], r["relation_type"])),
+        on_success=lambda r: safe_rels.append((r["source"], r["target"], r["relation_type"])),
         cancel_check=cancel_check,
         progress_callback=progress_callback,
+        max_workers=max_workers,
     )
 
 

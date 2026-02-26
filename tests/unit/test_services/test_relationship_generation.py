@@ -655,6 +655,7 @@ class TestExistingRelsIncludeTypes:
         svc = MagicMock()
         svc.get_config.return_value.get_threshold.return_value = 7.0
         svc._calculate_eta.return_value = 0.0
+        svc.settings.llm_max_concurrent_requests = 1  # Sequential: test expects ordered rels
 
         # Capture the rels list passed to generate_fn
         captured_rels = []
