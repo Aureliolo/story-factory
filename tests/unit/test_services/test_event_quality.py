@@ -797,6 +797,32 @@ class TestIsDuplicateDescription:
 
         assert _is_duplicate_description("Anything", []) is False
 
+    def test_truncation_at_prefix_len(self):
+        """Descriptions matching in the first 60 chars but differing after are duplicates."""
+        from src.services.world_quality_service._event import (
+            _EVENT_DESCRIPTION_PREFIX_LEN,
+            _is_duplicate_description,
+        )
+
+        base = "A" * _EVENT_DESCRIPTION_PREFIX_LEN
+        assert _is_duplicate_description(base + " extra text", [base + " different text"]) is True
+
+    def test_different_within_prefix_len(self):
+        """Descriptions differing within the first 60 chars are not duplicates."""
+        from src.services.world_quality_service._event import (
+            _EVENT_DESCRIPTION_PREFIX_LEN,
+            _is_duplicate_description,
+        )
+
+        prefix = "A" * (_EVENT_DESCRIPTION_PREFIX_LEN - 1)
+        assert _is_duplicate_description(prefix + "X", [prefix + "Y"]) is False
+
+    def test_whitespace_stripped_before_comparison(self):
+        """Leading/trailing whitespace is stripped before truncation and comparison."""
+        from src.services.world_quality_service._event import _is_duplicate_description
+
+        assert _is_duplicate_description("  A great battle  ", ["A great battle"]) is True
+
 
 class TestCharacterJudgeCalendarContext:
     """Test that character judge prompt includes calendar context (#395 Fix 4)."""

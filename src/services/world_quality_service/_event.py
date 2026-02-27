@@ -16,6 +16,11 @@ from src.utils.exceptions import WorldGenerationError, summarize_llm_error
 
 logger = logging.getLogger(__name__)
 
+# Truncation length for event description dedup — descriptions matching in the
+# first N characters (case-insensitive) are considered duplicates.  Keep in sync
+# with the ``get_name`` lambdas that truncate for logging/display.
+_EVENT_DESCRIPTION_PREFIX_LEN = 60
+
 
 def _format_participants(participants: list[Any]) -> str:
     """Format an event's participant list for prompt display.
@@ -55,8 +60,9 @@ def _format_consequences(consequences: list[Any]) -> str:
 def _is_duplicate_description(description: str, existing: list[str]) -> bool:
     """Check if an event description is a near-duplicate of an existing one.
 
-    Uses case-insensitive prefix matching (first 60 chars) since event
-    descriptions are identified by their truncated form in the quality loop.
+    Uses case-insensitive truncated comparison (first ``_EVENT_DESCRIPTION_PREFIX_LEN``
+    chars) since event descriptions are identified by their truncated form in
+    the quality loop.
 
     Args:
         description: The new event description to check.
@@ -65,8 +71,9 @@ def _is_duplicate_description(description: str, existing: list[str]) -> bool:
     Returns:
         True if the description is a duplicate.
     """
-    normalized = description.strip().casefold()[:60]
-    return any(d.strip().casefold()[:60] == normalized for d in existing)
+    n = _EVENT_DESCRIPTION_PREFIX_LEN
+    normalized = description.strip().casefold()[:n]
+    return any(d.strip().casefold()[:n] == normalized for d in existing)
 
 
 def generate_event_with_quality(
@@ -109,16 +116,22 @@ def generate_event_with_quality(
     prep_creator, prep_judge = svc._make_model_preparers("event")
 
     def _is_empty(evt: dict[str, Any]) -> bool:
-        """Check if event is empty or a duplicate of an already-known event."""
+        """Check if event is empty or a duplicate of an already-known event.
+
+        Side effect: appends duplicate descriptions to ``rejected_descriptions``
+        and ``all_known`` so subsequent creator prompts and dedup checks within
+        the same quality-loop invocation avoid regenerating them.
+        """
         desc = evt.get("description", "")
         if not desc:
             return True
         if _is_duplicate_description(desc, all_known):
             logger.warning(
                 "Generated duplicate event description '%s', rejecting",
-                desc[:60],
+                desc[:_EVENT_DESCRIPTION_PREFIX_LEN],
             )
             rejected_descriptions.append(desc)
+            all_known.append(desc)  # Keep snapshot in sync for within-invocation dedup
             return True
         return False
 
@@ -141,7 +154,7 @@ def generate_event_with_quality(
             story_state,
             config.get_refinement_temperature(iteration),
         ),
-        get_name=lambda evt: evt.get("description", "Unknown")[:60],
+        get_name=lambda evt: evt.get("description", "Unknown")[:_EVENT_DESCRIPTION_PREFIX_LEN],
         serialize=lambda evt: evt.copy(),
         is_empty=_is_empty,
         score_cls=EventQualityScores,
@@ -298,13 +311,13 @@ DO NOT wrap in "properties" or "description" - return ONLY the flat scores objec
             if multi_call:
                 logger.warning(
                     "Event quality judgment failed for '%s': %s",
-                    event.get("description", "Unknown")[:60],
+                    event.get("description", "Unknown")[:_EVENT_DESCRIPTION_PREFIX_LEN],
                     summary,
                 )
             else:
                 logger.error(
                     "Event quality judgment failed for '%s': %s",
-                    event.get("description", "Unknown")[:60],
+                    event.get("description", "Unknown")[:_EVENT_DESCRIPTION_PREFIX_LEN],
                     summary,
                 )
             raise WorldGenerationError(f"Event quality judgment failed: {summary}") from e
@@ -322,7 +335,7 @@ def _refine_event(
     """Refine an event based on quality feedback using structured generation."""
     logger.debug(
         "Refining event '%s' for story %s",
-        event.get("description", "Unknown")[:60],
+        event.get("description", "Unknown")[:_EVENT_DESCRIPTION_PREFIX_LEN],
         story_state.id,
     )
     brief = story_state.brief
@@ -399,7 +412,7 @@ Return ONLY the improved event."""
         summary = summarize_llm_error(e)
         logger.error(
             "Event refinement failed for '%s': %s",
-            event.get("description", "Unknown")[:60],
+            event.get("description", "Unknown")[:_EVENT_DESCRIPTION_PREFIX_LEN],
             summary,
         )
         raise WorldGenerationError(f"Event refinement failed: {summary}") from e

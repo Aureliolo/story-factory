@@ -85,6 +85,7 @@ def judge_with_averaging[T: BaseModel](
     """
     # Single call path — when consistency features are off or multi-call is disabled
     if not judge_config.enabled or not judge_config.multi_call_enabled:
+        logger.debug("Using single judge call (multi-call averaging disabled)")
         return judge_fn()
 
     call_count = judge_config.multi_call_count

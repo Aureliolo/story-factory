@@ -1902,3 +1902,128 @@ class TestConceptTemporalFields:
         assert concept.emergence_year is None
         assert concept.emergence_era is None
         assert concept.temporal_notes == ""
+
+
+class TestSentinelYearValidation:
+    """Tests for sentinel year filtering on entity Pydantic models (C3 fix).
+
+    LLMs use 0, -1, and 9999 as placeholder years. These must be rejected
+    to None at the Pydantic model level.
+    """
+
+    # --- Item.creation_year ---
+    def test_item_creation_year_zero_rejected(self):
+        """Item with creation_year=0 is rejected as sentinel."""
+        item = Item(name="Sword", description="A blade", creation_year=0)
+        assert item.creation_year is None
+
+    def test_item_creation_year_minus_one_rejected(self):
+        """Item with creation_year=-1 is rejected as sentinel."""
+        item = Item(name="Sword", description="A blade", creation_year=-1)
+        assert item.creation_year is None
+
+    def test_item_creation_year_9999_rejected(self):
+        """Item with creation_year=9999 is rejected as sentinel."""
+        item = Item(name="Sword", description="A blade", creation_year=9999)
+        assert item.creation_year is None
+
+    def test_item_creation_year_valid_passes(self):
+        """Item with valid creation_year passes through."""
+        item = Item(name="Sword", description="A blade", creation_year=500)
+        assert item.creation_year == 500
+
+    def test_item_creation_year_none_passes(self):
+        """Item with creation_year=None is accepted."""
+        item = Item(name="Sword", description="A blade", creation_year=None)
+        assert item.creation_year is None
+
+    # --- Location year fields ---
+    def test_location_founding_year_zero_rejected(self):
+        """Location with founding_year=0 is rejected as sentinel."""
+        loc = Location(name="City", description="A city", founding_year=0)
+        assert loc.founding_year is None
+
+    def test_location_destruction_year_zero_rejected(self):
+        """Location with destruction_year=0 is rejected as sentinel."""
+        loc = Location(name="City", description="A city", destruction_year=0)
+        assert loc.destruction_year is None
+
+    def test_location_valid_years_pass(self):
+        """Location with valid years passes through."""
+        loc = Location(name="City", description="A city", founding_year=100, destruction_year=400)
+        assert loc.founding_year == 100
+        assert loc.destruction_year == 400
+
+    # --- Faction year fields ---
+    def test_faction_founding_year_zero_rejected(self):
+        """Faction with founding_year=0 is rejected as sentinel."""
+        faction = Faction(name="Order", description="An order", founding_year=0)
+        assert faction.founding_year is None
+
+    def test_faction_dissolution_year_9999_rejected(self):
+        """Faction with dissolution_year=9999 is rejected as sentinel."""
+        faction = Faction(name="Order", description="An order", dissolution_year=9999)
+        assert faction.dissolution_year is None
+
+    # --- Concept.emergence_year ---
+    def test_concept_emergence_year_zero_rejected(self):
+        """Concept with emergence_year=0 is rejected as sentinel."""
+        concept = Concept(name="Idea", description="An idea", emergence_year=0)
+        assert concept.emergence_year is None
+
+    def test_concept_emergence_year_negative_valid(self):
+        """Concept with negative emergence_year (non-sentinel) passes through."""
+        concept = Concept(name="Idea", description="An idea", emergence_year=-500)
+        assert concept.emergence_year == -500
+
+    # --- Character year fields ---
+    def test_character_birth_year_zero_rejected(self):
+        """Character with birth_year=0 is rejected as sentinel."""
+        char = Character(name="Hero", role="protagonist", description="Brave", birth_year=0)
+        assert char.birth_year is None
+
+    def test_character_death_year_minus_one_rejected(self):
+        """Character with death_year=-1 is rejected as sentinel."""
+        char = Character(name="Hero", role="protagonist", description="Brave", death_year=-1)
+        assert char.death_year is None
+
+    def test_character_valid_years_pass(self):
+        """Character with valid years passes through."""
+        char = Character(
+            name="Hero",
+            role="protagonist",
+            description="Brave",
+            birth_year=100,
+            death_year=180,
+        )
+        assert char.birth_year == 100
+        assert char.death_year == 180
+
+    # --- CharacterCreation year fields ---
+    def test_character_creation_birth_year_zero_rejected(self):
+        """CharacterCreation with birth_year=0 is rejected as sentinel."""
+        cc = CharacterCreation(name="Hero", role="protagonist", description="Brave", birth_year=0)
+        assert cc.birth_year is None
+
+    def test_character_creation_death_year_9999_rejected(self):
+        """CharacterCreation with death_year=9999 is rejected as sentinel."""
+        cc = CharacterCreation(
+            name="Hero", role="protagonist", description="Brave", death_year=9999
+        )
+        assert cc.death_year is None
+
+    # --- Float and string coercion through _parse_year ---
+    def test_item_creation_year_float_zero_rejected(self):
+        """Float 0.0 is rejected as sentinel after truncation to int."""
+        item = Item(name="Sword", description="A blade", creation_year=0.0)
+        assert item.creation_year is None
+
+    def test_item_creation_year_string_zero_rejected(self):
+        """String '0' is rejected as sentinel after parsing."""
+        item = Item(name="Sword", description="A blade", creation_year="0")
+        assert item.creation_year is None
+
+    def test_item_creation_year_bool_rejected(self):
+        """Bool values are rejected (bool is subclass of int)."""
+        item = Item(name="Sword", description="A blade", creation_year=True)
+        assert item.creation_year is None

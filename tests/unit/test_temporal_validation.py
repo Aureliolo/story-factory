@@ -1652,3 +1652,57 @@ class TestEraMismatchDetection:
         )
 
         assert len(result.warnings) == 0
+
+
+class TestNormalizeEraName:
+    """Direct unit tests for the _normalize_era_name helper."""
+
+    def test_strips_the_prefix(self):
+        """'The' article prefix is stripped."""
+        from src.services.temporal_validation_service import _normalize_era_name
+
+        assert _normalize_era_name("The Golden Age") == "golden age"
+
+    def test_strips_era_suffix(self):
+        """' Era' suffix is stripped."""
+        from src.services.temporal_validation_service import _normalize_era_name
+
+        assert _normalize_era_name("Dark Era") == "dark"
+
+    def test_strips_both_prefix_and_suffix(self):
+        """Both 'The' prefix and ' Era' suffix are stripped together."""
+        from src.services.temporal_validation_service import _normalize_era_name
+
+        assert _normalize_era_name("The Ancient Era") == "ancient"
+
+    def test_case_insensitive(self):
+        """Normalization is case-insensitive via casefold."""
+        from src.services.temporal_validation_service import _normalize_era_name
+
+        assert _normalize_era_name("THE FIRST AGE") == "first age"
+
+    def test_strips_a_prefix(self):
+        """'A' article prefix is stripped."""
+        from src.services.temporal_validation_service import _normalize_era_name
+
+        assert _normalize_era_name("A Golden Age") == "golden age"
+
+    def test_strips_an_prefix(self):
+        """'An' article prefix is stripped."""
+        from src.services.temporal_validation_service import _normalize_era_name
+
+        assert _normalize_era_name("An Ancient Time") == "ancient time"
+
+    def test_whitespace_only(self):
+        """Whitespace-only input normalizes to empty string."""
+        from src.services.temporal_validation_service import _normalize_era_name
+
+        assert _normalize_era_name("   ") == ""
+
+    def test_idempotent(self):
+        """Normalizing an already-normalized name produces the same result."""
+        from src.services.temporal_validation_service import _normalize_era_name
+
+        once = _normalize_era_name("The First Age Era")
+        twice = _normalize_era_name(once)
+        assert once == twice

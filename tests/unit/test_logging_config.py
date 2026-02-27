@@ -323,12 +323,23 @@ class TestSetLogLevel:
         with pytest.raises(ValueError, match="Invalid log level"):
             set_log_level("INVALID_LEVEL")
 
-    def test_set_log_level_same_level_noop(self):
+    def test_set_log_level_same_level_noop(self, caplog):
         """set_log_level should be a no-op when the level is already set."""
-        setup_logging(level="WARNING", log_file=None)
+        # Don't call setup_logging() — it removes caplog's handler.
+        # Instead, manually set root logger and handler levels.
         root_logger = logging.getLogger()
-        assert root_logger.level == logging.WARNING
-        # Calling set_log_level with same level should not change anything
+        root_logger.setLevel(logging.WARNING)
+        for h in root_logger.handlers:
+            h.setLevel(logging.WARNING)
+
+        # Use logger-specific capture to avoid caplog.at_level altering the
+        # root logger level, which would defeat the "already at WARNING" check.
+        caplog.set_level(logging.DEBUG, logger="src.utils.logging_config")
         set_log_level("WARNING")
+
         # Level should still be WARNING (no change)
         assert root_logger.level == logging.WARNING
+        # The "Log level changed" info message must NOT appear
+        assert "Log level changed" not in caplog.text
+        # The debug trace for the no-op should appear
+        assert "already set to" in caplog.text

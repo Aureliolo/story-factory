@@ -623,6 +623,18 @@ Output ONLY valid JSON (all text in {brief.language}):
             },
         )
 
+        prompt_tokens = response.get("prompt_eval_count") or 0
+        completion_tokens = response.get("eval_count") or 0
+        duration_ns = response.get("total_duration") or 0
+        logger.info(
+            "Relationship creation LLM call: model=%s, %.2fs, tokens=%s+%s=%s",
+            model,
+            duration_ns / 1e9,
+            prompt_tokens,
+            completion_tokens,
+            prompt_tokens + completion_tokens,
+        )
+
         data = json.loads(response["response"])
         if data and isinstance(data, dict):
             # Schema constrains relation_type to VALID_RELATIONSHIP_TYPES,
@@ -833,6 +845,18 @@ Output ONLY valid JSON:
             options={
                 "temperature": temperature,
             },
+        )
+
+        prompt_tokens = response.get("prompt_eval_count") or 0
+        completion_tokens = response.get("eval_count") or 0
+        duration_ns = response.get("total_duration") or 0
+        logger.info(
+            "Relationship refinement LLM call: model=%s, %.2fs, tokens=%s+%s=%s",
+            model,
+            duration_ns / 1e9,
+            prompt_tokens,
+            completion_tokens,
+            prompt_tokens + completion_tokens,
         )
 
         data = json.loads(response["response"])

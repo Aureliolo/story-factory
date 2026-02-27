@@ -20,15 +20,16 @@ logger = logging.getLogger(__name__)
 
 # Prefixes that LLMs inconsistently add/omit on era names (e.g. "The Human Epoch"
 # vs "Human Epoch").  Stripping them before comparison prevents false mismatches.
-_ERA_STRIP_PREFIXES = ("the ",)
+_ERA_STRIP_PREFIXES = ("the ", "a ", "an ")
 _ERA_STRIP_SUFFIXES = (" era",)
 
 
 def _normalize_era_name(name: str) -> str:
-    """Normalize an era name for comparison.
+    """Normalize an era name for fuzzy comparison.
 
-    Strips leading articles ("The") and trailing "Era" suffix, then
-    case-folds so that "The Human Epoch" and "Human Epoch" compare equal.
+    Case-folds the name, strips a leading article ("the", "a", "an") and a
+    trailing " era" suffix.  For example, ``"The Human Epoch"`` and
+    ``"human epoch"`` compare equal, as do ``"Golden Era"`` and ``"Golden"``.
     """
     result = name.strip().casefold()
     for prefix in _ERA_STRIP_PREFIXES:

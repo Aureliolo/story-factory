@@ -592,6 +592,8 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
     if birth_data := lifecycle_data.get("birth"):
         if isinstance(birth_data, dict):
             filtered = _filter_sentinel_year_in_dict(birth_data, "birth")
+            if "raw_text" not in filtered:
+                filtered = {**filtered, "raw_text": str(birth_data)}
             try:
                 result.birth = StoryTimestamp(**filtered)
             except ValidationError as exc:
@@ -602,6 +604,8 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
     if death_data := lifecycle_data.get("death"):
         if isinstance(death_data, dict):
             filtered = _filter_sentinel_year_in_dict(death_data, "death")
+            if "raw_text" not in filtered:
+                filtered = {**filtered, "raw_text": str(death_data)}
             try:
                 result.death = StoryTimestamp(**filtered)
             except ValidationError as exc:
@@ -612,6 +616,8 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
     if first_data := lifecycle_data.get("first_appearance"):
         if isinstance(first_data, dict):
             filtered = _filter_sentinel_year_in_dict(first_data, "first_appearance")
+            if "raw_text" not in filtered:
+                filtered = {**filtered, "raw_text": str(first_data)}
             try:
                 result.first_appearance = StoryTimestamp(**filtered)
             except ValidationError as exc:
@@ -622,6 +628,8 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
     if last_data := lifecycle_data.get("last_appearance"):
         if isinstance(last_data, dict):
             filtered = _filter_sentinel_year_in_dict(last_data, "last_appearance")
+            if "raw_text" not in filtered:
+                filtered = {**filtered, "raw_text": str(last_data)}
             try:
                 result.last_appearance = StoryTimestamp(**filtered)
             except ValidationError as exc:

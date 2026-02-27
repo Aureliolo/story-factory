@@ -101,7 +101,7 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
             log_path,
             maxBytes=10 * 1024 * 1024,
             backupCount=5,
-            encoding="utf-8",  # 10MB
+            encoding="utf-8",
         )
         file_handler.setLevel(log_level)
         file_handler.setFormatter(formatter)
@@ -145,6 +145,7 @@ def set_log_level(level: str) -> None:
         raise ValueError(f"Invalid log level: {level}")
     root_logger = logging.getLogger()
     if root_logger.level == log_level:
+        logger.debug("Log level already set to %s; skipping reconfiguration", level)
         return
     logger.info("Log level changed to %s", level)
     root_logger.setLevel(log_level)

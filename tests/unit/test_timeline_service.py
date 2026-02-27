@@ -516,6 +516,49 @@ class TestExtractLifecycleFromAttributes:
         assert lifecycle is not None
         assert lifecycle.destruction_year is None
 
+    def test_extract_birth_dict_populates_raw_text(self):
+        """Dict-path birth data populates raw_text for debugging (I4 fix)."""
+        attributes = {"lifecycle": {"birth": {"year": 1042, "era_name": "Silver Age"}}}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.birth is not None
+        assert lifecycle.birth.raw_text != ""
+        assert "1042" in lifecycle.birth.raw_text
+
+    def test_extract_death_dict_populates_raw_text(self):
+        """Dict-path death data populates raw_text for debugging (I4 fix)."""
+        attributes = {"lifecycle": {"death": {"year": 1200}}}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.death is not None
+        assert lifecycle.death.raw_text != ""
+        assert "1200" in lifecycle.death.raw_text
+
+    def test_extract_first_appearance_dict_populates_raw_text(self):
+        """Dict-path first_appearance data populates raw_text (I4 fix)."""
+        attributes = {"lifecycle": {"first_appearance": {"year": 50, "month": 3}}}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.first_appearance is not None
+        assert lifecycle.first_appearance.raw_text != ""
+        assert "50" in lifecycle.first_appearance.raw_text
+
+    def test_extract_last_appearance_dict_populates_raw_text(self):
+        """Dict-path last_appearance data populates raw_text (I4 fix)."""
+        attributes = {"lifecycle": {"last_appearance": {"year": 300}}}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.last_appearance is not None
+        assert lifecycle.last_appearance.raw_text != ""
+
+    def test_extract_dict_with_existing_raw_text_preserved(self):
+        """If the dict already has raw_text, it is not overwritten."""
+        attributes = {"lifecycle": {"birth": {"year": 100, "raw_text": "custom label"}}}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.birth is not None
+        assert lifecycle.birth.raw_text == "custom label"
+
     def test_extract_zero_founding_year_rejected_as_sentinel(self):
         """Test that founding_year=0 is rejected as a sentinel value."""
         attributes = {"lifecycle": {"founding_year": 0}}

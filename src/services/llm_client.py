@@ -99,7 +99,11 @@ def get_model_context_size(client: ollama.Client, model: str) -> int | None:
             return None
 
 
+# Track models that have already triggered a context-size warning so each
+# model only logs the warning once per process lifetime, reducing log spam
+# when validate_context_size() is called on every structured generation.
 _warned_context_size_models: set[str] = set()
+_warned_context_size_models_lock = threading.Lock()
 
 
 def validate_context_size(client: ollama.Client, model: str, configured_context_size: int) -> int:
@@ -119,8 +123,12 @@ def validate_context_size(client: ollama.Client, model: str, configured_context_
     """
     model_limit = get_model_context_size(client, model)
     if model_limit is not None and model_limit < configured_context_size:
-        if model not in _warned_context_size_models:
-            _warned_context_size_models.add(model)
+        should_warn = False
+        with _warned_context_size_models_lock:
+            if model not in _warned_context_size_models:
+                _warned_context_size_models.add(model)
+                should_warn = True
+        if should_warn:
             logger.warning(
                 "Model %s has context limit of %d tokens, but configured context_size "
                 "is %d. Capping to model limit to prevent truncation. "

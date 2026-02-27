@@ -1811,6 +1811,38 @@ class TestCreateRelationship:
                 story_state, entity_names=["A", "B"], existing_rels=[], temperature=0.9
             )
 
+    def test_create_relationship_logs_info_after_llm_call(
+        self, service, story_state, mock_ollama_client, caplog
+    ):
+        """Relationship creation logs INFO with model, timing, and token counts (I5 fix)."""
+        rel_json = json.dumps(
+            {
+                "source": "Dr. Eleanor Grey",
+                "target": "Lord Blackwood",
+                "relation_type": "suspects",
+                "description": "A suspicion",
+            }
+        )
+        mock_ollama_client.generate.return_value = {
+            "response": rel_json,
+            "prompt_eval_count": 120,
+            "eval_count": 45,
+            "total_duration": 2_500_000_000,  # 2.5 seconds in nanoseconds
+        }
+        service._client = mock_ollama_client
+
+        with caplog.at_level(logging.INFO):
+            service._create_relationship(
+                story_state,
+                entity_names=["Dr. Eleanor Grey", "Lord Blackwood"],
+                existing_rels=[],
+                temperature=0.9,
+            )
+
+        info_messages = [r.message for r in caplog.records if r.levelno == logging.INFO]
+        assert any("Relationship creation LLM call" in m for m in info_messages)
+        assert any("tokens=120+45=165" in m for m in info_messages)
+
 
 class TestJudgeRelationshipQuality:
     """Tests for _judge_relationship_quality method."""
@@ -1921,6 +1953,43 @@ class TestRefineRelationship:
 
         with pytest.raises(WorldGenerationError, match="Invalid relationship refinement"):
             service._refine_relationship(original, scores, story_state, temperature=0.7)
+
+    def test_refine_relationship_logs_info_after_llm_call(
+        self, service, story_state, mock_ollama_client, caplog
+    ):
+        """Relationship refinement logs INFO with model, timing, and token counts (I5 fix)."""
+        refined_json = json.dumps(
+            {
+                "source": "Alice",
+                "target": "Bob",
+                "relation_type": "rivals",
+                "description": "Improved rivalry description",
+            }
+        )
+        mock_ollama_client.generate.return_value = {
+            "response": refined_json,
+            "prompt_eval_count": 200,
+            "eval_count": 80,
+            "total_duration": 3_000_000_000,
+        }
+        service._client = mock_ollama_client
+
+        original = {
+            "source": "Alice",
+            "target": "Bob",
+            "relation_type": "rivals",
+            "description": "Simple rivalry",
+        }
+        scores = RelationshipQualityScores(
+            tension=5.0, dynamics=5.0, story_potential=5.0, authenticity=5.0
+        )
+
+        with caplog.at_level(logging.INFO):
+            service._refine_relationship(original, scores, story_state, temperature=0.7)
+
+        info_messages = [r.message for r in caplog.records if r.levelno == logging.INFO]
+        assert any("Relationship refinement LLM call" in m for m in info_messages)
+        assert any("tokens=200+80=280" in m for m in info_messages)
 
 
 class TestGenerateRelationshipWithQuality:

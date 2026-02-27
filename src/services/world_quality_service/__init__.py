@@ -541,7 +541,7 @@ class WorldQualityService(EntityDelegatesMixin):
         )
 
         def prepare_creator() -> None:
-            """Unload judge model and prepare creator model for VRAM."""
+            """Ensure creator model is loaded in VRAM, evicting others if needed."""
             try:
                 _prepare_model(self.mode_service, creator_model)
             except Exception as e:
@@ -553,7 +553,7 @@ class WorldQualityService(EntityDelegatesMixin):
                 )
 
         def prepare_judge() -> None:
-            """Unload creator model and prepare judge model for VRAM."""
+            """Ensure judge model is loaded in VRAM, evicting others if needed."""
             try:
                 _prepare_model(self.mode_service, judge_model)
             except Exception as e:

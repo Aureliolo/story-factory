@@ -136,7 +136,7 @@ def build_entity_browser(page) -> None:
     load_prefs_deferred(_PAGE_KEY, lambda prefs: _apply_prefs(page, prefs))
 
 
-def refresh_entity_list(page, prefetched_entities: list | None = None) -> None:
+def refresh_entity_list(page, prefetched_entities: list[Entity] | None = None) -> None:
     """Refresh the entity list display.
 
     Args:
@@ -149,7 +149,9 @@ def refresh_entity_list(page, prefetched_entities: list | None = None) -> None:
 
     page._entity_list.clear()
 
-    # Use pre-fetched entities when available, otherwise fetch from DB
+    # Use pre-fetched entities when available to avoid a redundant
+    # list_entities() DB call during initial page build — entities were
+    # already fetched in WorldPage.build() for the options cache.
     if prefetched_entities is not None:
         all_entities = list(prefetched_entities)
     else:
