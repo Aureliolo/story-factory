@@ -164,6 +164,11 @@ class ModelResolutionCache:
         instead of overwriting it.  This prevents duplicate resolution log entries
         when parallel workers resolve the same role concurrently.
 
+        Note: ``_check_context()`` is intentionally not called here. If the
+        resolution context changed between the cache miss (``get``) and this
+        store, the stale entry will be detected and cleared by the next
+        ``get()`` call.
+
         Args:
             role: The agent role.
             model: The resolved model ID.
@@ -198,6 +203,11 @@ class ModelResolutionCache:
         Uses a double-check pattern: if another thread already stored a model
         for this role while the caller was resolving, returns the existing value
         instead of overwriting it.
+
+        Note: ``_check_context()`` is intentionally not called here. If the
+        resolution context changed between the cache miss (``get``) and this
+        store, the stale entry will be detected and cleared by the next
+        ``get()`` call.
 
         Args:
             role: The agent role.

@@ -60,10 +60,10 @@ gh pr view NUMBER --json body,title --jq '{title: .title, body: .body}'
 | No | Yes | OK — no warning needed, this is expected for investigation/partial PRs |
 | No | No | Warn the user: "PR does not reference a GitHub issue. Consider adding `closes #N` to the PR body if this resolves an issue." |
 
-**Fetch issue context.** If an issue number was found (regardless of warnings), fetch the issue for review context:
+**Fetch issue context.** If an issue reference was found (regardless of warnings), fetch the issue for review context. If the PR body used a full URL (`https://github.com/OWNER/REPO/issues/N`), extract both `OWNER/REPO` and `N` and pass `--repo OWNER/REPO` to query the correct repository:
 
 ```bash
-gh issue view N --json title,body,labels,comments --jq '{title: .title, body: .body, labels: [.labels[].name], comments: [.comments[] | {author: .author.login, body: .body}]}'
+gh issue view N --repo OWNER/REPO --json title,body,labels,comments --jq '{title: .title, body: .body, labels: [.labels[].name], comments: [.comments[] | {author: .author.login, body: .body}]}'
 ```
 
 Store the issue title, body, labels, and comments — this context will be passed to all review agents in Phase 3 so they can validate that the PR actually addresses what the issue requested.
@@ -124,7 +124,7 @@ Fetch from three GitHub API sources **in parallel** using `gh api`:
 
 ## Phase 5: Consolidate and triage
 
-**CRITICAL: Wait for ALL feedback sources before proceeding.** Do NOT present the triage table until every local review agent AND every external feedback fetch has completed. Since agents are launched as regular (non-background) parallel Task calls, their results arrive together in the same response — no need for `TaskOutput`. If any agent or fetch fails, retry it before proceeding. All agents must be confirmed complete before moving to triage.
+**CRITICAL: Wait for all mandatory feedback sources before proceeding.** Do NOT present the triage table until every local review agent has completed. For external feedback fetches, retry failures once; if still failing or no external reviews exist, proceed with local findings and clearly mark external coverage as partial.
 
 Build a single consolidated table of ALL actionable feedback from both local agents and external reviewers.
 
@@ -218,5 +218,5 @@ Report what was done:
 - Respect all rules in CLAUDE.md (formatting, logging, no placeholders, etc.).
 - If two sources contradict each other, flag it and ask the user.
 - Do NOT use `--no-verify` or `--amend` for commits.
-- External feedback fetch failures are non-fatal — if the PR has no external reviews yet, proceed with local agent findings only.
+- External feedback fetch failures are non-fatal — retry once, then proceed with local findings if still failing. Mark external coverage as partial in the triage table.
 - **Fix everything in the current PR — never defer.** Every valid recommendation must be implemented in this PR regardless of size. No creating GitHub issues for "too large" items, no deferring to future PRs, no marking things as out of scope. If a reviewer flags it and it's valid, fix it now — docstrings, type hints, refactors, all of it.

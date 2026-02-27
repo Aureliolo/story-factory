@@ -1,8 +1,7 @@
 """Save and refresh logic for advanced settings persistence and undo/redo.
 
 Delegates between UI widgets and the settings model for world generation,
-story structure, data integrity, advanced LLM, and relationship validation
-settings.
+story structure, data integrity, and advanced LLM settings.
 """
 
 import logging
@@ -138,9 +137,8 @@ def save_to_settings(page: SettingsPage) -> None:
 def refresh_from_settings(page: SettingsPage) -> None:
     """Refresh advanced UI elements from current settings values.
 
-    Handles world generation, story structure, data integrity, advanced LLM,
-    and relationship validation settings. Uses clear-and-rebuild for dynamic
-    elements like relationship minimums.
+    Handles world generation, story structure, data integrity, and advanced LLM
+    settings.
 
     Args:
         page: The SettingsPage instance.

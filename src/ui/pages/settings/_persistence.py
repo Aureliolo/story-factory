@@ -175,6 +175,7 @@ def capture_settings_snapshot(page: SettingsPage) -> dict[str, Any]:
         "world_quality_early_stopping_variance_tolerance",
         "world_quality_score_plateau_tolerance",
         "world_quality_dimension_minimum",
+        "world_quality_hail_mary_min_attempts",
         # RAG context settings
         "rag_context_enabled",
         "rag_context_max_tokens",
@@ -291,6 +292,7 @@ def restore_settings_snapshot(page: SettingsPage, snapshot: dict[str, Any]) -> N
         "world_quality_early_stopping_variance_tolerance",
         "world_quality_score_plateau_tolerance",
         "world_quality_dimension_minimum",
+        "world_quality_hail_mary_min_attempts",
         # RAG context settings
         "rag_context_enabled",
         "rag_context_max_tokens",

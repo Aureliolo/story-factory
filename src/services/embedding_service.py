@@ -293,7 +293,8 @@ class EmbeddingService:
 
         Pre-truncates the description to fit within the embedding model's
         context budget after accounting for entity names and relation type,
-        prioritizing entity name preservation where feasible.
+        skipping the embedding entirely if the overhead (prefix + header)
+        exceeds the context budget.
 
         Args:
             db: WorldDatabase instance with vec support.
@@ -343,7 +344,7 @@ class EmbeddingService:
                 self._record_failure(rel.id)
                 return False
             logger.warning(
-                "Relationship header exceeds embedding budget (%d > %d chars); "
+                "Relationship overhead meets embedding budget (%d >= %d chars); "
                 "embedding with empty description to preserve entity names: %s...%s...%s",
                 overhead_chars,
                 max_chars,

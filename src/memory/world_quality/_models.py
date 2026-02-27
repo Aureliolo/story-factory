@@ -261,6 +261,23 @@ class BaseQualityScores(BaseModel):
 
     feedback: str = ""
 
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Validate that _EXCLUDED_FROM_AVERAGE entries are real fields."""
+        super().__init_subclass__(**kwargs)
+        if hasattr(cls, "_EXCLUDED_FROM_AVERAGE") and cls._EXCLUDED_FROM_AVERAGE:
+            # Collect annotations from the full MRO (model_fields isn't
+            # populated yet during Pydantic metaclass processing).
+            all_annotations: set[str] = set()
+            for klass in cls.__mro__:
+                all_annotations.update(getattr(klass, "__annotations__", {}))
+            all_annotations.discard("feedback")
+            invalid = cls._EXCLUDED_FROM_AVERAGE - all_annotations
+            if invalid:
+                raise TypeError(
+                    f"{cls.__name__}._EXCLUDED_FROM_AVERAGE contains unknown "
+                    f"fields: {sorted(invalid)}"
+                )
+
     def _score_fields(self) -> list[tuple[str, str, float]]:
         """Return (field_name, display_name, value) for all numeric scoring dimensions.
 

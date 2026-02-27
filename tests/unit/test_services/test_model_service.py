@@ -1494,6 +1494,26 @@ class TestTTLCaching:
         # Client created twice for health and twice for list (2 each)
         assert mock_client.call_count == 4
 
+    def test_unhealthy_result_not_cached(self, model_service):
+        """Unhealthy check_health results bypass cache so recovery is detected immediately."""
+        with patch("src.services.model_service.ollama.Client") as mock_client:
+            # First call: Ollama unreachable
+            mock_client.side_effect = ConnectionError("refused")
+            result1 = model_service.check_health()
+            assert not result1.is_healthy
+
+            # Second call (within TTL): Ollama now reachable
+            mock_client.side_effect = None
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            with (
+                patch("src.services.model_service.get_available_vram", return_value=24),
+                patch.object(model_service, "get_running_models", return_value=[]),
+            ):
+                result2 = model_service.check_health()
+
+            assert result2.is_healthy  # recovery detected, not stale cached error
+
 
 class TestTTLCacheExpiration:
     """Tests for TTL cache expiration using mocked time."""

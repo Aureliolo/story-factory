@@ -701,7 +701,7 @@ class TestEmbedRelationship:
         assert result is True
         embedded_text = mock_embed_text.call_args[0][0]
         assert embedded_text.endswith(": ")
-        assert any("exceeds embedding budget" in r.message for r in caplog.records)
+        assert any("meets embedding budget" in r.message for r in caplog.records)
 
     def test_embed_relationship_skips_when_overhead_exceeds_max_chars(
         self, service, mock_db, caplog
@@ -759,6 +759,36 @@ class TestEmbedRelationship:
         assert result is False
         mock_embed_text.assert_not_called()
         assert any("skipping embedding to avoid truncating" in r.message for r in caplog.records)
+
+    def test_embed_relationship_uses_fallback_when_context_size_none(
+        self, service, mock_db, caplog
+    ):
+        """embed_relationship uses _FALLBACK_CONTEXT_TOKENS when context size is None."""
+        rel = Relationship(
+            id="rel-fallback",
+            source_id="ent-001",
+            target_id="ent-002",
+            relation_type="allied_with",
+            description="A short description",
+        )
+        mock_client = MagicMock()
+        mock_embed_text = MagicMock(return_value=FAKE_EMBEDDING)
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch(
+                "src.services.embedding_service.get_model_context_size",
+                return_value=None,
+            ),
+            patch("src.services.embedding_service.get_embedding_prefix", return_value="pfx:"),
+            patch.object(service, "embed_text", mock_embed_text),
+            caplog.at_level(logging.DEBUG),
+        ):
+            result = service.embed_relationship(mock_db, rel, "A", "B")
+
+        assert result is True
+        mock_embed_text.assert_called_once()
+        # Verify the fallback was used (debug log mentions the constant)
+        assert any("falling back to" in r.message and "512" in r.message for r in caplog.records)
 
 
 # ---------------------------------------------------------------------------

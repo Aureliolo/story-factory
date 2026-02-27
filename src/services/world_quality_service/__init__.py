@@ -2,7 +2,7 @@
 
 Implements a generate-judge-refine loop using:
 - Creator model: Higher temperature for creative generation (configurable, default 0.9)
-- Judge model: Lower temperature for consistent evaluation (configurable, default 0.1)
+- Judge model: Lower temperature for consistent evaluation (configurable, default 0.3)
 - Refinement: Incorporates feedback to improve entities
 """
 
@@ -313,8 +313,9 @@ class WorldQualityService(EntityDelegatesMixin):
                     "Do NOT use real-world dates."
                 )
             self._calendar_context = context_text
-            # Pre-format the calendar string so get_calendar_context() avoids
-            # re-acquiring the lock and re-concatenating on every call.
+            # Pre-format the calendar string so get_calendar_context() only
+            # reads a single field under the lock instead of re-building
+            # the string on every call.
             if context_text is not None:
                 self._cached_calendar_string = f"\nCALENDAR & TIMELINE:\n{context_text}\n"
             else:
@@ -332,8 +333,9 @@ class WorldQualityService(EntityDelegatesMixin):
     def get_calendar_context(self) -> str:
         """Get formatted calendar context block for entity generation prompts.
 
-        Returns the pre-formatted cached string when available, avoiding
-        redundant lock acquisition and string concatenation.
+        Returns the pre-formatted cached string when available, minimizing
+        time spent holding the lock to a single field read (no string
+        concatenation under lock).
 
         Returns:
             Calendar context block string. When no calendar is available, returns

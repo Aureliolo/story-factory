@@ -1465,3 +1465,19 @@ class TestBaseQualityScoresEdgeCases:
 
         scores = EmptyScores()
         assert scores.weak_dimensions() == []
+
+    def test_init_subclass_rejects_invalid_excluded_field(self):
+        """_EXCLUDED_FROM_AVERAGE with a typo should raise TypeError at class definition."""
+        from typing import ClassVar
+
+        from pydantic import Field
+
+        from src.memory.world_quality._models import BaseQualityScores
+
+        with pytest.raises(TypeError, match="unknown fields"):
+
+            class BadScores(BaseQualityScores):
+                """Subclass with a typo in _EXCLUDED_FROM_AVERAGE."""
+
+                _EXCLUDED_FROM_AVERAGE: ClassVar[frozenset[str]] = frozenset({"typo_field"})
+                real_field: float = Field(default=5.0, ge=0.0, le=10.0)
