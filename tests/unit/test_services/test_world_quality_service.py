@@ -5819,3 +5819,31 @@ class TestMakeModelPreparers:
             mock_prepare.reset_mock()
             prep_j()
             mock_prepare.assert_called_once_with(service.mode_service, "judge-model:8b")
+
+    def test_prepare_creator_graceful_on_failure(self, service):
+        """prepare_creator logs warning and continues when _prepare_model raises."""
+        with (
+            patch.object(service, "_get_creator_model", return_value="creator-model:8b"),
+            patch.object(service, "_get_judge_model", return_value="judge-model:8b"),
+            patch(
+                "src.services.world_quality_service._prepare_model",
+                side_effect=ConnectionError("Ollama unreachable"),
+            ),
+        ):
+            prep_c, _ = service._make_model_preparers("character")
+            # Should not raise — degrades gracefully with a warning
+            prep_c()
+
+    def test_prepare_judge_graceful_on_failure(self, service):
+        """prepare_judge logs warning and continues when _prepare_model raises."""
+        with (
+            patch.object(service, "_get_creator_model", return_value="creator-model:8b"),
+            patch.object(service, "_get_judge_model", return_value="judge-model:8b"),
+            patch(
+                "src.services.world_quality_service._prepare_model",
+                side_effect=ValueError("Invalid vram_strategy"),
+            ),
+        ):
+            _, prep_j = service._make_model_preparers("character")
+            # Should not raise — degrades gracefully with a warning
+            prep_j()

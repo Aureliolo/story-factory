@@ -1111,3 +1111,23 @@ class TestMaxWorkersReductionForDifferentModels:
         assert len(results) == 2
         # No reduction log — was already 1
         assert not any("Reducing max_workers to 1" in msg for msg in caplog.messages)
+
+    def test_model_resolution_failure_keeps_max_workers(self, mock_svc, caplog):
+        """When model resolution fails, max_workers stays unchanged and logs warning."""
+        mock_svc._get_creator_model = MagicMock(side_effect=ValueError("unknown entity type"))
+
+        entity = {"name": "Hero"}
+        scores = _make_char_scores(8.0)
+
+        with caplog.at_level(logging.WARNING):
+            results = _generate_batch_parallel(
+                svc=mock_svc,
+                count=2,
+                entity_type="character",
+                generate_fn=lambda i: (entity, scores, 1),
+                get_name=lambda e: e["name"],
+                max_workers=2,
+            )
+
+        assert len(results) == 2
+        assert any("Failed to resolve models" in msg for msg in caplog.messages)

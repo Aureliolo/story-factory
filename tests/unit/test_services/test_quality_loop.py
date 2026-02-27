@@ -3634,3 +3634,37 @@ class TestPrepareModelCallbacks:
             "prepare_judge",
             "judge",
         ]
+
+    def test_prepare_creator_called_in_auto_pass(self, mock_svc, config):
+        """Auto-pass path calls prepare_creator before create_fn when entity is None."""
+        call_order: list[str] = []
+        auto_scores = _make_scores(8.5)
+
+        def prep_creator():
+            """Record prepare_creator call."""
+            call_order.append("prepare_creator")
+
+        def create_fn(retries):
+            """Record create call and return entity."""
+            call_order.append("create")
+            return {"name": "Hero"}
+
+        quality_refinement_loop(
+            entity_type="relationship",
+            create_fn=create_fn,
+            judge_fn=MagicMock(),
+            refine_fn=MagicMock(),
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+            auto_pass_score=auto_scores,
+            prepare_creator=prep_creator,
+            prepare_judge=MagicMock(),
+        )
+
+        # prepare_creator should be called before create in auto-pass path
+        assert call_order == ["prepare_creator", "create"]
