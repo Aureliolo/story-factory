@@ -613,6 +613,64 @@ class TestGenerateEventWithQuality:
                 entity_context="Test context",
             )
 
+    @patch("src.services.world_quality_service._event._judge_event_quality")
+    @patch("src.services.world_quality_service._event._create_event")
+    def test_generate_event_rejects_duplicate_description(
+        self, mock_create, mock_judge, service, story_state
+    ):
+        """Test that duplicate descriptions are rejected and retried."""
+        # First call returns duplicate of existing, second returns unique
+        mock_create.side_effect = [
+            {"description": "Existing event", "year": 1200, "participants": [], "consequences": []},
+            {"description": "A unique event", "year": 1300, "participants": [], "consequences": []},
+        ]
+        mock_judge.return_value = EventQualityScores(
+            significance=8.0,
+            temporal_plausibility=8.0,
+            causal_coherence=8.0,
+            narrative_potential=8.0,
+            entity_integration=8.0,
+            feedback="Good",
+        )
+
+        event, _scores, _iterations = service.generate_event_with_quality(
+            story_state,
+            existing_descriptions=["Existing event"],
+            entity_context="Test context",
+        )
+
+        # Should have used the unique (non-duplicate) description
+        assert event["description"] == "A unique event"
+        assert mock_create.call_count == 2
+
+    @patch("src.services.world_quality_service._event._judge_event_quality")
+    @patch("src.services.world_quality_service._event._create_event")
+    def test_generate_event_rejects_empty_description(
+        self, mock_create, mock_judge, service, story_state
+    ):
+        """Test that empty descriptions trigger retry."""
+        mock_create.side_effect = [
+            {"description": "", "year": 1200, "participants": [], "consequences": []},
+            {"description": "Valid event", "year": 1300, "participants": [], "consequences": []},
+        ]
+        mock_judge.return_value = EventQualityScores(
+            significance=8.0,
+            temporal_plausibility=8.0,
+            causal_coherence=8.0,
+            narrative_potential=8.0,
+            entity_integration=8.0,
+            feedback="Good",
+        )
+
+        event, _scores, _iterations = service.generate_event_with_quality(
+            story_state,
+            existing_descriptions=[],
+            entity_context="Test context",
+        )
+
+        assert event["description"] == "Valid event"
+        assert mock_create.call_count == 2
+
 
 class TestGenerateEventsWithQualityBatch:
     """Tests for generate_events_with_quality batch wrapper."""
