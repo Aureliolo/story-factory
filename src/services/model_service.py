@@ -36,6 +36,7 @@ class _TTLCached[T]:
     __slots__ = ("_time", "_value", "ttl")
 
     def __init__(self, ttl: float) -> None:
+        """Initialize with the given TTL in seconds."""
         if ttl <= 0:
             raise ValueError(f"TTL must be positive, got {ttl}")
         self._value: T | None = None

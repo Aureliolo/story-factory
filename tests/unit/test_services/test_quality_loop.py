@@ -3435,3 +3435,202 @@ class TestMinimumScoreCalendar:
         ):
             with pytest.raises(StoryFactoryError, match="no numeric scoring dimensions"):
                 _ = scores.minimum_score
+
+
+class TestPrepareModelCallbacks:
+    """Test that prepare_creator/prepare_judge callbacks are called at the right points."""
+
+    def test_prepare_callbacks_called_in_create_judge_flow(self, mock_svc, config):
+        """Callbacks called: prepare_creator before create, prepare_judge before judge."""
+        call_order: list[str] = []
+        entity = {"name": "Hero"}
+        scores = _make_scores(8.5)
+
+        def prep_creator():
+            """Record prepare_creator call."""
+            call_order.append("prepare_creator")
+
+        def prep_judge():
+            """Record prepare_judge call."""
+            call_order.append("prepare_judge")
+
+        def create_fn(retries):
+            """Record create call and return entity."""
+            call_order.append("create")
+            return entity
+
+        def judge_fn(e):
+            """Record judge call and return scores."""
+            call_order.append("judge")
+            return scores
+
+        quality_refinement_loop(
+            entity_type="character",
+            create_fn=create_fn,
+            judge_fn=judge_fn,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+            prepare_creator=prep_creator,
+            prepare_judge=prep_judge,
+        )
+
+        assert call_order == ["prepare_creator", "create", "prepare_judge", "judge"]
+
+    def test_prepare_callbacks_called_in_refine_flow(self, mock_svc, config):
+        """Callbacks called before refine and before re-judge."""
+        call_order: list[str] = []
+        original = {"name": "Hero"}
+        refined = {"name": "Hero v2"}
+        low_scores = _make_scores(6.0)
+        high_scores = _make_scores(8.5)
+        judge_call_count = 0
+
+        def prep_creator():
+            """Record prepare_creator call."""
+            call_order.append("prepare_creator")
+
+        def prep_judge():
+            """Record prepare_judge call."""
+            call_order.append("prepare_judge")
+
+        def create_fn(retries):
+            """Record create call and return original entity."""
+            call_order.append("create")
+            return original
+
+        def judge_fn(e):
+            """Return low scores first, then high scores."""
+            nonlocal judge_call_count
+            call_order.append("judge")
+            judge_call_count += 1
+            return low_scores if judge_call_count == 1 else high_scores
+
+        def refine_fn(e, s, i):
+            """Record refine call and return refined entity."""
+            call_order.append("refine")
+            return refined
+
+        quality_refinement_loop(
+            entity_type="character",
+            create_fn=create_fn,
+            judge_fn=judge_fn,
+            refine_fn=refine_fn,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+            prepare_creator=prep_creator,
+            prepare_judge=prep_judge,
+        )
+
+        # Expected: create(prep_c, create) -> judge(prep_j, judge) -> refine(prep_c, refine) -> judge(prep_j, judge)
+        assert call_order == [
+            "prepare_creator",
+            "create",
+            "prepare_judge",
+            "judge",
+            "prepare_creator",
+            "refine",
+            "prepare_judge",
+            "judge",
+        ]
+
+    def test_none_callbacks_are_no_ops(self, mock_svc, config):
+        """When callbacks are None, the loop runs normally without errors."""
+        entity = {"name": "Hero"}
+        scores = _make_scores(8.5)
+
+        result_entity, _result_scores, iterations = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entity,
+            judge_fn=lambda e: scores,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+            prepare_creator=None,
+            prepare_judge=None,
+        )
+
+        assert result_entity == entity
+        assert iterations == 1
+
+    def test_prepare_callbacks_called_in_hail_mary(self, mock_svc, config):
+        """Callbacks called before hail-mary create and judge."""
+        # max_iterations must be > 1 for hail-mary to trigger
+        config.max_iterations = 2
+        config.early_stopping_patience = 1  # Early stop after 1 plateau
+        call_order: list[str] = []
+        entity = {"name": "Hero"}
+        low_scores = _make_scores(6.0)
+
+        # Mock analytics_db for hail-mary
+        mock_svc.analytics_db = MagicMock()
+        mock_svc.analytics_db.get_hail_mary_win_rate.return_value = 0.5
+        mock_svc.analytics_db.record_hail_mary_attempt = MagicMock()
+
+        judge_count = 0
+
+        def prep_creator():
+            """Record prepare_creator call."""
+            call_order.append("prepare_creator")
+
+        def prep_judge():
+            """Record prepare_judge call."""
+            call_order.append("prepare_judge")
+
+        def create_fn(retries):
+            """Record create call and return entity."""
+            call_order.append("create")
+            return entity
+
+        def judge_fn(e):
+            """Record judge call and always return low scores."""
+            nonlocal judge_count
+            call_order.append("judge")
+            judge_count += 1
+            return low_scores
+
+        quality_refinement_loop(
+            entity_type="character",
+            create_fn=create_fn,
+            judge_fn=judge_fn,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+            prepare_creator=prep_creator,
+            prepare_judge=prep_judge,
+        )
+
+        # Main loop iter 0: prep_creator, create, prep_judge, judge (below threshold)
+        # Main loop iter 1: prep_creator before refine → unchanged detection → early stop
+        # Hail-mary: prep_creator, create, prep_judge, judge
+        assert call_order == [
+            "prepare_creator",
+            "create",
+            "prepare_judge",
+            "judge",
+            "prepare_creator",  # refine attempt (before unchanged detection breaks)
+            "prepare_creator",  # hail-mary create
+            "create",
+            "prepare_judge",
+            "judge",
+        ]

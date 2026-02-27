@@ -134,6 +134,18 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
     if count == 0:
         return []
 
+    # When creator and judge models differ, reduce to single worker to prevent
+    # two threads causing GPU model thrashing (both models competing for VRAM).
+    creator = svc._get_creator_model(entity_type)
+    judge = svc._get_judge_model(entity_type)
+    if creator != judge and max_workers > 1:
+        logger.info(
+            "Reducing max_workers to 1: creator (%s) != judge (%s), avoiding GPU thrashing",
+            creator,
+            judge,
+        )
+        max_workers = 1
+
     # Degenerate case: single worker → delegate to sequential
     if max_workers <= 1:
         return _generate_batch(

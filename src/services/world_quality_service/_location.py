@@ -44,6 +44,8 @@ def generate_location_with_quality(
     if not brief:
         raise ValueError("Story must have a brief for location generation")
 
+    prep_creator, prep_judge = svc._make_model_preparers("location")
+
     return quality_refinement_loop(
         entity_type="location",
         create_fn=lambda retries: svc._create_location(
@@ -69,6 +71,8 @@ def generate_location_with_quality(
         config=config,
         svc=svc,
         story_id=story_state.id,
+        prepare_creator=prep_creator,
+        prepare_judge=prep_judge,
     )
 
 

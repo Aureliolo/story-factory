@@ -56,6 +56,10 @@ def mock_svc():
     svc.get_config = MagicMock(return_value=config)
     svc.settings = MagicMock()
     svc.settings.llm_max_concurrent_requests = 2
+    # Return same model for creator and judge so max_workers isn't reduced
+    # to 1 by the GPU-thrashing check (creator != judge triggers sequential).
+    svc._get_creator_model.return_value = "test-model:8b"
+    svc._get_judge_model.return_value = "test-model:8b"
     return svc
 
 
@@ -682,6 +686,7 @@ class TestGenerateBatchParallel:
         from src.utils.exceptions import DuplicateNameError
 
         def always_duplicate(_i):
+            """Always raise DuplicateNameError."""
             raise DuplicateNameError("Name already exists")
 
         with caplog.at_level(logging.WARNING):
@@ -1029,3 +1034,80 @@ class TestGenerateRelationshipsWithQuality:
         # Should have unique pairs in results
         pairs = {(r["source"], r["target"]) for r, _ in results}
         assert len(pairs) == 2
+
+
+class TestMaxWorkersReductionForDifferentModels:
+    """Tests for _generate_batch_parallel reducing max_workers when creator != judge."""
+
+    def test_reduces_to_sequential_when_models_differ(self, mock_svc, caplog):
+        """When creator and judge models differ, max_workers drops to 1 (sequential)."""
+        mock_svc._get_creator_model = MagicMock(return_value="creator-model:24b")
+        mock_svc._get_judge_model = MagicMock(return_value="judge-model:30b")
+
+        entity = {"name": "Hero"}
+        scores = _make_char_scores(8.0)
+
+        call_thread_ids: list[int | None] = []
+
+        def gen_fn(i):
+            """Record thread ID and return a test entity."""
+            call_thread_ids.append(threading.current_thread().ident)
+            return entity, scores, 1
+
+        with caplog.at_level(logging.INFO):
+            results = _generate_batch_parallel(
+                svc=mock_svc,
+                count=3,
+                entity_type="character",
+                generate_fn=gen_fn,
+                get_name=lambda e: e["name"],
+                max_workers=4,
+            )
+
+        assert len(results) == 3
+        # The log message about reducing should appear
+        assert any("Reducing max_workers to 1" in msg for msg in caplog.messages)
+
+    def test_no_reduction_when_models_same(self, mock_svc, caplog):
+        """When creator and judge are the same model, max_workers stays unchanged."""
+        mock_svc._get_creator_model = MagicMock(return_value="same-model:8b")
+        mock_svc._get_judge_model = MagicMock(return_value="same-model:8b")
+
+        entity = {"name": "Hero"}
+        scores = _make_char_scores(8.0)
+
+        with caplog.at_level(logging.INFO):
+            results = _generate_batch_parallel(
+                svc=mock_svc,
+                count=2,
+                entity_type="character",
+                generate_fn=lambda i: (entity, scores, 1),
+                get_name=lambda e: e["name"],
+                max_workers=2,
+            )
+
+        assert len(results) == 2
+        # No reduction log message should appear
+        assert not any("Reducing max_workers to 1" in msg for msg in caplog.messages)
+
+    def test_no_reduction_when_already_single_worker(self, mock_svc, caplog):
+        """When max_workers is already 1, no reduction log even if models differ."""
+        mock_svc._get_creator_model = MagicMock(return_value="creator-model:24b")
+        mock_svc._get_judge_model = MagicMock(return_value="judge-model:30b")
+
+        entity = {"name": "Hero"}
+        scores = _make_char_scores(8.0)
+
+        with caplog.at_level(logging.INFO):
+            results = _generate_batch_parallel(
+                svc=mock_svc,
+                count=2,
+                entity_type="character",
+                generate_fn=lambda i: (entity, scores, 1),
+                get_name=lambda e: e["name"],
+                max_workers=1,
+            )
+
+        assert len(results) == 2
+        # No reduction log — was already 1
+        assert not any("Reducing max_workers to 1" in msg for msg in caplog.messages)

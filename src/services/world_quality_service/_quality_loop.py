@@ -65,6 +65,8 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     story_id: str,
     initial_entity: T | None = None,
     auto_pass_score: S | None = None,
+    prepare_creator: Callable[[], None] | None = None,
+    prepare_judge: Callable[[], None] | None = None,
 ) -> tuple[T, S, int]:
     """Run the quality refinement loop for any entity type.
 
@@ -90,6 +92,10 @@ def quality_refinement_loop[T, S: BaseQualityScores](
             the entity and return immediately with this score and scoring_rounds=0.
             Used when historical data shows the judge is nearly always a no-op
             (e.g. relationship first-pass rate >= 95%).
+        prepare_creator: Optional callback called before create_fn() and refine_fn()
+            to prepare VRAM (e.g. unload the judge model). None = no-op.
+        prepare_judge: Optional callback called before judge_fn() to prepare VRAM
+            (e.g. unload the creator model). None = no-op.
 
     Returns:
         Tuple of (best_entity, best_scores, scoring_rounds) where scoring_rounds
@@ -198,6 +204,8 @@ def quality_refinement_loop[T, S: BaseQualityScores](
             elif entity is None or (iteration == 0) or is_empty(entity):
                 # Need fresh creation
                 stage = "create"
+                if prepare_creator:
+                    prepare_creator()
                 t_create = time.perf_counter()
                 entity = create_fn(creation_retries)
                 logger.info(
@@ -223,6 +231,8 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                 # Refinement based on previous feedback
                 if scores is not None:
                     stage = "refine"
+                    if prepare_creator:
+                        prepare_creator()
                     dynamic_temp_iter = iteration + 1
                     t_refine = time.perf_counter()
                     entity = refine_fn(entity, scores, dynamic_temp_iter)
@@ -284,6 +294,8 @@ def quality_refinement_loop[T, S: BaseQualityScores](
             assert entity is not None  # nosec — invariant, not runtime check
 
             stage = "judge"
+            if prepare_judge:
+                prepare_judge()
             t_judge = time.perf_counter()
             scores = judge_fn(entity)
             judge_duration = time.perf_counter() - t_judge
@@ -592,8 +604,12 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                 entity_threshold,
             )
             try:
+                if prepare_creator:
+                    prepare_creator()
                 fresh_entity = create_fn(creation_retries + 1)
                 if fresh_entity is not None and not is_empty(fresh_entity):
+                    if prepare_judge:
+                        prepare_judge()
                     fresh_scores = judge_fn(fresh_entity)
                     hail_mary_zero = _detect_zero_score_dims(fresh_scores)
                     if hail_mary_zero:
