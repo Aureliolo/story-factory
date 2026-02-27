@@ -712,6 +712,34 @@ class TestFormatHelpers:
         assert "Kingdom united" in result
 
 
+class TestIsDuplicateDescription:
+    """Tests for _is_duplicate_description helper."""
+
+    def test_exact_match_is_duplicate(self):
+        """Test that an exact match is detected as duplicate."""
+        from src.services.world_quality_service._event import _is_duplicate_description
+
+        assert _is_duplicate_description("A great battle", ["A great battle"]) is True
+
+    def test_case_insensitive_match(self):
+        """Test that case-insensitive prefix matching detects duplicates."""
+        from src.services.world_quality_service._event import _is_duplicate_description
+
+        assert _is_duplicate_description("A GREAT BATTLE", ["a great battle"]) is True
+
+    def test_no_match(self):
+        """Test that non-matching descriptions are not duplicates."""
+        from src.services.world_quality_service._event import _is_duplicate_description
+
+        assert _is_duplicate_description("A mysterious plague", ["A great battle"]) is False
+
+    def test_empty_existing(self):
+        """Test that empty existing list never matches."""
+        from src.services.world_quality_service._event import _is_duplicate_description
+
+        assert _is_duplicate_description("Anything", []) is False
+
+
 class TestCharacterJudgeCalendarContext:
     """Test that character judge prompt includes calendar context (#395 Fix 4)."""
 

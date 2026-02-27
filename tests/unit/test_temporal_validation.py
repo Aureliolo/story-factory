@@ -1625,6 +1625,21 @@ class TestEraMismatchDetection:
 
         assert len(result.warnings) == 0
 
+    def test_no_mismatch_when_era_name_has_prefix_suffix(
+        self, validation_service, calendar_with_eras
+    ):
+        """Test that era names normalize 'The' prefix and 'Era' suffix for comparison."""
+        entity = Entity(id="ent-001", name="Hero", type="character")
+        # "The First Age Era" should normalize to match "First Age"
+        timestamp = StoryTimestamp(year=50, era_name="The First Age Era")
+        result = TemporalValidationResult()
+
+        validation_service._check_era_name_mismatch(
+            entity, timestamp, calendar_with_eras, "birth", result
+        )
+
+        assert len(result.warnings) == 0
+
     def test_skips_when_era_not_resolved(self, validation_service, calendar_with_eras):
         """Test early return when calendar can't resolve era for year."""
         entity = Entity(id="ent-001", name="Hero", type="character")
