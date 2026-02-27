@@ -44,6 +44,8 @@ def generate_concept_with_quality(
     if not brief:
         raise ValueError("Story must have a brief for concept generation")
 
+    prep_creator, prep_judge = svc._make_model_preparers("concept")
+
     return quality_refinement_loop(
         entity_type="concept",
         create_fn=lambda retries: svc._create_concept(
@@ -69,6 +71,8 @@ def generate_concept_with_quality(
         config=config,
         svc=svc,
         story_id=story_state.id,
+        prepare_creator=prep_creator,
+        prepare_judge=prep_judge,
     )
 
 

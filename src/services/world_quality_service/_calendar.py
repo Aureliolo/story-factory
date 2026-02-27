@@ -48,6 +48,8 @@ def generate_calendar_with_quality(
     if not brief:
         raise ValueError("Story must have a brief for calendar generation")
 
+    prep_creator, prep_judge = svc._make_model_preparers("calendar")
+
     return quality_refinement_loop(
         entity_type="calendar",
         create_fn=lambda retries: _create_calendar(
@@ -75,6 +77,8 @@ def generate_calendar_with_quality(
         config=config,
         svc=svc,
         story_id=story_state.id,
+        prepare_creator=prep_creator,
+        prepare_judge=prep_judge,
     )
 
 

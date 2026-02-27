@@ -38,6 +38,7 @@ def review_plot_quality(
     """
     logger.debug("Reviewing plot quality for story %s", story_state.id)
     config = svc.get_config()
+    prep_creator, prep_judge = svc._make_model_preparers("plot")
 
     return quality_refinement_loop(
         entity_type="plot",
@@ -63,6 +64,8 @@ def review_plot_quality(
         svc=svc,
         story_id=story_state.id,
         initial_entity=plot_outline,
+        prepare_creator=prep_creator,
+        prepare_judge=prep_judge,
     )
 
 

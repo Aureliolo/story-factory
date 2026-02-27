@@ -44,6 +44,8 @@ def generate_character_with_quality(
     if not brief:
         raise ValueError("Story must have a brief for character generation")
 
+    prep_creator, prep_judge = svc._make_model_preparers("character")
+
     return quality_refinement_loop(
         entity_type="character",
         create_fn=lambda retries: svc._create_character(
@@ -70,6 +72,8 @@ def generate_character_with_quality(
         config=config,
         svc=svc,
         story_id=story_state.id,
+        prepare_creator=prep_creator,
+        prepare_judge=prep_judge,
     )
 
 
@@ -95,6 +99,7 @@ def review_character_quality(
         WorldGenerationError: If refinement fails after all attempts.
     """
     config = svc.get_config()
+    prep_creator, prep_judge = svc._make_model_preparers("character")
 
     return quality_refinement_loop(
         entity_type="character",
@@ -118,6 +123,8 @@ def review_character_quality(
         svc=svc,
         story_id=story_state.id,
         initial_entity=character,
+        prepare_creator=prep_creator,
+        prepare_judge=prep_judge,
     )
 
 

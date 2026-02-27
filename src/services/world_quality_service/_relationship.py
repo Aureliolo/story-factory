@@ -287,6 +287,8 @@ def generate_relationship_with_quality(
             feedback="Auto-passed: historical first-pass rate >= 95%",
         )
 
+    prep_creator, prep_judge = svc._make_model_preparers("relationship")
+
     return quality_refinement_loop(
         entity_type="relationship",
         create_fn=_create,
@@ -309,6 +311,8 @@ def generate_relationship_with_quality(
         svc=svc,
         story_id=story_state.id,
         auto_pass_score=auto_pass,
+        prepare_creator=prep_creator,
+        prepare_judge=prep_judge,
     )
 
 

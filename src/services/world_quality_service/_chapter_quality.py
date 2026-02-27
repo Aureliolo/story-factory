@@ -38,6 +38,7 @@ def review_chapter_quality(
     """
     logger.debug("Reviewing chapter quality for 'Ch%d: %s'", chapter.number, chapter.title)
     config = svc.get_config()
+    prep_creator, prep_judge = svc._make_model_preparers("chapter")
 
     return quality_refinement_loop(
         entity_type="chapter",
@@ -61,6 +62,8 @@ def review_chapter_quality(
         svc=svc,
         story_id=story_state.id,
         initial_entity=chapter,
+        prepare_creator=prep_creator,
+        prepare_judge=prep_judge,
     )
 
 
