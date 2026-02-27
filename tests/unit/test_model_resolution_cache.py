@@ -168,3 +168,39 @@ class TestCacheOperations:
             assert not cache.has_warned_conflict("character:model-a")
             cache.mark_conflict_warned("character:model-a")
             assert cache.has_warned_conflict("character:model-a")
+
+    def test_store_creator_model_returns_existing_on_race(self, cache):
+        """Double-check: second store for same role returns the first-stored value."""
+        with (
+            patch(
+                "src.settings.get_available_vram",
+                return_value=24000,
+            ),
+            patch(
+                "src.settings.get_installed_models_with_sizes",
+                return_value={"model-a": 8000},
+            ),
+        ):
+            cache.get_creator_model("writer")  # establish context
+            first = cache.store_creator_model("writer", "first-model:8b")
+            second = cache.store_creator_model("writer", "second-model:8b")
+            assert first == "first-model:8b"
+            assert second == "first-model:8b"  # returns existing, not the new value
+
+    def test_store_judge_model_returns_existing_on_race(self, cache):
+        """Double-check: second store for same role returns the first-stored value."""
+        with (
+            patch(
+                "src.settings.get_available_vram",
+                return_value=24000,
+            ),
+            patch(
+                "src.settings.get_installed_models_with_sizes",
+                return_value={"model-a": 8000},
+            ),
+        ):
+            cache.get_judge_model("judge")  # establish context
+            first = cache.store_judge_model("judge", "first-judge:12b")
+            second = cache.store_judge_model("judge", "second-judge:12b")
+            assert first == "first-judge:12b"
+            assert second == "first-judge:12b"  # returns existing, not the new value
