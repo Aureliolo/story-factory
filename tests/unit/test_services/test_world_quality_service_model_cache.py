@@ -163,7 +163,7 @@ class TestJudgeModelCaching:
         model1 = service._get_judge_model("character")
         assert model1 == "judge-model:8b"
         # Cache key includes creator model for entity-type-aware anti-self-judging
-        cache_key = "judge:judge-model:8b"
+        cache_key = ("judge", "judge-model:8b")
         assert cache_key in service._model_cache._resolved_judge_models
 
         # Second call - should use stored value
@@ -191,7 +191,7 @@ class TestJudgeModelCaching:
         assert model == "alternate-judge:8b"
         # Swapped model should be stored (cache key includes creator model)
         assert (
-            service._model_cache._resolved_judge_models.get("judge:same-model:8b")
+            service._model_cache._resolved_judge_models.get(("judge", "same-model:8b"))
             == "alternate-judge:8b"
         )
 
