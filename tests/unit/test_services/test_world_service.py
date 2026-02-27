@@ -925,12 +925,23 @@ class TestWorldHealthMethods:
 
     def test_health_score_weighted_structural_and_quality(self, world_service, world_db):
         """Test health score is a weighted blend of structural (60%) and quality (40%)."""
-        # Create entities with perfect quality (10.0) and no structural issues
+        # Create entities with perfect quality (10.0), no structural issues,
+        # and lifecycle data to avoid MISSING_TEMPORAL_DATA warnings
         alice_id = world_db.add_entity(
-            "character", "Alice", attributes={"quality_scores": {"average": 10.0}}
+            "character",
+            "Alice",
+            attributes={
+                "quality_scores": {"average": 10.0},
+                "lifecycle": {"birth": {"year": 100}},
+            },
         )
         bob_id = world_db.add_entity(
-            "character", "Bob", attributes={"quality_scores": {"average": 10.0}}
+            "character",
+            "Bob",
+            attributes={
+                "quality_scores": {"average": 10.0},
+                "lifecycle": {"birth": {"year": 200}},
+            },
         )
         world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
 
@@ -943,10 +954,13 @@ class TestWorldHealthMethods:
 
     def test_health_score_unscored_entities_contribute_zero(self, world_service, world_db):
         """Test unscored entities contribute 0.0 to quality average."""
-        # Create entities with no quality scores
-        world_db.add_entity("character", "Alice")
-        world_db.add_entity("character", "Bob")
-        world_db.add_entity("location", "Town")
+        # Create entities with no quality scores but with lifecycle data
+        # to avoid MISSING_TEMPORAL_DATA warnings affecting the score
+        world_db.add_entity(
+            "character", "Alice", attributes={"lifecycle": {"birth": {"year": 100}}}
+        )
+        world_db.add_entity("character", "Bob", attributes={"lifecycle": {"birth": {"year": 200}}})
+        world_db.add_entity("location", "Town", attributes={"lifecycle": {"founding_year": 50}})
 
         metrics = world_service.get_world_health_metrics(world_db)
 
@@ -962,9 +976,18 @@ class TestWorldHealthMethods:
     def test_health_score_mixed_scored_and_unscored(self, world_service, world_db):
         """Test health score with mix of scored and unscored entities."""
         alice_id = world_db.add_entity(
-            "character", "Alice", attributes={"quality_scores": {"average": 8.0}}
+            "character",
+            "Alice",
+            attributes={
+                "quality_scores": {"average": 8.0},
+                "lifecycle": {"birth": {"year": 100}},
+            },
         )
-        bob_id = world_db.add_entity("character", "Bob")  # Unscored
+        bob_id = world_db.add_entity(
+            "character",
+            "Bob",
+            attributes={"lifecycle": {"birth": {"year": 200}}},
+        )  # Unscored but has lifecycle
         world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
 
         metrics = world_service.get_world_health_metrics(world_db)
