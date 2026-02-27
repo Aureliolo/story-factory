@@ -18,6 +18,27 @@ from src.settings import Settings
 
 logger = logging.getLogger(__name__)
 
+# Prefixes that LLMs inconsistently add/omit on era names (e.g. "The Human Epoch"
+# vs "Human Epoch").  Stripping them before comparison prevents false mismatches.
+_ERA_STRIP_PREFIXES = ("the ",)
+_ERA_STRIP_SUFFIXES = (" era",)
+
+
+def _normalize_era_name(name: str) -> str:
+    """Normalize an era name for comparison.
+
+    Strips leading articles ("The") and trailing "Era" suffix, then
+    case-folds so that "The Human Epoch" and "Human Epoch" compare equal.
+    """
+    result = name.strip().casefold()
+    for prefix in _ERA_STRIP_PREFIXES:
+        if result.startswith(prefix):
+            result = result[len(prefix) :]
+    for suffix in _ERA_STRIP_SUFFIXES:
+        if result.endswith(suffix):
+            result = result[: -len(suffix)]
+    return result.strip()
+
 
 class TemporalErrorType(StrEnum):
     """Types of temporal validation errors."""
@@ -549,7 +570,7 @@ class TemporalValidationService:
         if resolved_era is None:
             return
 
-        if timestamp.era_name != resolved_era.name:
+        if _normalize_era_name(timestamp.era_name) != _normalize_era_name(resolved_era.name):
             warning = TemporalValidationIssue(
                 entity_id=entity.id,
                 entity_name=entity.name,

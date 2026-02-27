@@ -132,6 +132,7 @@ def set_log_level(level: str) -> None:
 
     Updates the root logger and all its handlers, then re-suppresses noisy
     third-party loggers so they stay at WARNING regardless of the app level.
+    No-ops if the requested level matches the current level.
 
     Args:
         level: Log level name (DEBUG, INFO, WARNING, ERROR).
@@ -142,8 +143,10 @@ def set_log_level(level: str) -> None:
     log_level = getattr(logging, level.upper(), None)
     if log_level is None:
         raise ValueError(f"Invalid log level: {level}")
-    logger.info("Log level changed to %s", level)
     root_logger = logging.getLogger()
+    if root_logger.level == log_level:
+        return
+    logger.info("Log level changed to %s", level)
     root_logger.setLevel(log_level)
     for handler in root_logger.handlers:
         handler.setLevel(log_level)

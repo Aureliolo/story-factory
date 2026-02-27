@@ -553,12 +553,13 @@ def generate_events_with_quality(
         WorldGenerationError: If no events could be generated.
     """
     descriptions = existing_descriptions.copy()
+    rejected: list[str] = []
     return _generate_batch(
         svc=svc,
         count=count,
         entity_type="event",
         generate_fn=lambda _i: svc.generate_event_with_quality(
-            story_state, descriptions, entity_context
+            story_state, descriptions, entity_context, rejected_descriptions=rejected
         ),
         get_name=lambda evt: evt.get("description", "Unknown")[:60],
         on_success=lambda evt: (

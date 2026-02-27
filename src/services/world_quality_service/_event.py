@@ -52,11 +52,29 @@ def _format_consequences(consequences: list[Any]) -> str:
     return "Consequences:\n" + "\n".join(f"  - {c}" for c in consequences)
 
 
+def _is_duplicate_description(description: str, existing: list[str]) -> bool:
+    """Check if an event description is a near-duplicate of an existing one.
+
+    Uses case-insensitive prefix matching (first 60 chars) since event
+    descriptions are identified by their truncated form in the quality loop.
+
+    Args:
+        description: The new event description to check.
+        existing: List of existing event descriptions.
+
+    Returns:
+        True if the description is a duplicate.
+    """
+    normalized = description.strip().casefold()[:60]
+    return any(d.strip().casefold()[:60] == normalized for d in existing)
+
+
 def generate_event_with_quality(
     svc,
     story_state: StoryState,
     existing_descriptions: list[str],
     entity_context: str,
+    rejected_descriptions: list[str] | None = None,
 ) -> tuple[dict[str, Any], EventQualityScores, int]:
     """Generate a world event with iterative quality refinement.
 
@@ -68,6 +86,8 @@ def generate_event_with_quality(
         story_state: Current story state with brief.
         existing_descriptions: Descriptions of existing events to avoid duplicates.
         entity_context: Pre-formatted string of all entities/relationships/lifecycle data.
+        rejected_descriptions: Descriptions rejected as duplicates within the current
+            batch, fed back into the creator prompt to avoid regeneration.
 
     Returns:
         Tuple of (event_dict, quality_scores, iterations_used).
@@ -80,13 +100,33 @@ def generate_event_with_quality(
     if not brief:
         raise ValueError("Story must have a brief for event generation")
 
+    if rejected_descriptions is None:
+        rejected_descriptions = []
+
+    # Combine existing + rejected for dedup checking and prompt injection
+    all_known = existing_descriptions + rejected_descriptions
+
     prep_creator, prep_judge = svc._make_model_preparers("event")
+
+    def _is_empty(evt: dict[str, Any]) -> bool:
+        """Check if event is empty or a duplicate of an already-known event."""
+        desc = evt.get("description", "")
+        if not desc:
+            return True
+        if _is_duplicate_description(desc, all_known):
+            logger.warning(
+                "Generated duplicate event description '%s', rejecting",
+                desc[:60],
+            )
+            rejected_descriptions.append(desc)
+            return True
+        return False
 
     return quality_refinement_loop(
         entity_type="event",
         create_fn=lambda retries: svc._create_event(
             story_state,
-            existing_descriptions,
+            all_known,
             entity_context,
             retry_temperature(config, retries),
         ),
@@ -103,7 +143,7 @@ def generate_event_with_quality(
         ),
         get_name=lambda evt: evt.get("description", "Unknown")[:60],
         serialize=lambda evt: evt.copy(),
-        is_empty=lambda evt: not evt.get("description"),
+        is_empty=_is_empty,
         score_cls=EventQualityScores,
         config=config,
         svc=svc,
@@ -227,7 +267,7 @@ Era: {event.get("era_name", "N/A")}
 
 Rate each dimension 0-10:
 - significance: How world-shaping is this event? Does it change the status quo?
-- temporal_plausibility: VERIFY against CALENDAR above — event year MUST fall within a defined era's [start_year, end_year] range. Score 8-10 ONLY if the event's year is inside a valid era AND the event type makes sense for that era. Score 5-7 if timing is plausible but era alignment is unclear. Score 2-4 if the event year falls outside all defined eras or contradicts the calendar. If the CALENDAR block states "No calendar available", score exactly 3.0 (insufficient context to verify).
+- temporal_plausibility: VERIFY against CALENDAR above — event year MUST fall within a defined era's [start_year, end_year] range. Score 8-10 ONLY if the event's year is inside a valid era AND the event type makes sense for that era. Score 5-7 if timing is plausible but era alignment is unclear. Score 2-4 if the event year falls outside all defined eras or contradicts the calendar. If the event year is "N/A" (not yet assigned), score 5.0 (neutral — date is pending, not wrong). If the CALENDAR block states "No calendar available", score 5.0 (insufficient context to verify).
 - causal_coherence: Are causes and consequences logically connected?
 - narrative_potential: Does it create story opportunities and tension?
 - entity_integration: Do participant roles make sense for their entity types?

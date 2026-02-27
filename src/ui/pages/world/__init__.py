@@ -159,14 +159,17 @@ class WorldPage:
 
         # Pre-fetch entity options once for all child sections to avoid duplicate API calls
         if self.state.world_db:
-            entities = self.services.world.list_entities(self.state.world_db)
-            self._cached_entity_options = {e.id: e.name for e in entities}
+            entity_list = list(self.services.world.list_entities(self.state.world_db))
+            self._cached_entity_options = {e.id: e.name for e in entity_list}
+            # Store full list for the entity browser to reuse during initial build
+            self._prefetched_entities = entity_list
             logger.debug(
                 "Pre-fetched %d entity options for world page",
                 len(self._cached_entity_options),
             )
         else:
             self._cached_entity_options = {}
+            self._prefetched_entities = []
 
         try:
             # World generation toolbar
