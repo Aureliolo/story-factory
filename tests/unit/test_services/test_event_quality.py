@@ -621,12 +621,21 @@ class TestGenerateEventsWithQualityBatch:
     @patch("src.services.world_quality_service._event._create_event")
     def test_batch_generates_events(self, mock_create, mock_judge, service, story_state):
         """Test batch wrapper calls single-event generator and collects results."""
-        mock_create.return_value = {
-            "description": "A great battle",
-            "year": 1200,
-            "participants": [],
-            "consequences": [],
-        }
+        # Return unique descriptions to avoid dedup rejection
+        mock_create.side_effect = [
+            {
+                "description": "A great battle",
+                "year": 1200,
+                "participants": [],
+                "consequences": [],
+            },
+            {
+                "description": "A mysterious plague",
+                "year": 1350,
+                "participants": [],
+                "consequences": [],
+            },
+        ]
         mock_judge.return_value = EventQualityScores(
             significance=8.0,
             temporal_plausibility=8.0,
@@ -644,8 +653,9 @@ class TestGenerateEventsWithQualityBatch:
         )
 
         assert len(results) == 2
-        for event_dict, scores in results:
-            assert event_dict["description"] == "A great battle"
+        assert results[0][0]["description"] == "A great battle"
+        assert results[1][0]["description"] == "A mysterious plague"
+        for _event_dict, scores in results:
             assert scores.average == 8.0
 
 

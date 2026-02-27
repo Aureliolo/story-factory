@@ -717,10 +717,15 @@ class WorldQualityService(EntityDelegatesMixin):
         story_state: StoryState,
         existing_descriptions: list[str],
         entity_context: str,
+        rejected_descriptions: list[str] | None = None,
     ) -> tuple[dict[str, Any], EventQualityScores, int]:
         """Generate an event using the creator-judge-refine quality loop."""
         return _generate_event_with_quality(
-            self, story_state, existing_descriptions, entity_context
+            self,
+            story_state,
+            existing_descriptions,
+            entity_context,
+            rejected_descriptions=rejected_descriptions,
         )
 
     # -- Calendar --
