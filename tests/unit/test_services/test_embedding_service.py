@@ -748,8 +748,8 @@ class TestEmbedRelationship:
         mock_embed_text = MagicMock(return_value=FAKE_EMBEDDING)
         with (
             patch.object(service, "_get_client", return_value=mock_client),
-            # Tiny context so header alone exceeds max_chars
-            patch("src.services.embedding_service.get_model_context_size", return_value=1),
+            # Small context (15 tokens → 10 chars after margin) so header exceeds max_chars
+            patch("src.services.embedding_service.get_model_context_size", return_value=15),
             patch("src.services.embedding_service.get_embedding_prefix", return_value=""),
             patch.object(service, "embed_text", mock_embed_text),
             caplog.at_level(logging.WARNING),

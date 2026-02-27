@@ -1662,8 +1662,8 @@ class TestTTLCachedDirect:
         cache.set("hello", now=1.0)
         assert cache.get(now=11.1) is None
 
-    def test_get_returns_value_at_exact_ttl_boundary(self):
-        """get() returns the value when elapsed == ttl (uses strict <)."""
+    def test_get_expires_at_exact_ttl_boundary(self):
+        """get() returns None when elapsed == ttl (strict < comparison)."""
         cache: _TTLCached[str] = _TTLCached(ttl=10.0)
         cache.set("hello", now=1.0)
         # Elapsed exactly 10.0 — should expire (< not <=)

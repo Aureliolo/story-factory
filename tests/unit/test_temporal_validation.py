@@ -1,5 +1,6 @@
 """Tests for temporal validation service."""
 
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -1043,7 +1044,7 @@ class TestValidateWorld:
         assert result.error_count >= 1
 
     def test_validate_world_handles_settings_error(
-        self, validation_service: TemporalValidationService
+        self, validation_service: TemporalValidationService, caplog: pytest.LogCaptureFixture
     ) -> None:
         """Test that world validation handles errors when loading settings."""
         entity = Entity(
@@ -1063,13 +1064,14 @@ class TestValidateWorld:
         mock_world_db.get_world_settings.side_effect = sqlite3.OperationalError("Table not found")
 
         # Should not raise - should handle gracefully
-        result = validation_service.validate_world(mock_world_db)
+        with caplog.at_level(logging.WARNING):
+            result = validation_service.validate_world(mock_world_db)
 
         assert result.is_valid is True
         assert result.error_count == 0
-        # Calendar loading failure should be reported as a warning
-        assert result.warning_count >= 1
-        assert any("Calendar-based validation skipped" in w.message for w in result.warnings)
+        # Calendar failure is logged, not added to result (would skew quality scoring)
+        assert result.warning_count == 0
+        assert any("Calendar-based validation skipped" in m for m in caplog.messages)
 
 
 class TestDeathDateValidation:

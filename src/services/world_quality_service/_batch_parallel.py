@@ -419,10 +419,11 @@ def _collect_late_results[T, S: BaseQualityScores](
         except Exception as late_err:
             if isinstance(late_err, (MemoryError, RecursionError)):
                 raise
-            errors.append(summarize_llm_error(late_err, max_length=200))
+            late_msg = summarize_llm_error(late_err, max_length=200)
+            errors.append(late_msg)
             logger.warning(
                 "Discarded late %s during early termination: %s",
                 entity_type,
-                summarize_llm_error(late_err, max_length=200),
+                late_msg,
                 exc_info=True,
             )
