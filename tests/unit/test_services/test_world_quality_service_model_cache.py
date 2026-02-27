@@ -160,14 +160,16 @@ class TestJudgeModelCaching:
         # First call - should resolve and store
         model1 = service._get_judge_model("character")
         assert model1 == "judge-model:8b"
-        assert "judge" in service._model_cache._resolved_judge_models
+        # Cache key includes creator model for entity-type-aware anti-self-judging
+        cache_key = "judge:judge-model:8b"
+        assert cache_key in service._model_cache._resolved_judge_models
 
         # Second call - should use stored value
         model2 = service._get_judge_model("character")
         assert model2 == "judge-model:8b"
 
         # Verify cache was used (judge model still in storage)
-        assert service._model_cache._resolved_judge_models["judge"] == "judge-model:8b"
+        assert service._model_cache._resolved_judge_models[cache_key] == "judge-model:8b"
 
     @patch("src.settings.get_installed_models_with_sizes", return_value={"same-model:8b": 8.0})
     @patch("src.settings.get_available_vram", return_value=16)
@@ -185,8 +187,11 @@ class TestJudgeModelCaching:
 
         # Should have swapped to alternate
         assert model == "alternate-judge:8b"
-        # Swapped model should be stored
-        assert service._model_cache._resolved_judge_models.get("judge") == "alternate-judge:8b"
+        # Swapped model should be stored (cache key includes creator model)
+        assert (
+            service._model_cache._resolved_judge_models.get("judge:same-model:8b")
+            == "alternate-judge:8b"
+        )
 
 
 class TestCacheInvalidation:

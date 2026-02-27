@@ -190,24 +190,29 @@ class ModelResolutionCache:
             logger.debug("Cached creator model for role '%s': %s", role, model)
             return model
 
-    def get_judge_model(self, role: str) -> str | None:
-        """Get cached judge model for a role, if available.
+    def get_judge_model(self, role: str, creator_model: str | None = None) -> str | None:
+        """Get cached judge model for a role+creator combination, if available.
+
+        The cache key incorporates the creator model so that entity types with
+        different creators get independent anti-self-judging decisions.
 
         Args:
             role: The agent role (judge, etc.).
+            creator_model: The creator model for this entity type (used in cache key).
 
         Returns:
             The cached model ID, or None if not cached.
         """
         with self._lock:
             self._check_context()
-            return self._resolved_judge_models.get(role)
+            cache_key = f"{role}:{creator_model}" if creator_model else role
+            return self._resolved_judge_models.get(cache_key)
 
-    def store_judge_model(self, role: str, model: str) -> str:
-        """Store a resolved judge model for a role, returning the canonical value.
+    def store_judge_model(self, role: str, model: str, creator_model: str | None = None) -> str:
+        """Store a resolved judge model for a role+creator combination.
 
         Uses a double-check pattern: if another thread already stored a model
-        for this role while the caller was resolving, returns the existing value
+        for this key while the caller was resolving, returns the existing value
         instead of overwriting it.
 
         Note: ``_check_context()`` is intentionally not called here. If the
@@ -218,22 +223,24 @@ class ModelResolutionCache:
         Args:
             role: The agent role.
             model: The resolved model ID.
+            creator_model: The creator model for this entity type (used in cache key).
 
         Returns:
-            The model ID that is now cached for this role (may differ from *model*
+            The model ID that is now cached for this key (may differ from *model*
             if another thread stored first).
         """
         with self._lock:
-            existing = self._resolved_judge_models.get(role)
+            cache_key = f"{role}:{creator_model}" if creator_model else role
+            existing = self._resolved_judge_models.get(cache_key)
             if existing is not None:
                 logger.debug(
-                    "Judge model already cached for role '%s'; keeping '%s'",
-                    role,
+                    "Judge model already cached for key '%s'; keeping '%s'",
+                    cache_key,
                     existing,
                 )
                 return existing
-            self._resolved_judge_models[role] = model
-            logger.debug("Cached judge model for role '%s': %s", role, model)
+            self._resolved_judge_models[cache_key] = model
+            logger.debug("Cached judge model for key '%s': %s", cache_key, model)
             return model
 
     def has_warned_conflict(self, conflict_key: str) -> bool:

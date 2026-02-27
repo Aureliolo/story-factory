@@ -126,8 +126,11 @@ def get_judge_model(service: WorldQualityService, entity_type: str | None = None
     else:
         agent_role = "judge"
 
-    # Check cache (validates context automatically)
-    cached = service._model_cache.get_judge_model(agent_role)
+    # Resolve the creator model first so we can use it in the cache key
+    creator_model = get_creator_model(service, entity_type) if entity_type else None
+
+    # Check cache using role+creator key for per-entity-type anti-self-judging
+    cached = service._model_cache.get_judge_model(agent_role, creator_model)
     if cached is not None:
         return cached
 
@@ -135,42 +138,48 @@ def get_judge_model(service: WorldQualityService, entity_type: str | None = None
     model = resolve_model_for_role(service, agent_role)
 
     # Prefer a different model from the creator to avoid self-judging bias
-    if entity_type:
-        creator_model = get_creator_model(service, entity_type)
-        if model == creator_model:
-            # Try to find an alternative judge model
-            alternatives = service.settings.get_models_for_role("judge")
-            alternative_found = False
+    if entity_type and creator_model and model == creator_model:
+        # Search for alternatives across multiple role tags, not just "judge".
+        # Models tagged "architect" or "continuity" also have reasoning capability
+        # suitable for quality judgment.
+        search_roles = ["judge", "architect", "continuity"]
+        alternative_found = False
+        for search_role in search_roles:
+            alternatives = service.settings.get_models_for_role(search_role)
             for alt_model in alternatives:
                 if alt_model != creator_model:
                     logger.debug(
                         "Swapping judge model from '%s' to '%s' for entity_type=%s "
-                        "to avoid self-judging bias (creator model is '%s')",
+                        "to avoid self-judging bias (creator='%s', found via '%s' tag)",
                         model,
                         alt_model,
                         entity_type,
                         creator_model,
+                        search_role,
                     )
                     model = alt_model
                     alternative_found = True
                     break
+            if alternative_found:
+                break
 
-            if not alternative_found:
-                # Throttle warning: only warn once per entity_type:model combination
-                conflict_key = f"{entity_type}:{model}"
-                if not service._model_cache.has_warned_conflict(conflict_key):
-                    service._model_cache.mark_conflict_warned(conflict_key)
-                    logger.warning(
-                        "Judge model '%s' is the same as creator model for entity_type=%s "
-                        "and no alternative judge model is available. "
-                        "A model judging its own output produces unreliable scores. "
-                        "Configure a different model for the 'judge' role in Settings > Models.",
-                        model,
-                        entity_type,
-                    )
+        if not alternative_found:
+            # Throttle warning: only warn once per entity_type:model combination
+            conflict_key = f"{entity_type}:{model}"
+            if not service._model_cache.has_warned_conflict(conflict_key):
+                service._model_cache.mark_conflict_warned(conflict_key)
+                logger.warning(
+                    "Judge model '%s' is the same as creator model for entity_type=%s "
+                    "and no alternative model is available across judge/architect/continuity "
+                    "tags. A model judging its own output produces unreliable scores. "
+                    "Install a second model or configure a different model for the 'judge' "
+                    "role in Settings > Models.",
+                    model,
+                    entity_type,
+                )
 
-    # Store the resolved model (including any swapped alternative)
-    stored = service._model_cache.store_judge_model(agent_role, model)
+    # Store the resolved model keyed by role+creator for entity-type-aware caching
+    stored = service._model_cache.store_judge_model(agent_role, model, creator_model)
     if stored == model:
         logger.info(
             "Resolved judge model '%s' for entity_type=%s (role=%s)",

@@ -230,9 +230,11 @@ class TestTemporalValidationService:
             relationships=[],
         )
 
-        # Should pass with no errors/warnings if no lifecycle data
+        # No errors, but should have a MISSING_TEMPORAL_DATA warning
         assert result.is_valid is True
         assert result.error_count == 0
+        assert result.warning_count == 1
+        assert result.warnings[0].error_type == TemporalErrorType.MISSING_TEMPORAL_DATA
 
     def test_validate_character_born_before_faction_founded(
         self, validation_service: TemporalValidationService
@@ -938,8 +940,11 @@ class TestValidateItem:
             relationships=[],
         )
 
+        # No errors, but should warn about missing creation year
         assert result.is_valid is True
         assert result.error_count == 0
+        assert result.warning_count == 1
+        assert result.warnings[0].error_type == TemporalErrorType.MISSING_TEMPORAL_DATA
 
 
 class TestValidateWorld:
@@ -1069,8 +1074,10 @@ class TestValidateWorld:
 
         assert result.is_valid is True
         assert result.error_count == 0
-        # Calendar failure is logged, not added to result (would skew quality scoring)
-        assert result.warning_count == 0
+        # Calendar failure is logged, not added to result (would skew quality scoring).
+        # But the entity has no lifecycle data, so it gets a MISSING_TEMPORAL_DATA warning.
+        assert result.warning_count == 1
+        assert result.warnings[0].error_type == TemporalErrorType.MISSING_TEMPORAL_DATA
         assert any("Calendar-based validation skipped" in m for m in caplog.messages)
 
 
@@ -1316,9 +1323,11 @@ class TestCharacterValidationEdgeCases:
             relationships=relationships,
         )
 
-        # Should pass because character has no birth year to validate
+        # No errors, but should warn about missing temporal data
         assert result.is_valid is True
         assert result.error_count == 0
+        assert result.warning_count == 1
+        assert result.warnings[0].error_type == TemporalErrorType.MISSING_TEMPORAL_DATA
 
     def test_validate_character_faction_without_founding_year(
         self, validation_service: TemporalValidationService
@@ -1356,6 +1365,93 @@ class TestCharacterValidationEdgeCases:
         # Should pass because faction has no founding year to compare
         assert result.is_valid is True
         assert result.error_count == 0
+
+
+class TestMissingTemporalDataWarning:
+    """Tests for MISSING_TEMPORAL_DATA warning on entities without lifecycle data (#420 L2)."""
+
+    def test_faction_without_lifecycle_gets_warning(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Faction with empty attributes produces a MISSING_TEMPORAL_DATA warning."""
+        faction = Entity(
+            id="faction-1",
+            type="faction",
+            name="The Lost Order",
+            description="A faction",
+            attributes={},
+        )
+
+        result = validation_service.validate_entity(
+            entity=faction, calendar=None, all_entities=[faction], relationships=[]
+        )
+
+        assert result.is_valid is True
+        assert result.warning_count == 1
+        assert result.warnings[0].error_type == TemporalErrorType.MISSING_TEMPORAL_DATA
+        assert "founding year" in result.warnings[0].message
+
+    def test_location_without_lifecycle_gets_warning(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Location with no lifecycle data produces a MISSING_TEMPORAL_DATA warning."""
+        location = Entity(
+            id="loc-1",
+            type="location",
+            name="Unknown Ruins",
+            description="A location",
+            attributes={},
+        )
+
+        result = validation_service.validate_entity(
+            entity=location, calendar=None, all_entities=[location], relationships=[]
+        )
+
+        assert result.is_valid is True
+        assert result.warning_count == 1
+        assert result.warnings[0].error_type == TemporalErrorType.MISSING_TEMPORAL_DATA
+        assert "lifecycle" in result.warnings[0].message
+
+    def test_item_without_lifecycle_gets_warning(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Item with no lifecycle data produces a MISSING_TEMPORAL_DATA warning."""
+        item = Entity(
+            id="item-1",
+            type="item",
+            name="Mystery Artifact",
+            description="An item",
+            attributes={},
+        )
+
+        result = validation_service.validate_entity(
+            entity=item, calendar=None, all_entities=[item], relationships=[]
+        )
+
+        assert result.is_valid is True
+        assert result.warning_count == 1
+        assert result.warnings[0].error_type == TemporalErrorType.MISSING_TEMPORAL_DATA
+        assert "creation year" in result.warnings[0].message
+
+    def test_location_with_lifecycle_no_destruction_no_warning(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Location with lifecycle but no destruction year should NOT get missing data warning."""
+        location = Entity(
+            id="loc-1",
+            type="location",
+            name="Standing City",
+            description="A location",
+            attributes={"lifecycle": {"founding_year": 100}},
+        )
+
+        result = validation_service.validate_entity(
+            entity=location, calendar=None, all_entities=[location], relationships=[]
+        )
+
+        # Has lifecycle data, just no destruction — that's normal
+        assert result.is_valid is True
+        assert result.warning_count == 0
 
 
 class TestSentinelYearRejection:

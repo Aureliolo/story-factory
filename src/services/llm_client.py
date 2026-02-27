@@ -55,7 +55,7 @@ def get_model_context_size(client: ollama.Client, model: str) -> int | None:
         try:
             info = client.show(model)
             # Extract context length from model info
-            model_info = info.get("model_info", {})
+            model_info = info.modelinfo or {}
             context_length = None
             for key, value in model_info.items():
                 if "context_length" in key:

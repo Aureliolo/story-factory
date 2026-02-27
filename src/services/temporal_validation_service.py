@@ -29,6 +29,7 @@ class TemporalErrorType(StrEnum):
     INVALID_DATE = "invalid_date"  # Date doesn't validate against calendar
     LIFESPAN_OVERLAP = "lifespan_overlap"  # Character lifespan inconsistent with events
     FOUNDING_ORDER = "founding_order"  # Faction founded before parent faction
+    MISSING_TEMPORAL_DATA = "missing_temporal_data"  # Entity has no temporal/lifecycle data
 
 
 class TemporalErrorSeverity(StrEnum):
@@ -218,7 +219,21 @@ class TemporalValidationService:
     ) -> None:
         """Validate temporal rules for characters."""
         if not lifecycle or not lifecycle.birth or lifecycle.birth.year is None:
-            logger.debug(f"Character '{entity.name}' has no birth year, skipping birth checks")
+            logger.warning(
+                "Character '%s' has no birth year — temporal validation skipped",
+                entity.name,
+            )
+            result.warnings.append(
+                TemporalValidationIssue(
+                    entity_id=entity.id,
+                    entity_name=entity.name,
+                    entity_type=entity.type,
+                    error_type=TemporalErrorType.MISSING_TEMPORAL_DATA,
+                    severity=TemporalErrorSeverity.WARNING,
+                    message=f"Character '{entity.name}' has no birth year data",
+                    suggestion="Add birth year to enable temporal consistency checks",
+                )
+            )
             return
 
         birth_year = lifecycle.birth.year
@@ -274,7 +289,21 @@ class TemporalValidationService:
             # destruction_year could be used for future validation rules
 
         if founding_year is None:
-            logger.debug(f"Faction '{entity.name}' has no founding year, skipping checks")
+            logger.warning(
+                "Faction '%s' has no founding year — temporal validation skipped",
+                entity.name,
+            )
+            result.warnings.append(
+                TemporalValidationIssue(
+                    entity_id=entity.id,
+                    entity_name=entity.name,
+                    entity_type=entity.type,
+                    error_type=TemporalErrorType.MISSING_TEMPORAL_DATA,
+                    severity=TemporalErrorSeverity.WARNING,
+                    message=f"Faction '{entity.name}' has no founding year data",
+                    suggestion="Add founding year to enable temporal consistency checks",
+                )
+            )
             return
 
         # Check parent faction relationships
@@ -321,6 +350,24 @@ class TemporalValidationService:
         destruction_year = None
         if lifecycle:
             destruction_year = lifecycle.destruction_year
+
+        if not lifecycle:
+            logger.warning(
+                "Location '%s' has no lifecycle data — temporal validation skipped",
+                entity.name,
+            )
+            result.warnings.append(
+                TemporalValidationIssue(
+                    entity_id=entity.id,
+                    entity_name=entity.name,
+                    entity_type=entity.type,
+                    error_type=TemporalErrorType.MISSING_TEMPORAL_DATA,
+                    severity=TemporalErrorSeverity.WARNING,
+                    message=f"Location '{entity.name}' has no lifecycle data",
+                    suggestion="Add lifecycle data to enable temporal consistency checks",
+                )
+            )
+            return
 
         if destruction_year is None:
             # No destruction year means location still exists, no post-destruction checks needed
@@ -370,15 +417,25 @@ class TemporalValidationService:
         """Validate temporal rules for items."""
         # Items have simpler temporal validation
         # Check if creator existed when item was created
-        if not lifecycle:
+        if not lifecycle or not lifecycle.birth or lifecycle.birth.year is None:
+            logger.warning(
+                "Item '%s' has no creation year — temporal validation skipped",
+                entity.name,
+            )
+            result.warnings.append(
+                TemporalValidationIssue(
+                    entity_id=entity.id,
+                    entity_name=entity.name,
+                    entity_type=entity.type,
+                    error_type=TemporalErrorType.MISSING_TEMPORAL_DATA,
+                    severity=TemporalErrorSeverity.WARNING,
+                    message=f"Item '{entity.name}' has no creation year data",
+                    suggestion="Add creation year to enable temporal consistency checks",
+                )
+            )
             return
 
-        creation_year = None
-        if lifecycle.birth:
-            creation_year = lifecycle.birth.year
-
-        if creation_year is None:
-            return
+        creation_year = lifecycle.birth.year
 
         # Check creator relationship
         for source_id, target_id, rel_type in relationships:

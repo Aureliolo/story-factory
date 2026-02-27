@@ -1244,7 +1244,7 @@ class TestJudgePrefersAlternativeModel:
         assert any("Swapping judge model" in r.message for r in caplog.records)
 
     def test_falls_back_when_no_alternative(self, settings, mock_mode_service, caplog):
-        """When no alternative judge model exists, keeps same model with warning."""
+        """When no alternative model exists across all tags, keeps same model with warning."""
         import logging
         from unittest.mock import patch
 
@@ -1254,7 +1254,7 @@ class TestJudgePrefersAlternativeModel:
 
         service = WorldQualityService(settings, mock_mode_service)
 
-        # Only model available is the same as creator
+        # Only model available is the same as creator for all searched tags
         with (
             patch.object(
                 settings,
@@ -1267,6 +1267,73 @@ class TestJudgePrefersAlternativeModel:
 
         assert model == "only-model:8b"
         assert any("same as creator model" in r.message for r in caplog.records)
+
+    def test_finds_alternative_via_architect_tag(self, settings, mock_mode_service, caplog):
+        """When no judge-tagged alternative exists, falls back to architect-tagged model."""
+        import logging
+        from unittest.mock import patch
+
+        settings.use_per_agent_models = False
+        settings.default_model = "auto"
+        mock_mode_service.get_model_for_agent.return_value = "same-model:8b"
+
+        service = WorldQualityService(settings, mock_mode_service)
+
+        # judge tag returns only the same model; architect tag has an alternative
+        def mock_get_models(role):
+            if role == "judge":
+                return ["same-model:8b"]
+            if role == "architect":
+                return ["arch-model:12b", "same-model:8b"]
+            return ["same-model:8b"]
+
+        with (
+            patch.object(settings, "get_models_for_role", side_effect=mock_get_models),
+            caplog.at_level(logging.DEBUG),
+        ):
+            model = service._get_judge_model(entity_type="character")
+
+        assert model == "arch-model:12b"
+        assert any(
+            "Swapping judge model" in r.message and "architect" in r.message for r in caplog.records
+        )
+
+    def test_different_creator_models_get_independent_judge_decisions(
+        self, settings, mock_mode_service, caplog
+    ):
+        """Entity types with different creators get independent judge model decisions."""
+        import logging
+        from unittest.mock import patch
+
+        settings.use_per_agent_models = True
+        settings.agent_models = {
+            "writer": "writer-model:8b",
+            "architect": "architect-model:12b",
+            "editor": "auto",
+            "judge": "auto",
+            "continuity": "auto",
+        }
+        # Auto-selected judge resolves to writer-model (same as character creator)
+        mock_mode_service.get_model_for_agent.return_value = "writer-model:8b"
+
+        service = WorldQualityService(settings, mock_mode_service)
+
+        def mock_get_models(role):
+            return ["writer-model:8b", "architect-model:12b"]
+
+        with (
+            patch.object(settings, "get_models_for_role", side_effect=mock_get_models),
+            caplog.at_level(logging.DEBUG),
+        ):
+            # Character uses writer creator → judge should swap away from writer-model
+            char_judge = service._get_judge_model(entity_type="character")
+            # Faction uses architect creator → judge (writer-model) differs, no swap needed
+            faction_judge = service._get_judge_model(entity_type="faction")
+
+        # Character judge should have swapped to avoid self-judging
+        assert char_judge == "architect-model:12b"
+        # Faction judge: writer-model != architect-model, so no swap
+        assert faction_judge == "writer-model:8b"
 
 
 class TestConflictWarningThrottle:
