@@ -40,7 +40,7 @@ def build_world_gen_section(page: SettingsPage) -> None:
         )
 
         # Store inputs for saving
-        page._world_gen_inputs: dict[str, tuple[ui.number, ui.number]] = {}  # type: ignore[misc]
+        page._world_gen_inputs.clear()
 
         entity_configs = [
             ("characters", "Characters", "people", 1, 20),

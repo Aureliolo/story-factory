@@ -124,7 +124,7 @@ Fetch from three GitHub API sources **in parallel** using `gh api`:
 
 ## Phase 5: Consolidate and triage
 
-**CRITICAL: Wait for all mandatory feedback sources before proceeding.** Do NOT present the triage table until every local review agent has completed. For external feedback fetches, retry failures once; if still failing or no external reviews exist, proceed with local findings and clearly mark external coverage as partial.
+**CRITICAL: Wait for all mandatory feedback sources before proceeding.** Mandatory sources are local review agents (Phase 3); external reviewer feedback (Phase 4) is optional. Do NOT present the triage table until every local review agent has completed. For external feedback fetches, retry failures once; if still failing or no external reviews exist, proceed with local findings and clearly mark external coverage as partial.
 
 Build a single consolidated table of ALL actionable feedback from both local agents and external reviewers.
 

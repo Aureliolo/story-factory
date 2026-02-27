@@ -385,7 +385,7 @@ class RefinementConfig(BaseModel):
         default=0.9, ge=0.0, le=2.0, description="Temperature for creation"
     )
     judge_temperature: float = Field(
-        default=0.1, ge=0.0, le=2.0, description="Temperature for judging"
+        default=0.3, ge=0.0, le=2.0, description="Temperature for judging"
     )
     refinement_temperature: float = Field(
         default=0.7, ge=0.0, le=2.0, description="Temperature for refinement"

@@ -1521,7 +1521,8 @@ class TestTTLCacheExpiration:
     def test_check_health_cache_expires_after_ttl(self, model_service):
         """Test that check_health re-queries Ollama after TTL expires."""
         call_count = 0
-        monotonic_values = iter([100.0, 100.5, 200.0])  # start, within TTL, past TTL
+        ttl = model_service.settings.model_health_cache_ttl
+        monotonic_values = iter([100.0, 100.0 + (ttl / 2), 100.0 + ttl + 0.1])
 
         def mock_monotonic():
             """Return predetermined time values to simulate TTL expiration."""
@@ -1549,7 +1550,8 @@ class TestTTLCacheExpiration:
 
     def test_list_installed_cache_expires_after_ttl(self, model_service):
         """Test that list_installed re-queries Ollama after TTL expires."""
-        monotonic_values = iter([100.0, 100.5, 200.0])
+        ttl = model_service.settings.model_installed_cache_ttl
+        monotonic_values = iter([100.0, 100.0 + (ttl / 2), 100.0 + ttl + 0.1])
 
         with (
             patch(

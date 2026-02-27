@@ -180,8 +180,14 @@ class ModelResolutionCache:
         with self._lock:
             existing = self._resolved_creator_models.get(role)
             if existing is not None:
+                logger.debug(
+                    "Creator model already cached for role '%s'; keeping '%s'",
+                    role,
+                    existing,
+                )
                 return existing
             self._resolved_creator_models[role] = model
+            logger.debug("Cached creator model for role '%s': %s", role, model)
             return model
 
     def get_judge_model(self, role: str) -> str | None:
@@ -214,13 +220,20 @@ class ModelResolutionCache:
             model: The resolved model ID.
 
         Returns:
-            The model ID that is now cached for this role.
+            The model ID that is now cached for this role (may differ from *model*
+            if another thread stored first).
         """
         with self._lock:
             existing = self._resolved_judge_models.get(role)
             if existing is not None:
+                logger.debug(
+                    "Judge model already cached for role '%s'; keeping '%s'",
+                    role,
+                    existing,
+                )
                 return existing
             self._resolved_judge_models[role] = model
+            logger.debug("Cached judge model for role '%s': %s", role, model)
             return model
 
     def has_warned_conflict(self, conflict_key: str) -> bool:

@@ -25,7 +25,7 @@ def save_to_settings(page: SettingsPage) -> None:
     settings = page.settings
 
     # World generation settings
-    for key, (min_input, max_input) in page._world_gen_inputs.items():  # type: ignore[attr-defined]
+    for key, (min_input, max_input) in page._world_gen_inputs.items():
         min_val = int(min_input.value)
         max_val = int(max_input.value)
         # Ensure min <= max
