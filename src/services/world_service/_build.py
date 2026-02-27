@@ -924,17 +924,26 @@ def _generate_relationships(
         svc.settings.world_gen_relationships_max,
     )
 
-    # Cap relationship count based on available entities to avoid excessive duplicates
-    max_by_entities = int(len(entity_names) * RELATIONSHIP_TO_ENTITY_RATIO_CAP)
-    if rel_count > max_by_entities:
-        logger.info(
-            "Capping relationship count from %d to %d (based on %d entities x %.1f)",
+    # Cap relationship count based on available entities to avoid excessive duplicates.
+    # Subtract implicit relationships already in DB (from character extraction, factions,
+    # etc.) so the cap applies to the total relationship count, not just new ones.
+    max_total = int(len(entity_names) * RELATIONSHIP_TO_ENTITY_RATIO_CAP)
+    implicit_count = len(existing_rels)
+    max_new = max(0, max_total - implicit_count)
+    if rel_count > max_new:
+        # Warn when implicit relationships already meet/exceed the cap.
+        log_fn = logger.warning if max_new == 0 else logger.info
+        log_fn(
+            "Capping new relationship count from %d to %d "
+            "(total cap=%d from %d entities x %.1f, implicit already=%d)",
             rel_count,
-            max_by_entities,
+            max_new,
+            max_total,
             len(entity_names),
             RELATIONSHIP_TO_ENTITY_RATIO_CAP,
+            implicit_count,
         )
-        rel_count = max_by_entities
+        rel_count = max_new
 
     relationship_results = services.world_quality.generate_relationships_with_quality(
         state,

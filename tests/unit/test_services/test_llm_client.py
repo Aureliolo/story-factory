@@ -492,15 +492,27 @@ class TestGenerateStructured:
         )
 
 
+def _make_show_response(model_info: dict | None = None) -> MagicMock:
+    """Create a mock ShowResponse with a modelinfo attribute.
+
+    ollama.ShowResponse stores model info in the ``modelinfo`` Python attribute
+    (the JSON alias is ``model_info``).  The production code accesses
+    ``info.modelinfo``, so mocks must expose the same attribute.
+    """
+    resp = MagicMock()
+    resp.modelinfo = model_info
+    return resp
+
+
 class TestGetModelContextSize:
     """Tests for get_model_context_size function."""
 
     def test_get_model_context_size_returns_context_length(self):
-        """Test that the context length is extracted from model_info."""
+        """Test that the context length is extracted from modelinfo."""
         mock_client = MagicMock()
-        mock_client.show.return_value = {
-            "model_info": {"some.context_length": 8192},
-        }
+        mock_client.show.return_value = _make_show_response(
+            {"some.context_length": 8192},
+        )
 
         result = get_model_context_size(mock_client, "test-model:8b")
 
@@ -509,9 +521,9 @@ class TestGetModelContextSize:
     def test_get_model_context_size_caches_result(self):
         """Test that the context size is cached and client.show is called only once."""
         mock_client = MagicMock()
-        mock_client.show.return_value = {
-            "model_info": {"llama.context_length": 4096},
-        }
+        mock_client.show.return_value = _make_show_response(
+            {"llama.context_length": 4096},
+        )
 
         result1 = get_model_context_size(mock_client, "cached-model:8b")
         result2 = get_model_context_size(mock_client, "cached-model:8b")
@@ -519,6 +531,15 @@ class TestGetModelContextSize:
         assert result1 == 4096
         assert result2 == 4096
         mock_client.show.assert_called_once()
+
+    def test_get_model_context_size_returns_none_when_modelinfo_is_none(self):
+        """Test that modelinfo=None (the Pydantic default) returns None via or {} fallback."""
+        mock_client = MagicMock()
+        mock_client.show.return_value = _make_show_response(None)
+
+        result = get_model_context_size(mock_client, "nil-info-model:8b")
+
+        assert result is None
 
     def test_get_model_context_size_caches_none_on_network_error(self):
         """Test that None is cached when client.show raises a network error.
@@ -554,9 +575,9 @@ class TestGetModelContextSize:
         Unexpected errors may be transient programming issues — allow retry.
         """
         mock_client = MagicMock()
-        mock_client.show.return_value = {
-            "model_info": {"llama.context_length": "not_a_number"},
-        }
+        mock_client.show.return_value = _make_show_response(
+            {"llama.context_length": "not_a_number"},
+        )
 
         result = get_model_context_size(mock_client, "bad-meta-model:8b")
         assert result is None
@@ -638,9 +659,9 @@ class TestValidateContextSize:
     def test_validate_context_size_caps_to_model_limit(self, caplog):
         """Test that configured value is capped to model limit when model limit is smaller."""
         mock_client = MagicMock()
-        mock_client.show.return_value = {
-            "model_info": {"llama.context_length": 4096},
-        }
+        mock_client.show.return_value = _make_show_response(
+            {"llama.context_length": 4096},
+        )
 
         with caplog.at_level(logging.WARNING, logger="src.services.llm_client"):
             result = validate_context_size(mock_client, "small-model:8b", 32768)
@@ -653,9 +674,9 @@ class TestValidateContextSize:
     def test_validate_context_size_returns_configured_when_larger(self):
         """Test that configured value is returned when model limit is larger."""
         mock_client = MagicMock()
-        mock_client.show.return_value = {
-            "model_info": {"llama.context_length": 131072},
-        }
+        mock_client.show.return_value = _make_show_response(
+            {"llama.context_length": 131072},
+        )
 
         result = validate_context_size(mock_client, "big-model:8b", 32768)
 

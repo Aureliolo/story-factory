@@ -29,6 +29,7 @@ class TemporalErrorType(StrEnum):
     INVALID_DATE = "invalid_date"  # Date doesn't validate against calendar
     LIFESPAN_OVERLAP = "lifespan_overlap"  # Character lifespan inconsistent with events
     FOUNDING_ORDER = "founding_order"  # Faction founded before parent faction
+    MISSING_TEMPORAL_DATA = "missing_temporal_data"  # Entity has no temporal/lifecycle data
 
 
 class TemporalErrorSeverity(StrEnum):
@@ -218,7 +219,21 @@ class TemporalValidationService:
     ) -> None:
         """Validate temporal rules for characters."""
         if not lifecycle or not lifecycle.birth or lifecycle.birth.year is None:
-            logger.debug(f"Character '{entity.name}' has no birth year, skipping birth checks")
+            logger.warning(
+                "Character '%s' has no birth year — temporal validation skipped",
+                entity.name,
+            )
+            result.warnings.append(
+                TemporalValidationIssue(
+                    entity_id=entity.id,
+                    entity_name=entity.name,
+                    entity_type=entity.type,
+                    error_type=TemporalErrorType.MISSING_TEMPORAL_DATA,
+                    severity=TemporalErrorSeverity.WARNING,
+                    message=f"Character '{entity.name}' has no birth year data",
+                    suggestion="Add birth year to enable temporal consistency checks",
+                )
+            )
             return
 
         birth_year = lifecycle.birth.year
@@ -274,7 +289,21 @@ class TemporalValidationService:
             # destruction_year could be used for future validation rules
 
         if founding_year is None:
-            logger.debug(f"Faction '{entity.name}' has no founding year, skipping checks")
+            logger.warning(
+                "Faction '%s' has no founding year — temporal validation skipped",
+                entity.name,
+            )
+            result.warnings.append(
+                TemporalValidationIssue(
+                    entity_id=entity.id,
+                    entity_name=entity.name,
+                    entity_type=entity.type,
+                    error_type=TemporalErrorType.MISSING_TEMPORAL_DATA,
+                    severity=TemporalErrorSeverity.WARNING,
+                    message=f"Faction '{entity.name}' has no founding year data",
+                    suggestion="Add founding year to enable temporal consistency checks",
+                )
+            )
             return
 
         # Check parent faction relationships
@@ -318,10 +347,30 @@ class TemporalValidationService:
         result: TemporalValidationResult,
     ) -> None:
         """Validate temporal rules for locations."""
-        destruction_year = None
-        if lifecycle:
-            destruction_year = lifecycle.destruction_year
+        # Check for missing lifecycle data first (matches pattern in other validators).
+        # Also catches empty EntityLifecycle objects (e.g. attributes={'lifecycle': {}})
+        # which are truthy but have no usable temporal fields.
+        if not lifecycle or (
+            lifecycle.destruction_year is None and lifecycle.founding_year is None
+        ):
+            logger.warning(
+                "Location '%s' has no lifecycle data — temporal validation skipped",
+                entity.name,
+            )
+            result.warnings.append(
+                TemporalValidationIssue(
+                    entity_id=entity.id,
+                    entity_name=entity.name,
+                    entity_type=entity.type,
+                    error_type=TemporalErrorType.MISSING_TEMPORAL_DATA,
+                    severity=TemporalErrorSeverity.WARNING,
+                    message=f"Location '{entity.name}' has no lifecycle data",
+                    suggestion="Add lifecycle data to enable temporal consistency checks",
+                )
+            )
+            return
 
+        destruction_year = lifecycle.destruction_year
         if destruction_year is None:
             # No destruction year means location still exists, no post-destruction checks needed
             return
@@ -370,15 +419,25 @@ class TemporalValidationService:
         """Validate temporal rules for items."""
         # Items have simpler temporal validation
         # Check if creator existed when item was created
-        if not lifecycle:
+        if not lifecycle or not lifecycle.birth or lifecycle.birth.year is None:
+            logger.warning(
+                "Item '%s' has no creation year — temporal validation skipped",
+                entity.name,
+            )
+            result.warnings.append(
+                TemporalValidationIssue(
+                    entity_id=entity.id,
+                    entity_name=entity.name,
+                    entity_type=entity.type,
+                    error_type=TemporalErrorType.MISSING_TEMPORAL_DATA,
+                    severity=TemporalErrorSeverity.WARNING,
+                    message=f"Item '{entity.name}' has no creation year data",
+                    suggestion="Add creation year to enable temporal consistency checks",
+                )
+            )
             return
 
-        creation_year = None
-        if lifecycle.birth:
-            creation_year = lifecycle.birth.year
-
-        if creation_year is None:
-            return
+        creation_year = lifecycle.birth.year
 
         # Check creator relationship
         for source_id, target_id, rel_type in relationships:
@@ -519,15 +578,23 @@ class TemporalValidationService:
         Returns:
             Score from 0 (many errors) to 10 (no issues).
         """
-        if result.total_issues == 0:
+        # Exclude MISSING_TEMPORAL_DATA warnings from the penalty calculation.
+        # Missing data is an absence of information, not a temporal inconsistency,
+        # so it should not reduce the consistency score.
+        substantive_warnings = sum(
+            1 for w in result.warnings if w.error_type != TemporalErrorType.MISSING_TEMPORAL_DATA
+        )
+
+        if result.error_count == 0 and substantive_warnings == 0:
             return 10.0
 
-        # Each error reduces score by 2, each warning by 0.5
-        penalty = (result.error_count * 2.0) + (result.warning_count * 0.5)
+        # Each error reduces score by 2, each substantive warning by 0.5
+        penalty = (result.error_count * 2.0) + (substantive_warnings * 0.5)
         score = max(0.0, 10.0 - penalty)
 
         logger.debug(
             f"Temporal consistency score: {score:.1f} "
-            f"({result.error_count} errors, {result.warning_count} warnings)"
+            f"({result.error_count} errors, {substantive_warnings} substantive warnings, "
+            f"{result.warning_count - substantive_warnings} missing-data warnings excluded)"
         )
         return score

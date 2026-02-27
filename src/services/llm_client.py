@@ -54,8 +54,11 @@ def get_model_context_size(client: ollama.Client, model: str) -> int | None:
 
         try:
             info = client.show(model)
-            # Extract context length from model info
-            model_info = info.get("model_info", {})
+            # Extract context length from model info.
+            # NOTE: ollama.ShowResponse uses Pydantic alias: the JSON key is
+            # "model_info" but the Python attribute is "modelinfo" (no underscore).
+            # Do NOT use .get("model_info") — it silently returns None.
+            model_info = info.modelinfo or {}
             context_length = None
             for key, value in model_info.items():
                 if "context_length" in key:
