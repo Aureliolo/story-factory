@@ -793,6 +793,8 @@ class TestValidateItem:
 
         assert result.is_valid is True
         assert result.error_count == 0
+        assert result.warning_count == 1
+        assert result.warnings[0].error_type == TemporalErrorType.MISSING_TEMPORAL_DATA
 
     def test_validate_item_created_before_creator_born(
         self, validation_service: TemporalValidationService
@@ -1432,6 +1434,47 @@ class TestMissingTemporalDataWarning:
         assert result.warning_count == 1
         assert result.warnings[0].error_type == TemporalErrorType.MISSING_TEMPORAL_DATA
         assert "creation year" in result.warnings[0].message
+
+    def test_character_with_birth_but_no_year_gets_warning(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Character with lifecycle.birth present but birth.year=None gets warning."""
+        character = Entity(
+            id="char-1",
+            type="character",
+            name="Unknown Age",
+            description="A character",
+            attributes={"lifecycle": {"birth": {"era_name": "First Age"}}},
+        )
+
+        result = validation_service.validate_entity(
+            entity=character, calendar=None, all_entities=[character], relationships=[]
+        )
+
+        assert result.is_valid is True
+        assert result.warning_count == 1
+        assert result.warnings[0].error_type == TemporalErrorType.MISSING_TEMPORAL_DATA
+        assert "birth year" in result.warnings[0].message
+
+    def test_location_with_empty_lifecycle_dict_gets_warning(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Location with empty lifecycle dict (truthy but no data) gets warning."""
+        location = Entity(
+            id="loc-1",
+            type="location",
+            name="Empty Place",
+            description="A location",
+            attributes={"lifecycle": {}},
+        )
+
+        result = validation_service.validate_entity(
+            entity=location, calendar=None, all_entities=[location], relationships=[]
+        )
+
+        assert result.is_valid is True
+        assert result.warning_count == 1
+        assert result.warnings[0].error_type == TemporalErrorType.MISSING_TEMPORAL_DATA
 
     def test_location_with_lifecycle_no_destruction_no_warning(
         self, validation_service: TemporalValidationService

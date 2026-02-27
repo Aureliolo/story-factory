@@ -262,7 +262,16 @@ def get_world_health_metrics(
 
             temporal_result = temporal_validation.validate_world(world_db)
             temporal_error_count = temporal_result.error_count
-            temporal_warning_count = temporal_result.warning_count
+            # Exclude MISSING_TEMPORAL_DATA from the warning count used for
+            # health score penalties — missing data is informational, not an
+            # inconsistency.  The full issues list still includes them.
+            from src.services.temporal_validation_service import TemporalErrorType
+
+            temporal_warning_count = sum(
+                1
+                for w in temporal_result.warnings
+                if w.error_type != TemporalErrorType.MISSING_TEMPORAL_DATA
+            )
             temporal_issues = [
                 {
                     "entity_id": issue.entity_id,

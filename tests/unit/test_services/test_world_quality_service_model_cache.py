@@ -153,7 +153,9 @@ class TestJudgeModelCaching:
         self, mock_vram, mock_models, service, mock_mode_service, settings
     ):
         """Second call for same role uses stored value instead of re-resolving."""
-        # Set up judge model different from creator to avoid swap logic
+        # Both judge and creator resolve to the same model (judge-model:8b).
+        # The anti-self-judging swap fires but finds no alternative (only one
+        # model available), so the resolved judge stays as judge-model:8b.
         mock_mode_service.get_model_for_agent.return_value = "judge-model:8b"
         settings.get_models_for_role = MagicMock(return_value=["judge-model:8b"])
 

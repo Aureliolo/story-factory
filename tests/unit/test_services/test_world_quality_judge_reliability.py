@@ -1279,8 +1279,8 @@ class TestJudgePrefersAlternativeModel:
 
         service = WorldQualityService(settings, mock_mode_service)
 
-        # judge tag returns only the same model; architect tag has an alternative
         def mock_get_models(role):
+            """Return judge=same only, architect=alternative+same."""
             if role == "judge":
                 return ["same-model:8b"]
             if role == "architect":
@@ -1296,6 +1296,63 @@ class TestJudgePrefersAlternativeModel:
         assert model == "arch-model:12b"
         assert any(
             "Swapping judge model" in r.message and "architect" in r.message for r in caplog.records
+        )
+
+    def test_skips_empty_role_tags_during_search(self, settings, mock_mode_service, caplog):
+        """Empty model lists for some tags are skipped with a debug log."""
+        import logging
+        from unittest.mock import patch
+
+        settings.use_per_agent_models = False
+        settings.default_model = "auto"
+        mock_mode_service.get_model_for_agent.return_value = "same-model:8b"
+
+        service = WorldQualityService(settings, mock_mode_service)
+
+        def mock_get_models(role):
+            """Return empty lists for judge/architect, alternative for continuity."""
+            if role == "continuity":
+                return ["alt-model:14b", "same-model:8b"]
+            return []
+
+        with (
+            patch.object(settings, "get_models_for_role", side_effect=mock_get_models),
+            caplog.at_level(logging.DEBUG),
+        ):
+            model = service._get_judge_model(entity_type="character")
+
+        assert model == "alt-model:14b"
+        assert any(
+            "No models found for tag" in r.message and "judge" in r.message for r in caplog.records
+        )
+
+    def test_finds_alternative_via_continuity_tag(self, settings, mock_mode_service, caplog):
+        """When judge and architect tags have no alternative, falls back to continuity tag."""
+        import logging
+        from unittest.mock import patch
+
+        settings.use_per_agent_models = False
+        settings.default_model = "auto"
+        mock_mode_service.get_model_for_agent.return_value = "same-model:8b"
+
+        service = WorldQualityService(settings, mock_mode_service)
+
+        def mock_get_models(role):
+            """Return same-model for judge/architect, alternative for continuity."""
+            if role == "continuity":
+                return ["continuity-model:14b", "same-model:8b"]
+            return ["same-model:8b"]
+
+        with (
+            patch.object(settings, "get_models_for_role", side_effect=mock_get_models),
+            caplog.at_level(logging.DEBUG),
+        ):
+            model = service._get_judge_model(entity_type="character")
+
+        assert model == "continuity-model:14b"
+        assert any(
+            "Swapping judge model" in r.message and "continuity" in r.message
+            for r in caplog.records
         )
 
     def test_different_creator_models_get_independent_judge_decisions(
@@ -1319,6 +1376,7 @@ class TestJudgePrefersAlternativeModel:
         service = WorldQualityService(settings, mock_mode_service)
 
         def mock_get_models(role):
+            """Return both writer and architect models for all roles."""
             return ["writer-model:8b", "architect-model:12b"]
 
         with (

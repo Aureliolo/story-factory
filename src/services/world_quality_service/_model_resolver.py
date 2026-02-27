@@ -108,7 +108,7 @@ def get_judge_model(service: WorldQualityService, entity_type: str | None = None
     """
     Determine the model ID to use for judging quality for a given entity type or the default judge role.
 
-    If an entity_type is provided it is mapped to a judge agent role via ENTITY_JUDGE_ROLES and validated. The selected model honors Settings precedence (explicit per-agent or default model) and falls back to automatic mode selection when appropriate. To avoid self-judging bias, when an entity_type is provided the function prefers a judge model different from the creator model for the same entity; if no alternative judge model is available it emits a single throttled warning for that entity_type:model combination. Resolved models are cached per judge role to avoid repeated resolution.
+    If an entity_type is provided it is mapped to a judge agent role via ENTITY_JUDGE_ROLES and validated. The selected model honors Settings precedence (explicit per-agent or default model) and falls back to automatic mode selection when appropriate. To avoid self-judging bias, when an entity_type is provided the function prefers a judge model different from the creator model for the same entity, searching across judge/architect/continuity role tags; if no alternative is available it emits a single throttled warning for that entity_type:model combination. Resolved models are cached per role+creator_model key so entity types with different creators get independent anti-self-judging decisions.
 
     Parameters:
         entity_type (str | None): Optional entity type to map to a judge agent role; if omitted the generic "judge" role is used.
@@ -146,9 +146,18 @@ def get_judge_model(service: WorldQualityService, entity_type: str | None = None
         alternative_found = False
         for search_role in search_roles:
             alternatives = service.settings.get_models_for_role(search_role)
+            if not alternatives:
+                logger.debug(
+                    "No models found for tag '%s' while searching for judge alternative",
+                    search_role,
+                )
+                continue
             for alt_model in alternatives:
                 if alt_model != creator_model:
-                    logger.debug(
+                    # Use INFO for non-judge tags so users see when a model is
+                    # repurposed from another role as judge.
+                    log_fn = logger.debug if search_role == "judge" else logger.info
+                    log_fn(
                         "Swapping judge model from '%s' to '%s' for entity_type=%s "
                         "to avoid self-judging bias (creator='%s', found via '%s' tag)",
                         model,

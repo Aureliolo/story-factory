@@ -307,6 +307,94 @@ class TestDynamicScaling:
         finally:
             world_db.close()
 
+    def test_dynamic_scaling_subtracts_implicit_relationships(self, story_state, tmp_path):
+        """Implicit relationships already in DB are subtracted from the cap (#420 I4)."""
+        from src.services.world_service import WorldService
+
+        settings = MagicMock()
+        settings.world_gen_relationships_min = 10
+        settings.world_gen_relationships_max = 25
+        settings.fuzzy_match_threshold = 0.8
+        svc = WorldService(settings)
+
+        # Set up world_db with 5 entities and 3 implicit relationships
+        world_db = WorldDatabase(tmp_path / "test_implicit.db")
+        try:
+            ids = []
+            for i in range(5):
+                ids.append(world_db.add_entity("character", f"Char{i}", f"Character {i}"))
+            # Add 3 implicit relationships (e.g. from character extraction)
+            world_db.add_relationship(ids[0], ids[1], "knows")
+            world_db.add_relationship(ids[1], ids[2], "allies_with")
+            world_db.add_relationship(ids[2], ids[3], "mentors")
+
+            services = MagicMock()
+            captured_count = {}
+
+            def capture_generate(state, names, rels, count, cancel_check=None, **kwargs):
+                """Capture the count argument for later assertion."""
+                captured_count["value"] = count
+                return []
+
+            services.world_quality.generate_relationships_with_quality.side_effect = (
+                capture_generate
+            )
+
+            from src.services.world_service._build import _generate_relationships
+
+            with patch("src.services.world_service._build.random.randint", return_value=25):
+                _generate_relationships(svc, story_state, world_db, services)
+
+            # 5 entities x 1.5 = 7 max total, minus 3 implicit = 4 max new
+            assert captured_count["value"] == 4
+        finally:
+            world_db.close()
+
+    def test_dynamic_scaling_implicit_exceeds_cap_produces_zero(self, story_state, tmp_path):
+        """When implicit relationships exceed the cap, max_new is clamped to 0 (#420 I4)."""
+        from src.services.world_service import WorldService
+
+        settings = MagicMock()
+        settings.world_gen_relationships_min = 10
+        settings.world_gen_relationships_max = 25
+        settings.fuzzy_match_threshold = 0.8
+        svc = WorldService(settings)
+
+        # 3 entities → cap = 4 total. Add 5 implicit relationships to exceed cap.
+        world_db = WorldDatabase(tmp_path / "test_zero.db")
+        try:
+            ids = []
+            for i in range(3):
+                ids.append(world_db.add_entity("character", f"Char{i}", f"Character {i}"))
+            # Add 5 implicit relationships (exceeds 3 * 1.5 = 4 cap)
+            world_db.add_relationship(ids[0], ids[1], "knows")
+            world_db.add_relationship(ids[1], ids[0], "knows")
+            world_db.add_relationship(ids[0], ids[2], "mentors")
+            world_db.add_relationship(ids[2], ids[0], "student_of")
+            world_db.add_relationship(ids[1], ids[2], "rivals_with")
+
+            services = MagicMock()
+            captured_count = {}
+
+            def capture_generate(state, names, rels, count, cancel_check=None, **kwargs):
+                """Capture the count argument for later assertion."""
+                captured_count["value"] = count
+                return []
+
+            services.world_quality.generate_relationships_with_quality.side_effect = (
+                capture_generate
+            )
+
+            from src.services.world_service._build import _generate_relationships
+
+            with patch("src.services.world_service._build.random.randint", return_value=25):
+                _generate_relationships(svc, story_state, world_db, services)
+
+            # 3 entities x 1.5 = 4, minus 5 implicit → max(0, -1) = 0
+            assert captured_count["value"] == 0
+        finally:
+            world_db.close()
+
 
 # =========================================================================
 # Group 2: Controlled Vocabulary

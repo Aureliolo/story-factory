@@ -43,7 +43,7 @@ class ModelResolutionCache:
         self._settings = settings
         self._mode_service = mode_service
         self._resolved_creator_models: dict[str, str] = {}  # role -> model_id
-        self._resolved_judge_models: dict[str, str] = {}  # role -> model_id
+        self._resolved_judge_models: dict[str, str] = {}  # role:creator_model -> model_id
         self._resolution_context: tuple | None = None
         self._warned_conflicts: set[str] = set()
         self._lock = threading.RLock()
@@ -190,6 +190,14 @@ class ModelResolutionCache:
             logger.debug("Cached creator model for role '%s': %s", role, model)
             return model
 
+    def _judge_cache_key(self, role: str, creator_model: str | None) -> str:
+        """Build the cache key for a judge model entry.
+
+        Incorporates the creator model so entity types with different creators
+        get independent anti-self-judging decisions.
+        """
+        return f"{role}:{creator_model}" if creator_model else role
+
     def get_judge_model(self, role: str, creator_model: str | None = None) -> str | None:
         """Get cached judge model for a role+creator combination, if available.
 
@@ -205,8 +213,7 @@ class ModelResolutionCache:
         """
         with self._lock:
             self._check_context()
-            cache_key = f"{role}:{creator_model}" if creator_model else role
-            return self._resolved_judge_models.get(cache_key)
+            return self._resolved_judge_models.get(self._judge_cache_key(role, creator_model))
 
     def store_judge_model(self, role: str, model: str, creator_model: str | None = None) -> str:
         """Store a resolved judge model for a role+creator combination.
@@ -230,7 +237,7 @@ class ModelResolutionCache:
             if another thread stored first).
         """
         with self._lock:
-            cache_key = f"{role}:{creator_model}" if creator_model else role
+            cache_key = self._judge_cache_key(role, creator_model)
             existing = self._resolved_judge_models.get(cache_key)
             if existing is not None:
                 logger.debug(

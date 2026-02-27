@@ -204,3 +204,61 @@ class TestCacheOperations:
             second = cache.store_judge_model("judge", "second-judge:12b")
             assert first == "first-judge:12b"
             assert second == "first-judge:12b"  # returns existing, not the new value
+
+    def test_judge_model_with_creator_model_key(self, cache):
+        """Judge model keyed by role+creator_model for per-entity-type caching."""
+        with (
+            patch(
+                "src.settings.get_available_vram",
+                return_value=24000,
+            ),
+            patch(
+                "src.settings.get_installed_models_with_sizes",
+                return_value={"model-a": 8000},
+            ),
+        ):
+            cache.get_judge_model("judge")  # establish context
+            cache.store_judge_model("judge", "judge-a:8b", creator_model="creator-x:8b")
+            result = cache.get_judge_model("judge", creator_model="creator-x:8b")
+            assert result == "judge-a:8b"
+
+    def test_different_creator_models_get_independent_entries(self, cache):
+        """Different creator_model values produce independent cache entries."""
+        with (
+            patch(
+                "src.settings.get_available_vram",
+                return_value=24000,
+            ),
+            patch(
+                "src.settings.get_installed_models_with_sizes",
+                return_value={"model-a": 8000},
+            ),
+        ):
+            cache.get_judge_model("judge")  # establish context
+            cache.store_judge_model("judge", "judge-a:8b", creator_model="creator-x:8b")
+            cache.store_judge_model("judge", "judge-b:12b", creator_model="creator-y:12b")
+
+            assert cache.get_judge_model("judge", "creator-x:8b") == "judge-a:8b"
+            assert cache.get_judge_model("judge", "creator-y:12b") == "judge-b:12b"
+            # Bare role key (no creator) is independent too
+            assert cache.get_judge_model("judge") is None
+
+    def test_store_judge_model_race_with_creator_model(self, cache):
+        """Double-check with creator_model: second store returns first-stored value."""
+        with (
+            patch(
+                "src.settings.get_available_vram",
+                return_value=24000,
+            ),
+            patch(
+                "src.settings.get_installed_models_with_sizes",
+                return_value={"model-a": 8000},
+            ),
+        ):
+            cache.get_judge_model("judge")  # establish context
+            first = cache.store_judge_model("judge", "first-judge:12b", creator_model="creator:8b")
+            second = cache.store_judge_model(
+                "judge", "second-judge:12b", creator_model="creator:8b"
+            )
+            assert first == "first-judge:12b"
+            assert second == "first-judge:12b"

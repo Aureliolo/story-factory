@@ -532,6 +532,15 @@ class TestGetModelContextSize:
         assert result2 == 4096
         mock_client.show.assert_called_once()
 
+    def test_get_model_context_size_returns_none_when_modelinfo_is_none(self):
+        """Test that modelinfo=None (the Pydantic default) returns None via or {} fallback."""
+        mock_client = MagicMock()
+        mock_client.show.return_value = _make_show_response(None)
+
+        result = get_model_context_size(mock_client, "nil-info-model:8b")
+
+        assert result is None
+
     def test_get_model_context_size_caches_none_on_network_error(self):
         """Test that None is cached when client.show raises a network error.
 

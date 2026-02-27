@@ -931,7 +931,9 @@ def _generate_relationships(
     implicit_count = len(existing_rels)
     max_new = max(0, max_total - implicit_count)
     if rel_count > max_new:
-        logger.info(
+        # Warn when implicit relationships already meet/exceed the cap.
+        log_fn = logger.warning if max_new == 0 else logger.info
+        log_fn(
             "Capping new relationship count from %d to %d "
             "(total cap=%d from %d entities x %.1f, implicit already=%d)",
             rel_count,

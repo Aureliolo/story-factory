@@ -347,11 +347,12 @@ class TemporalValidationService:
         result: TemporalValidationResult,
     ) -> None:
         """Validate temporal rules for locations."""
-        destruction_year = None
-        if lifecycle:
-            destruction_year = lifecycle.destruction_year
-
-        if not lifecycle:
+        # Check for missing lifecycle data first (matches pattern in other validators).
+        # Also catches empty EntityLifecycle objects (e.g. attributes={'lifecycle': {}})
+        # which are truthy but have no usable temporal fields.
+        if not lifecycle or (
+            lifecycle.destruction_year is None and lifecycle.founding_year is None
+        ):
             logger.warning(
                 "Location '%s' has no lifecycle data — temporal validation skipped",
                 entity.name,
@@ -369,6 +370,7 @@ class TemporalValidationService:
             )
             return
 
+        destruction_year = lifecycle.destruction_year
         if destruction_year is None:
             # No destruction year means location still exists, no post-destruction checks needed
             return
@@ -576,15 +578,23 @@ class TemporalValidationService:
         Returns:
             Score from 0 (many errors) to 10 (no issues).
         """
-        if result.total_issues == 0:
+        # Exclude MISSING_TEMPORAL_DATA warnings from the penalty calculation.
+        # Missing data is an absence of information, not a temporal inconsistency,
+        # so it should not reduce the consistency score.
+        substantive_warnings = sum(
+            1 for w in result.warnings if w.error_type != TemporalErrorType.MISSING_TEMPORAL_DATA
+        )
+
+        if result.error_count == 0 and substantive_warnings == 0:
             return 10.0
 
-        # Each error reduces score by 2, each warning by 0.5
-        penalty = (result.error_count * 2.0) + (result.warning_count * 0.5)
+        # Each error reduces score by 2, each substantive warning by 0.5
+        penalty = (result.error_count * 2.0) + (substantive_warnings * 0.5)
         score = max(0.0, 10.0 - penalty)
 
         logger.debug(
             f"Temporal consistency score: {score:.1f} "
-            f"({result.error_count} errors, {result.warning_count} warnings)"
+            f"({result.error_count} errors, {substantive_warnings} substantive warnings, "
+            f"{result.warning_count - substantive_warnings} missing-data warnings excluded)"
         )
         return score
