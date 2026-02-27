@@ -779,6 +779,37 @@ class TestCollectLateResults:
         assert len(results) == 0
         assert len(errors) == 1
 
+    def test_memory_error_reraised_from_late_future(self):
+        """MemoryError from a late future is re-raised, not swallowed."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        def oom():
+            """Raise MemoryError."""
+            raise MemoryError("out of memory")
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(oom)
+            try:
+                future.result()
+            except MemoryError:
+                pass
+
+            pending: dict = {future: (0, 0.0)}
+            results: list = []
+            completed_times: list[float] = []
+            errors: list[str] = []
+
+            with pytest.raises(MemoryError, match="out of memory"):
+                _collect_late_results(
+                    pending,
+                    results,
+                    completed_times,
+                    errors,
+                    "test",
+                    lambda e: e["name"],
+                    None,
+                )
+
     def test_on_success_called_for_late_results(self):
         """on_success hook is invoked for each successful late result."""
         from concurrent.futures import ThreadPoolExecutor
