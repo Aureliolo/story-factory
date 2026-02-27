@@ -671,8 +671,8 @@ class TestGenerateBatchParallel:
                 max_workers=2,
             )
 
-        # Should still produce results despite the duplicate
-        assert len(results) >= 1
+        # Should produce all requested results (replacement tasks submitted for duplicates)
+        assert len(results) == 3
         # DuplicateNameError should be logged as a warning, not an error
         duplicate_msgs = [m for m in caplog.messages if "Duplicate" in m]
         assert len(duplicate_msgs) >= 1

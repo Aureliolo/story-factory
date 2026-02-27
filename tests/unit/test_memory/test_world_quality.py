@@ -1301,15 +1301,15 @@ class TestEventQualityScores:
     """Tests for EventQualityScores model."""
 
     def test_average_calculation(self):
-        """Test average score calculation for event quality (5 dimensions / 5.0)."""
+        """Test average excludes temporal_plausibility (4 contributing dimensions)."""
         scores = EventQualityScores(
             significance=8.0,
-            temporal_plausibility=7.0,
+            temporal_plausibility=2.0,  # Excluded from average
             causal_coherence=6.0,
             narrative_potential=9.0,
             entity_integration=5.0,
         )
-        # (8 + 7 + 6 + 9 + 5) / 5 = 35 / 5 = 7.0
+        # temporal_plausibility excluded: (8 + 6 + 9 + 5) / 4 = 28 / 4 = 7.0
         assert scores.average == 7.0
 
     def test_average_uniform_scores(self):

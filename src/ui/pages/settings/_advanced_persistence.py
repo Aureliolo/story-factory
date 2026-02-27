@@ -199,6 +199,7 @@ def refresh_from_settings(page: SettingsPage) -> None:
         ),
         ("_score_plateau_tolerance_input", "world_quality_score_plateau_tolerance"),
         ("_dimension_minimum_input", "world_quality_dimension_minimum"),
+        ("_hail_mary_min_attempts_input", "world_quality_hail_mary_min_attempts"),
         # Judge consistency settings
         ("_judge_consistency_switch", "judge_consistency_enabled"),
         ("_judge_multi_call_switch", "judge_multi_call_enabled"),

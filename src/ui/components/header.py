@@ -210,16 +210,14 @@ class Header:
                 self._status_label.text = f"{vram}GB"
                 self._status_label.classes(replace="text-xs text-green-500")
                 if self._status_icon:
-                    self._status_icon._props["name"] = "check_circle"
+                    self._status_icon.set_name("check_circle")
                     self._status_icon.classes(replace="text-green-500")
-                    self._status_icon.update()
             else:
                 self._status_label.text = "Offline"
                 self._status_label.classes(replace="text-xs text-red-500")
                 if self._status_icon:
-                    self._status_icon._props["name"] = "error"
+                    self._status_icon.set_name("error")
                     self._status_icon.classes(replace="text-red-500")
-                    self._status_icon.update()
 
             # Update cold-start indicator
             if self._cold_start_icon:

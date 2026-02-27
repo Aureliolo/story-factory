@@ -223,7 +223,7 @@ class TestProjectListCache:
     """Tests for project list caching in AppState."""
 
     def test_cache_returns_cached_value_within_ttl(self):
-        """Test that cached value is returned within the 2-second TTL."""
+        """Test that cached value is returned within the cache TTL window."""
         state = AppState()
         call_count = 0
 

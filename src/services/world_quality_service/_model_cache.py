@@ -156,19 +156,28 @@ class ModelResolutionCache:
             self._check_context()
             return self._resolved_creator_models.get(role)
 
-    def store_creator_model(self, role: str, model: str) -> None:
-        """Store a resolved creator model for a role.
+    def store_creator_model(self, role: str, model: str) -> str:
+        """Store a resolved creator model for a role, returning the canonical value.
+
+        Uses a double-check pattern: if another thread already stored a model
+        for this role while the caller was resolving, returns the existing value
+        instead of overwriting it.  This prevents duplicate resolution log entries
+        when parallel workers resolve the same role concurrently.
 
         Args:
             role: The agent role.
             model: The resolved model ID.
 
-        Note: _check_context is not called here intentionally. If context changed
-        between get (cache miss) and store, the entry may be stale, but the next
-        get call will detect the context change and clear the cache.
+        Returns:
+            The model ID that is now cached for this role (may differ from *model*
+            if another thread stored first).
         """
         with self._lock:
+            existing = self._resolved_creator_models.get(role)
+            if existing is not None:
+                return existing
             self._resolved_creator_models[role] = model
+            return model
 
     def get_judge_model(self, role: str) -> str | None:
         """Get cached judge model for a role, if available.
@@ -183,19 +192,26 @@ class ModelResolutionCache:
             self._check_context()
             return self._resolved_judge_models.get(role)
 
-    def store_judge_model(self, role: str, model: str) -> None:
-        """Store a resolved judge model for a role.
+    def store_judge_model(self, role: str, model: str) -> str:
+        """Store a resolved judge model for a role, returning the canonical value.
+
+        Uses a double-check pattern: if another thread already stored a model
+        for this role while the caller was resolving, returns the existing value
+        instead of overwriting it.
 
         Args:
             role: The agent role.
             model: The resolved model ID.
 
-        Note: _check_context is not called here intentionally. If context changed
-        between get (cache miss) and store, the entry may be stale, but the next
-        get call will detect the context change and clear the cache.
+        Returns:
+            The model ID that is now cached for this role.
         """
         with self._lock:
+            existing = self._resolved_judge_models.get(role)
+            if existing is not None:
+                return existing
             self._resolved_judge_models[role] = model
+            return model
 
     def has_warned_conflict(self, conflict_key: str) -> bool:
         """Check if a conflict warning has already been issued.

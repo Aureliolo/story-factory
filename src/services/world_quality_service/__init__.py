@@ -340,11 +340,8 @@ class WorldQualityService(EntityDelegatesMixin):
             a sentinel block instructing judges to reflect temporal uncertainty.
             Never returns an empty string.
         """
-        # Fast path: read the cached string without locking.
-        # Safe under CPython's GIL (str assignment is atomic). Under free-threaded
-        # Python (PEP 703 / no-GIL), the worst case is a stale read of a previously
-        # valid string — still safe because Python strings are immutable references.
-        cached = self._cached_calendar_string
+        with self._calendar_context_lock:
+            cached = self._cached_calendar_string
         if cached is not None:
             logger.debug(
                 "get_calendar_context: returning cached calendar context (%d chars)",

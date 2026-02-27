@@ -674,7 +674,7 @@ class TestEmbedRelationship:
     def test_embed_relationship_empty_description_when_header_exceeds_budget(
         self, service, mock_db, caplog
     ):
-        """Description is cleared when overhead exceeds budget but header fits max_chars."""
+        """Description is cleared when overhead equals budget but fits max_chars."""
         rel = Relationship(
             id="rel-overflow",
             source_id="ent-001",
@@ -684,18 +684,15 @@ class TestEmbedRelationship:
         )
         mock_client = MagicMock()
         mock_embed_text = MagicMock(return_value=FAKE_EMBEDDING)
-        # header = "A allied_with B: " (18 chars)
-        # prefix = "x" * 30 (30 chars) → overhead = 30 + 18 = 48
+        # header = "A allied_with B: " (17 chars)
+        # prefix = "x" * 43 → overhead = 43 + 17 = 60
         # context_limit = 40, margin = 10 → max_chars = (40 - 10) * 2 = 60
-        # available_for_desc = 60 - 48 = 12 → too small for "Some description" (16 chars)
-        # but header (18) <= max_chars (60), so embed with truncated/empty desc
-        # Actually we need overhead > max_chars for the "exceeds budget" branch.
-        # prefix = "x" * 50 → overhead = 50 + 18 = 68 > 60 → budget exceeded
-        # header (18) <= max_chars (60) → embed with empty description
+        # available_for_desc = 60 - 60 = 0 → budget exhausted
+        # overhead (60) == max_chars (60), NOT > → embed with empty description
         with (
             patch.object(service, "_get_client", return_value=mock_client),
             patch("src.services.embedding_service.get_model_context_size", return_value=40),
-            patch("src.services.embedding_service.get_embedding_prefix", return_value="x" * 50),
+            patch("src.services.embedding_service.get_embedding_prefix", return_value="x" * 43),
             patch.object(service, "embed_text", mock_embed_text),
             caplog.at_level(logging.WARNING),
         ):
@@ -706,10 +703,42 @@ class TestEmbedRelationship:
         assert embedded_text.endswith(": ")
         assert any("exceeds embedding budget" in r.message for r in caplog.records)
 
-    def test_embed_relationship_skips_when_header_exceeds_max_chars(self, service, mock_db, caplog):
-        """Embedding is skipped entirely when the header itself exceeds max_chars."""
+    def test_embed_relationship_skips_when_overhead_exceeds_max_chars(
+        self, service, mock_db, caplog
+    ):
+        """Embedding is skipped when prefix + header exceeds max_chars."""
         rel = Relationship(
             id="rel-skip",
+            source_id="ent-001",
+            target_id="ent-002",
+            relation_type="allied_with",
+            description="Some description",
+        )
+        mock_client = MagicMock()
+        mock_embed_text = MagicMock(return_value=FAKE_EMBEDDING)
+        # header = "A allied_with B: " (17 chars)
+        # prefix = "x" * 50 → overhead = 50 + 17 = 67
+        # context_limit = 40, margin = 10 → max_chars = (40 - 10) * 2 = 60
+        # overhead (67) > max_chars (60) → skip embedding
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch("src.services.embedding_service.get_model_context_size", return_value=40),
+            patch("src.services.embedding_service.get_embedding_prefix", return_value="x" * 50),
+            patch.object(service, "embed_text", mock_embed_text),
+            caplog.at_level(logging.WARNING),
+        ):
+            result = service.embed_relationship(mock_db, rel, "A", "B")
+
+        assert result is False
+        mock_embed_text.assert_not_called()
+        assert any("skipping embedding to avoid truncating" in r.message for r in caplog.records)
+
+    def test_embed_relationship_skips_when_header_alone_exceeds_max_chars(
+        self, service, mock_db, caplog
+    ):
+        """Embedding is skipped when header alone exceeds max_chars (even without prefix)."""
+        rel = Relationship(
+            id="rel-skip-header",
             source_id="ent-001",
             target_id="ent-002",
             relation_type="allied_with",

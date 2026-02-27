@@ -2069,6 +2069,13 @@ class TestMissingValidationCoverage:
         ):
             settings.validate()
 
+    def test_validate_raises_on_bool_hail_mary_min_attempts(self):
+        """Should raise ValueError for boolean hail_mary_min_attempts (bool is subclass of int)."""
+        settings = Settings()
+        settings.world_quality_hail_mary_min_attempts = True
+        with pytest.raises(ValueError, match="must be an integer"):
+            settings.validate()
+
     # --- Per-entity quality thresholds ---
 
     def test_validate_per_entity_thresholds_default(self):

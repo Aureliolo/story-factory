@@ -35,7 +35,40 @@ gh repo view --json nameWithOwner -q .nameWithOwner
 
 If no PR is found, ask the user for a PR number using AskUserQuestion.
 
-## Phase 2: Run local review agents
+## Phase 2: Issue linkage and context
+
+After identifying the PR, fetch its body and check for issue linkage:
+
+```bash
+gh pr view NUMBER --json body,title --jq '{title: .title, body: .body}'
+```
+
+**Check for closing keywords.** Look for GitHub closing keywords in the PR body: `closes #N`, `fixes #N`, `resolves #N` (case-insensitive, with or without the `#`). Also accept full URL forms like `closes https://github.com/OWNER/REPO/issues/N`.
+
+**Determine if closing is expected.** Some PRs are intentionally non-closing — they represent partial progress toward an issue (e.g., investigation scripts, step 1 of N, research spikes, diagnostic tools). Scan the PR title and body for signals like:
+- "step 1", "step N of M", "part 1", "phase 1"
+- "investigation", "investigate", "diagnostic", "research", "spike", "evaluate"
+- "scripts/", "scripts for", "adds script"
+- Explicit statements like "does not close", "partial", "follow-up needed"
+
+**Decision logic:**
+
+| Closing keyword found? | Non-closing signals? | Action |
+|---|---|---|
+| Yes | No | Extract issue number, proceed to fetch context |
+| Yes | Yes | Warn the user: "PR has `closes #N` but appears to be partial work — confirm the issue should be closed when this merges" |
+| No | Yes | OK — no warning needed, this is expected for investigation/partial PRs |
+| No | No | Warn the user: "PR does not reference a GitHub issue. Consider adding `closes #N` to the PR body if this resolves an issue." |
+
+**Fetch issue context.** If an issue number was found (regardless of warnings), fetch the issue for review context:
+
+```bash
+gh issue view N --json title,body,labels,comments --jq '{title: .title, body: .body, labels: [.labels[].name], comments: [.comments[] | {author: .author.login, body: .body}]}'
+```
+
+Store the issue title, body, labels, and comments — this context will be passed to all review agents in Phase 3 so they can validate that the PR actually addresses what the issue requested.
+
+## Phase 3: Run local review agents
 
 Identify changed files and their types:
 
@@ -57,11 +90,11 @@ Based on changed files, launch applicable review agents **in parallel** using th
 | **comment-analyzer** | Comments or docstrings changed | `pr-review-toolkit:comment-analyzer` |
 | **type-design-analyzer** | Type annotations or classes added/modified | `pr-review-toolkit:type-design-analyzer` |
 
-Each agent should receive the list of changed files and focus on reviewing them.
+Each agent should receive the list of changed files and focus on reviewing them. **If issue context was collected in Phase 2, include the issue title, body, and key comments in each agent's prompt** so they can verify the PR addresses the issue's requirements.
 
 Collect all findings with their severity/confidence scores.
 
-## Phase 3: Fetch external reviewer feedback
+## Phase 4: Fetch external reviewer feedback
 
 Fetch from three GitHub API sources **in parallel** using `gh api`:
 
@@ -89,7 +122,7 @@ Fetch from three GitHub API sources **in parallel** using `gh api`:
 
 **Important:** When review bodies are large (e.g. CodeRabbit's review with embedded outside-diff comments), fetch the **full body** without truncation. Use `head -c` with a generous limit (e.g. 15000 chars) rather than `--jq '.body[0:500]'` truncation. Outside-diff comments are typically at the top of the review body.
 
-## Phase 4: Consolidate and triage
+## Phase 5: Consolidate and triage
 
 **CRITICAL: Wait for ALL feedback sources before proceeding.** Do NOT present the triage table until every local review agent AND every external feedback fetch has completed. Since agents are launched as regular (non-background) parallel Task calls, their results arrive together in the same response — no need for `TaskOutput`. If any agent or fetch fails, retry it before proceeding. All agents must be confirmed complete before moving to triage.
 
@@ -109,7 +142,7 @@ For each item, determine:
 
 **Conflict detection:** If two sources contradict each other, flag it and include both positions.
 
-## Phase 5: Present for approval
+## Phase 6: Present for approval
 
 Show the user the complete table, organized by severity (Critical first, Minor last). Include:
 
@@ -125,7 +158,7 @@ Then ask the user using AskUserQuestion with options like:
 
 If the user wants to skip items, ask which ones by number.
 
-## Phase 6: Implement fixes
+## Phase 7: Implement fixes
 
 For each approved item, grouped by file (to minimize context switches):
 
@@ -138,7 +171,7 @@ After all fixes:
 2. If any fix changes test expectations (e.g. behavior change), update the affected tests
 3. Only run tests for genuinely new code paths (1-2 targeted test runs max) — rely on pre-push hooks and CI for full coverage
 
-## Phase 7: Commit and push
+## Phase 8: Commit and push
 
 After all fixes pass linting and tests:
 
@@ -147,7 +180,7 @@ After all fixes pass linting and tests:
 3. Push to the current branch
 4. If commit or push fails due to hooks, fix the actual issue and create a NEW commit — NEVER use `--no-verify` or `--amend`
 
-## Phase 8: Verify external reviewer status
+## Phase 9: Verify external reviewer status
 
 After pushing, check if external reviewers (especially CodeRabbit) have posted updated feedback on the new commits:
 
@@ -165,7 +198,7 @@ gh api repos/OWNER/REPO/issues/NUMBER/comments --paginate
 
 The goal is to ensure all external reviewer feedback is resolved before considering the PR review complete — not just the feedback from the first round.
 
-## Phase 9: Summary
+## Phase 10: Summary
 
 Report what was done:
 

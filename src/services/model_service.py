@@ -166,8 +166,10 @@ class ModelService:
 
             # Detect cold-start models: configured models not currently loaded in VRAM
             cold_start: list[str] = []
-            try:
-                running = self.get_running_models()
+            running = self.get_running_models()
+            if running is None:
+                logger.debug("Skipping cold-start detection: running model state unavailable")
+            else:
                 running_names = {str(m["name"]) for m in running}
                 # Collect unique non-"auto" models from agent_models + default_model
                 configured: set[str] = set()
@@ -179,8 +181,6 @@ class ModelService:
                 for model_name in sorted(configured):
                     if model_name not in running_names:
                         cold_start.append(model_name)
-            except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-                logger.warning("Cold-start detection failed (non-fatal): %s", e)
 
             result = OllamaHealth(
                 is_healthy=True,
@@ -541,12 +541,14 @@ class ModelService:
                 "error": True,
             }
 
-    def get_running_models(self) -> list[dict[str, str | float]]:
+    def get_running_models(self) -> list[dict[str, str | float]] | None:
         """Query Ollama /api/ps to get currently loaded (running) models.
 
         Returns:
             List of dicts with 'name' and 'size_gb' for each loaded model.
-            Empty list on connection failure.
+            None when the running-model state is unavailable (connection
+            failure, unsupported client).  Callers must distinguish None
+            (unknown) from [] (no models loaded).
         """
         logger.debug("get_running_models called")
         try:
@@ -564,11 +566,11 @@ class ModelService:
             return models
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.warning("Failed to query running models from Ollama: %s", e)
-            return []
+            return None
         except AttributeError:
             # Older Ollama client versions may not have .ps()
             logger.debug("Ollama client does not support ps() — skipping running model check")
-            return []
+            return None
 
     def log_model_load_state(self, target_model: str | None = None) -> None:
         """Log whether target model is already loaded in Ollama's VRAM.
@@ -582,6 +584,9 @@ class ModelService:
                 what's currently loaded.
         """
         running = self.get_running_models()
+        if running is None:
+            logger.info("Ollama model load state: unable to query running models")
+            return
         running_names = [str(m["name"]) for m in running]
 
         if not running:

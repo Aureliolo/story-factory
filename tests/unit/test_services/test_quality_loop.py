@@ -2632,7 +2632,7 @@ class TestHailMaryWinRateTracking:
         # Without hail-mary, only main loop judge calls happen
         # (2 iterations plateau → early stop, no hail-mary)
         mock_svc.analytics_db.get_hail_mary_win_rate.assert_called_once_with(
-            entity_type="character", min_attempts=5
+            entity_type="character", min_attempts=config.hail_mary_min_attempts
         )
         # Hail-mary was NOT attempted → record_hail_mary_attempt not called
         mock_svc.analytics_db.record_hail_mary_attempt.assert_not_called()

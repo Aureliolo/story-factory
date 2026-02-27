@@ -293,7 +293,7 @@ class EmbeddingService:
 
         Pre-truncates the description to fit within the embedding model's
         context budget after accounting for entity names and relation type,
-        so that entity names are always preserved intact.
+        prioritizing entity name preservation where feasible.
 
         Args:
             db: WorldDatabase instance with vec support.
@@ -327,14 +327,14 @@ class EmbeddingService:
         description = rel.description
         available_for_desc = max_chars - overhead_chars
         if available_for_desc <= 0:
-            if len(header) > max_chars:
-                # Header alone exceeds the budget — embed_text would truncate
-                # entity names, defeating the "names preserved" guarantee.
+            if overhead_chars > max_chars:
+                # Prefix + header exceeds the budget — embed_text would truncate
+                # entity names even with an empty description.
                 logger.warning(
-                    "Relationship header exceeds max chars (%d > %d); "
+                    "Relationship overhead exceeds max chars (%d > %d); "
                     "skipping embedding to avoid truncating entity names: "
                     "%s...%s...%s",
-                    len(header),
+                    overhead_chars,
                     max_chars,
                     source_name,
                     rel.relation_type,

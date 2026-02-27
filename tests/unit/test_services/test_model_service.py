@@ -1293,8 +1293,8 @@ class TestModelServiceGetRunningModels:
             assert "model-a:8b" in names
             assert "model-b:30b" in names
 
-    def test_returns_empty_on_connection_error(self, model_service):
-        """Test returns empty list when Ollama is unreachable."""
+    def test_returns_none_on_connection_error(self, model_service):
+        """Test returns None when Ollama is unreachable (unknown state)."""
         with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
@@ -1302,10 +1302,10 @@ class TestModelServiceGetRunningModels:
 
             result = model_service.get_running_models()
 
-            assert result == []
+            assert result is None
 
-    def test_returns_empty_on_attribute_error(self, model_service):
-        """Test handles older Ollama clients without ps() method."""
+    def test_returns_none_on_attribute_error(self, model_service):
+        """Test returns None for older Ollama clients without ps() method."""
         with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
@@ -1313,7 +1313,7 @@ class TestModelServiceGetRunningModels:
 
             result = model_service.get_running_models()
 
-            assert result == []
+            assert result is None
 
     def test_returns_empty_list_when_no_models_loaded(self, model_service):
         """Test returns empty list when no models are in VRAM."""
@@ -1409,6 +1409,17 @@ class TestModelServiceLogModelLoadState:
         assert not warn_records
         info_records = [r for r in caplog.records if r.levelno == logging.INFO]
         assert any("1 model(s) loaded" in r.message for r in info_records)
+
+    def test_returns_early_when_running_models_unavailable(self, model_service, caplog):
+        """Test logs info and returns when running model state is unavailable."""
+        with caplog.at_level(logging.INFO, logger="src.services.model_service"):
+            with patch.object(model_service, "get_running_models", return_value=None):
+                model_service.log_model_load_state(target_model="test-writer:8b")
+
+        assert any("unable to query running models" in r.message for r in caplog.records)
+        # Should NOT warn about cold-start when state is unknown
+        warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert not warn_records
 
 
 class TestTTLCaching:
@@ -1588,20 +1599,17 @@ class TestColdStartDetection:
 
         assert result.cold_start_models == []
 
-    def test_cold_start_detection_failure_is_non_fatal(self, model_service, caplog):
-        """Test that cold-start detection failure doesn't break health check."""
+    def test_cold_start_skipped_when_running_models_unavailable(self, model_service, caplog):
+        """Test that cold-start detection is skipped when running model state is unavailable."""
+        model_service.settings.default_model = "my-model:8b"
         with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             with patch("src.services.model_service.get_available_vram", return_value=24):
-                with patch.object(
-                    model_service,
-                    "get_running_models",
-                    side_effect=ConnectionError("connection failed"),
-                ):
+                with patch.object(model_service, "get_running_models", return_value=None):
                     with caplog.at_level(logging.DEBUG, logger="src.services.model_service"):
                         result = model_service.check_health()
 
         assert result.is_healthy is True
         assert result.cold_start_models == []
-        assert any("Cold-start detection failed" in r.message for r in caplog.records)
+        assert any("Skipping cold-start detection" in r.message for r in caplog.records)
