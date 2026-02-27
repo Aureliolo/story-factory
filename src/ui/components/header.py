@@ -40,6 +40,7 @@ class Header:
         self._status_label: Label | None = None
         self._status_icon: Any = None
         self._cold_start_icon: Any = None
+        self._cold_start_tooltip: Any = None
 
     def build(self) -> None:
         """Build the header UI."""
@@ -115,25 +116,31 @@ class Header:
                 self._status_label = ui.label(f"{vram}GB").classes("text-xs text-green-500")
                 if health.cold_start_models:
                     cold_names = ", ".join(health.cold_start_models)
-                    self._cold_start_icon = (
-                        ui.icon("hourglass_empty", size="xs")
-                        .classes("text-yellow-500")
-                        .tooltip(f"Cold start: {cold_names} not loaded in VRAM")
+                    self._cold_start_icon = ui.icon("hourglass_empty", size="xs").classes(
+                        "text-yellow-500"
                     )
+                    with self._cold_start_icon:
+                        self._cold_start_tooltip = ui.tooltip(
+                            f"Cold start: {cold_names} not loaded in VRAM"
+                        )
                 else:
                     # Create hidden placeholder so refresh_status can show it later
-                    self._cold_start_icon = (
-                        ui.icon("hourglass_empty", size="xs").classes("text-yellow-500").tooltip("")
+                    self._cold_start_icon = ui.icon("hourglass_empty", size="xs").classes(
+                        "text-yellow-500"
                     )
+                    with self._cold_start_icon:
+                        self._cold_start_tooltip = ui.tooltip("")
                     self._cold_start_icon.visible = False
             else:
                 self._status_icon = ui.icon("error", size="xs").classes("text-red-500")
                 self._status_label = ui.label("Offline").classes("text-xs text-red-500")
                 # Create hidden placeholder so refresh_status can toggle visibility
                 # without checking for None or re-creating the element
-                self._cold_start_icon = (
-                    ui.icon("hourglass_empty", size="xs").classes("text-yellow-500").tooltip("")
+                self._cold_start_icon = ui.icon("hourglass_empty", size="xs").classes(
+                    "text-yellow-500"
                 )
+                with self._cold_start_icon:
+                    self._cold_start_tooltip = ui.tooltip("")
                 self._cold_start_icon.visible = False
 
     async def _on_project_change(self, e: Any) -> None:
@@ -219,11 +226,14 @@ class Header:
                     self._status_icon.set_name("error")
                     self._status_icon.classes(replace="text-red-500")
 
-            # Update cold-start indicator
+            # Update cold-start indicator (update tooltip text, never stack)
             if self._cold_start_icon:
                 if health.is_healthy and health.cold_start_models:
                     cold_names = ", ".join(health.cold_start_models)
-                    self._cold_start_icon.tooltip(f"Cold start: {cold_names} not loaded in VRAM")
+                    if self._cold_start_tooltip:
+                        self._cold_start_tooltip.text = (
+                            f"Cold start: {cold_names} not loaded in VRAM"
+                        )
                     self._cold_start_icon.visible = True
                 else:
                     self._cold_start_icon.visible = False

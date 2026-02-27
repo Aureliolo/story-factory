@@ -403,7 +403,9 @@ def _build_world_entities(
                             sub_entity_name=p.entity_name,
                         )
                     )
-                except Exception:
+                except Exception as exc:
+                    if isinstance(exc, (MemoryError, RecursionError)):
+                        raise
                     logger.warning("Sub-step progress callback failed", exc_info=True)
 
             rel_progress_cb = _rel_progress_adapter

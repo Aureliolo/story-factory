@@ -266,9 +266,9 @@ def generate_relationship_with_quality(
             exc_info=True,
         )
     if isinstance(first_pass_rate, (int, float)):
-        logger.info("Relationship first-pass rate: %.0f%% (min_records=20)", first_pass_rate * 100)
+        logger.debug("Relationship first-pass rate: %.0f%% (min_records=20)", first_pass_rate * 100)
     else:
-        logger.info("Relationship first-pass rate: unavailable (min_records=20)")
+        logger.debug("Relationship first-pass rate: unavailable (min_records=20)")
     if isinstance(first_pass_rate, (int, float)) and first_pass_rate >= 0.95:
         # Derive auto-pass scores from the configured threshold so they stay
         # consistent with the quality loop's threshold comparison.

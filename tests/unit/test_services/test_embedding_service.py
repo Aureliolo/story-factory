@@ -788,7 +788,10 @@ class TestEmbedRelationship:
         assert result is True
         mock_embed_text.assert_called_once()
         # Verify the fallback was used (debug log mentions the constant)
-        assert any("falling back to" in r.message and "512" in r.message for r in caplog.records)
+        fallback_value = str(embedding_service_mod._FALLBACK_CONTEXT_TOKENS)
+        assert any(
+            "falling back to" in r.message and fallback_value in r.message for r in caplog.records
+        )
 
 
 # ---------------------------------------------------------------------------

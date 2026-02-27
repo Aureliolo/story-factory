@@ -3,7 +3,7 @@
 import logging
 import time
 from collections.abc import Generator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import ollama
@@ -71,15 +71,18 @@ class ModelStatus:
     description: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class OllamaHealth:
-    """Ollama service health status."""
+    """Ollama service health status.
+
+    Frozen to prevent callers from mutating cached instances.
+    """
 
     is_healthy: bool
     message: str
     version: str | None = None
     available_vram: int | None = None
-    cold_start_models: list[str] = field(default_factory=list)
+    cold_start_models: tuple[str, ...] = ()
 
 
 class ModelService:
@@ -187,7 +190,7 @@ class ModelService:
                 message="Ollama is running",
                 version=None,  # Ollama doesn't expose version easily
                 available_vram=vram,
-                cold_start_models=cold_start,
+                cold_start_models=tuple(cold_start),
             )
             self._health_cache.set(result, now)
             return result

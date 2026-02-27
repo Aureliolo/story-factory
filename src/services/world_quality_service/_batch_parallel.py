@@ -161,6 +161,9 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
     shuffles_remaining = MAX_BATCH_SHUFFLE_RETRIES
     completed_count = 0
     duplicates_found = 0
+    # Cap duplicate retries to prevent unbounded submission when workers
+    # persistently produce duplicates (e.g. all entity-pair slots are taken).
+    max_duplicate_retries = count * (MAX_BATCH_SHUFFLE_RETRIES + 1)
 
     logger.info(
         "Starting parallel %s generation: %d entities with max_workers=%d",
@@ -184,7 +187,7 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
                 True if a task was submitted, False otherwise.
             """
             nonlocal next_index
-            if next_index >= count + duplicates_found:
+            if next_index >= count + min(duplicates_found, max_duplicate_retries):
                 return False
             if cancel_check and cancel_check():
                 return False
@@ -410,10 +413,12 @@ def _collect_late_results[T, S: BaseQualityScores](
                 entity_name,
             )
         except Exception as late_err:
-            errors.append(str(late_err)[:200])
+            if isinstance(late_err, (MemoryError, RecursionError)):
+                raise
+            errors.append(summarize_llm_error(late_err, max_length=200))
             logger.warning(
                 "Discarded late %s during early termination: %s",
                 entity_type,
-                late_err,
+                summarize_llm_error(late_err, max_length=200),
                 exc_info=True,
             )

@@ -18,7 +18,7 @@ from src.memory.world_quality import (
     LocationQualityScores,
     RelationshipQualityScores,
 )
-from src.utils.exceptions import WorldGenerationError, summarize_llm_error
+from src.utils.exceptions import DuplicateNameError, WorldGenerationError, summarize_llm_error
 
 logger = logging.getLogger(__name__)
 
@@ -686,7 +686,7 @@ def generate_relationships_with_quality(
         """Atomic dedup: reject if a concurrent worker already produced this pair."""
         accepted = safe_rels.append_if_new_pair((r["source"], r["target"], r["relation_type"]))
         if not accepted:
-            raise WorldGenerationError(
+            raise DuplicateNameError(
                 f"Duplicate relationship from parallel worker: {r['source']} -> {r['target']}"
             )
 

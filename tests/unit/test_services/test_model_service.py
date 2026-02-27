@@ -1590,7 +1590,7 @@ class TestColdStartDetection:
                 with patch.object(model_service, "get_running_models", return_value=[]):
                     result = model_service.check_health()
 
-        assert result.cold_start_models == ["my-model:8b"]
+        assert result.cold_start_models == ("my-model:8b",)
 
     def test_detects_cold_start_with_agent_models(self, model_service):
         """Test cold-start detection when agent_models have non-auto values."""
@@ -1619,7 +1619,7 @@ class TestColdStartDetection:
                 with patch.object(model_service, "get_running_models", return_value=running):
                     result = model_service.check_health()
 
-        assert result.cold_start_models == []
+        assert result.cold_start_models == ()
 
     def test_cold_start_skipped_when_running_models_unavailable(self, model_service, caplog):
         """Test that cold-start detection is skipped when running model state is unavailable."""
@@ -1633,5 +1633,5 @@ class TestColdStartDetection:
                         result = model_service.check_health()
 
         assert result.is_healthy is True
-        assert result.cold_start_models == []
+        assert result.cold_start_models == ()
         assert any("Skipping cold-start detection" in r.message for r in caplog.records)

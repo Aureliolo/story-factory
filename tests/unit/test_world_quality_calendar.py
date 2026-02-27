@@ -455,7 +455,8 @@ class TestGeneratedDataToWorldCalendar:
                 {"name": "Dark Age", "start_year": 100, "end_year": None, "description": ""},
             ],
         )
-        calendar = _generated_data_to_world_calendar(data)
+        with caplog.at_level("WARNING"):
+            calendar = _generated_data_to_world_calendar(data)
         # The coercion logic should replace "dark age" with "Dark Age"
         assert calendar.current_era_name == "Dark Age"
         assert "Coercing calendar era_name" in caplog.text
