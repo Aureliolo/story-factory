@@ -558,7 +558,8 @@ def quality_refinement_loop[T, S: BaseQualityScores](
         if not skip_hail_mary:
             try:
                 win_rate = svc.analytics_db.get_hail_mary_win_rate(
-                    entity_type=entity_type, min_attempts=10
+                    entity_type=entity_type,
+                    min_attempts=config.hail_mary_min_attempts,
                 )
                 if isinstance(win_rate, (int, float)) and win_rate < 0.20:
                     skip_hail_mary = True
@@ -568,10 +569,11 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                         history.entity_name,
                         win_rate * 100,
                     )
-            except AttributeError, TypeError:
+            except (AttributeError, TypeError) as e:
                 logger.debug(
-                    "Could not query hail-mary win rate for %s, proceeding with hail-mary",
+                    "Hail-mary win-rate query unavailable for %s: %s",
                     entity_type,
+                    e,
                 )
             except Exception:
                 logger.warning(
@@ -619,11 +621,12 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                                 best_score=history.peak_score,
                                 hail_mary_score=fresh_scores.average,
                             )
-                        except AttributeError:
+                        except (AttributeError, TypeError) as e:
                             logger.debug(
-                                "Could not record hail-mary attempt for %s (analytics_db "
-                                "unavailable)",
-                                entity_type,
+                                "%s '%s': hail-mary analytics unavailable: %s",
+                                entity_type.capitalize(),
+                                history.entity_name,
+                                e,
                             )
                         except Exception:
                             logger.warning(

@@ -55,6 +55,7 @@ def validate(settings: Settings) -> bool:
     _validate_ollama_client_timeouts(settings)
     _validate_retry_configuration(settings)
     _validate_verification_delays(settings)
+    _validate_model_cache_ttls(settings)
     _validate_validation_thresholds(settings)
     _validate_outline_generation(settings)
     _validate_import_thresholds(settings)
@@ -356,6 +357,18 @@ def _validate_world_quality(settings: Settings) -> None:
             f"got {settings.world_quality_early_stopping_patience}"
         )
 
+    hail_mary_min_attempts = settings.world_quality_hail_mary_min_attempts
+    if isinstance(hail_mary_min_attempts, bool) or not isinstance(hail_mary_min_attempts, int):
+        raise ValueError(
+            "world_quality_hail_mary_min_attempts must be an integer, "
+            f"got {type(hail_mary_min_attempts).__name__}"
+        )
+    if not 1 <= hail_mary_min_attempts <= 100:
+        raise ValueError(
+            f"world_quality_hail_mary_min_attempts must be between 1 and 100, "
+            f"got {hail_mary_min_attempts}"
+        )
+
     for temp_name, temp_value in [
         ("world_quality_creator_temp", settings.world_quality_creator_temp),
         ("world_quality_judge_temp", settings.world_quality_judge_temp),
@@ -636,6 +649,19 @@ def _validate_verification_delays(settings: Settings) -> None:
             f"model_verification_sleep must be between 0.01 and 5.0 seconds, "
             f"got {settings.model_verification_sleep}"
         )
+
+
+def _validate_model_cache_ttls(settings: Settings) -> None:
+    """Validate model service cache TTL settings."""
+    for name, value in [
+        ("model_health_cache_ttl", settings.model_health_cache_ttl),
+        ("model_installed_cache_ttl", settings.model_installed_cache_ttl),
+        ("model_vram_cache_ttl", settings.model_vram_cache_ttl),
+    ]:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{name} must be a number, got {type(value).__name__}")
+        if not 1.0 <= float(value) <= 300.0:
+            raise ValueError(f"{name} must be between 1.0 and 300.0 seconds, got {value}")
 
 
 def _validate_validation_thresholds(settings: Settings) -> None:

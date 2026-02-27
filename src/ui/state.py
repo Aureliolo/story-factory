@@ -1,9 +1,10 @@
 """Centralized UI state management."""
 
+import contextlib
 import logging
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -15,7 +16,7 @@ from src.utils.exceptions import BackgroundTaskActiveError
 logger = logging.getLogger(__name__)
 
 # Cache TTL in seconds for project list (avoids magic number)
-_PROJECT_LIST_CACHE_TTL = 2.0
+_PROJECT_LIST_CACHE_TTL = 30.0
 
 
 class ActionType(Enum):
@@ -161,6 +162,26 @@ class AppState:
                 task_name,
                 self._background_task_count,
             )
+
+    @contextlib.contextmanager
+    def background_task(self, task_name: str) -> Generator[None]:
+        """Context manager for exception-safe background task tracking.
+
+        Ensures ``end_background_task`` is always called, even if the body raises.
+
+        Args:
+            task_name: Human-readable name for logging.
+
+        Usage::
+
+            with state.background_task("world_build"):
+                do_work()
+        """
+        self.begin_background_task(task_name)
+        try:
+            yield
+        finally:
+            self.end_background_task(task_name)
 
     @property
     def is_busy(self) -> bool:

@@ -637,9 +637,68 @@ class TestGenerateBatchParallel:
 
         # Should see both recovery and early termination messages
         recovery_msgs = [m for m in caplog.messages if "Attempting recovery" in m]
-        termination_msgs = [m for m in caplog.messages if "early termination" in m]
+        termination_msgs = [
+            m for m in caplog.messages if "early termination" in m and "consecutive failures" in m
+        ]
         assert len(recovery_msgs) == MAX_BATCH_SHUFFLE_RETRIES
         assert len(termination_msgs) == 1
+
+    def test_duplicate_name_error_not_counted_as_failure(self, mock_svc, caplog):
+        """DuplicateNameError should be logged as warning, not counted as consecutive failure."""
+        from src.utils.exceptions import DuplicateNameError
+
+        call_count = 0
+        lock = threading.Lock()
+
+        def fail_then_succeed(i):
+            """First call raises DuplicateNameError, rest succeed."""
+            nonlocal call_count
+            with lock:
+                call_count += 1
+                current = call_count
+            if current == 1:
+                raise DuplicateNameError("Name already exists")
+            return {"name": f"Entity-{i}"}, _make_char_scores(8.5), 1
+
+        with caplog.at_level(logging.WARNING):
+            results = _generate_batch_parallel(
+                svc=mock_svc,
+                count=3,
+                entity_type="test",
+                generate_fn=fail_then_succeed,
+                get_name=lambda e: e["name"],
+                quality_threshold=7.5,
+                max_workers=2,
+            )
+
+        # Should produce all requested results (replacement tasks submitted for duplicates)
+        assert len(results) == 3
+        # DuplicateNameError should be logged as a warning, not an error
+        duplicate_msgs = [m for m in caplog.messages if "Duplicate" in m]
+        assert len(duplicate_msgs) >= 1
+
+    def test_all_duplicates_eventually_terminate(self, mock_svc, caplog):
+        """Persistent DuplicateNameError should terminate and raise WorldGenerationError."""
+        from src.utils.exceptions import DuplicateNameError
+
+        def always_duplicate(_i):
+            raise DuplicateNameError("Name already exists")
+
+        with caplog.at_level(logging.WARNING):
+            with pytest.raises(WorldGenerationError, match="Failed to generate any"):
+                _generate_batch_parallel(
+                    svc=mock_svc,
+                    count=3,
+                    entity_type="test",
+                    generate_fn=always_duplicate,
+                    get_name=lambda e: e["name"],
+                    quality_threshold=7.5,
+                    max_workers=2,
+                )
+
+        # Should have logged duplicate warnings
+        duplicate_msgs = [m for m in caplog.messages if "Duplicate" in m]
+        assert len(duplicate_msgs) >= 3
 
 
 # ---------------------------------------------------------------------------
@@ -742,6 +801,37 @@ class TestCollectLateResults:
 
         assert len(results) == 0
         assert len(errors) == 1
+
+    def test_memory_error_reraised_from_late_future(self):
+        """MemoryError from a late future is re-raised, not swallowed."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        def oom():
+            """Raise MemoryError."""
+            raise MemoryError("out of memory")
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(oom)
+            try:
+                future.result()
+            except MemoryError:
+                pass
+
+            pending: dict = {future: (0, 0.0)}
+            results: list = []
+            completed_times: list[float] = []
+            errors: list[str] = []
+
+            with pytest.raises(MemoryError, match="out of memory"):
+                _collect_late_results(
+                    pending,
+                    results,
+                    completed_times,
+                    errors,
+                    "test",
+                    lambda e: e["name"],
+                    None,
+                )
 
     def test_on_success_called_for_late_results(self):
         """on_success hook is invoked for each successful late result."""

@@ -18,7 +18,7 @@ from src.memory.world_quality import (
     LocationQualityScores,
     RelationshipQualityScores,
 )
-from src.utils.exceptions import WorldGenerationError, summarize_llm_error
+from src.utils.exceptions import DuplicateNameError, WorldGenerationError, summarize_llm_error
 
 logger = logging.getLogger(__name__)
 
@@ -220,6 +220,12 @@ def _generate_batch[T, S: BaseQualityScores](
                         ),
                     )
                 )
+        except DuplicateNameError as e:
+            # Don't count duplicates as consecutive failures —
+            # they're expected outcomes when entity-pair slots fill up.
+            duplicate_msg = summarize_llm_error(e, max_length=200)
+            errors.append(duplicate_msg)
+            logger.warning("Duplicate %s %d/%d: %s", entity_type, i + 1, count, duplicate_msg)
         except WorldGenerationError as e:
             error_msg = summarize_llm_error(e, max_length=200)
             errors.append(error_msg)
@@ -686,7 +692,7 @@ def generate_relationships_with_quality(
         """Atomic dedup: reject if a concurrent worker already produced this pair."""
         accepted = safe_rels.append_if_new_pair((r["source"], r["target"], r["relation_type"]))
         if not accepted:
-            raise WorldGenerationError(
+            raise DuplicateNameError(
                 f"Duplicate relationship from parallel worker: {r['source']} -> {r['target']}"
             )
 

@@ -38,6 +38,9 @@ class Header:
         self.current_path = current_path
         self._project_select: Select | None = None
         self._status_label: Label | None = None
+        self._status_icon: Any = None
+        self._cold_start_icon: Any = None
+        self._cold_start_tooltip: Any = None
 
     def build(self) -> None:
         """Build the header UI."""
@@ -109,11 +112,36 @@ class Header:
             vram = self.services.model.get_vram()
 
             if health.is_healthy:
-                ui.icon("check_circle", size="xs").classes("text-green-500")
+                self._status_icon = ui.icon("check_circle", size="xs").classes("text-green-500")
                 self._status_label = ui.label(f"{vram}GB").classes("text-xs text-green-500")
+                if health.cold_start_models:
+                    cold_names = ", ".join(health.cold_start_models)
+                    self._cold_start_icon = ui.icon("hourglass_empty", size="xs").classes(
+                        "text-yellow-500"
+                    )
+                    with self._cold_start_icon:
+                        self._cold_start_tooltip = ui.tooltip(
+                            f"Cold start: {cold_names} not loaded in VRAM"
+                        )
+                else:
+                    # Create hidden placeholder so refresh_status can show it later
+                    self._cold_start_icon = ui.icon("hourglass_empty", size="xs").classes(
+                        "text-yellow-500"
+                    )
+                    with self._cold_start_icon:
+                        self._cold_start_tooltip = ui.tooltip("")
+                    self._cold_start_icon.visible = False
             else:
-                ui.icon("error", size="xs").classes("text-red-500")
+                self._status_icon = ui.icon("error", size="xs").classes("text-red-500")
                 self._status_label = ui.label("Offline").classes("text-xs text-red-500")
+                # Create hidden placeholder so refresh_status can toggle visibility
+                # without checking for None or re-creating the element
+                self._cold_start_icon = ui.icon("hourglass_empty", size="xs").classes(
+                    "text-yellow-500"
+                )
+                with self._cold_start_icon:
+                    self._cold_start_tooltip = ui.tooltip("")
+                self._cold_start_icon.visible = False
 
     async def _on_project_change(self, e: Any) -> None:
         """Handle project selection change."""
@@ -180,7 +208,7 @@ class Header:
             self._project_select.update()
 
     def refresh_status(self) -> None:
-        """Refresh the Ollama status display."""
+        """Refresh the Ollama status display including cold-start indicator."""
         if self._status_label:
             health = self.services.model.check_health()
             vram = self.services.model.get_vram()
@@ -188,6 +216,24 @@ class Header:
             if health.is_healthy:
                 self._status_label.text = f"{vram}GB"
                 self._status_label.classes(replace="text-xs text-green-500")
+                if self._status_icon:
+                    self._status_icon.set_name("check_circle")
+                    self._status_icon.classes(replace="text-green-500")
             else:
                 self._status_label.text = "Offline"
                 self._status_label.classes(replace="text-xs text-red-500")
+                if self._status_icon:
+                    self._status_icon.set_name("error")
+                    self._status_icon.classes(replace="text-red-500")
+
+            # Update cold-start indicator (update tooltip text, never stack)
+            if self._cold_start_icon:
+                if health.is_healthy and health.cold_start_models:
+                    cold_names = ", ".join(health.cold_start_models)
+                    if self._cold_start_tooltip:
+                        self._cold_start_tooltip.text = (
+                            f"Cold start: {cold_names} not loaded in VRAM"
+                        )
+                    self._cold_start_icon.visible = True
+                else:
+                    self._cold_start_icon.visible = False

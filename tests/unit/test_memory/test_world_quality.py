@@ -970,8 +970,8 @@ class TestChapterQualityScores:
 class TestCharacterTemporalPlausibility:
     """Tests for temporal_plausibility in CharacterQualityScores."""
 
-    def test_temporal_plausibility_in_average(self):
-        """Average includes temporal_plausibility (sum of 6 dimensions / 6.0)."""
+    def test_temporal_plausibility_excluded_from_average(self):
+        """Average excludes temporal_plausibility (sum of 5 core dims / 5.0)."""
         scores = CharacterQualityScores(
             depth=6.0,
             goals=6.0,
@@ -982,8 +982,8 @@ class TestCharacterTemporalPlausibility:
         )
         assert scores.average == 6.0
 
-    def test_temporal_plausibility_affects_average(self):
-        """Changing temporal_plausibility changes the average."""
+    def test_temporal_plausibility_does_not_affect_average(self):
+        """Changing temporal_plausibility does NOT change the average (excluded)."""
         scores = CharacterQualityScores(
             depth=8.0,
             goals=8.0,
@@ -992,8 +992,8 @@ class TestCharacterTemporalPlausibility:
             arc_potential=8.0,
             temporal_plausibility=2.0,
         )
-        # (8*5 + 2) / 6 = 42/6 = 7.0
-        assert scores.average == 7.0
+        # temporal_plausibility excluded: (8*5) / 5 = 8.0
+        assert scores.average == 8.0
 
     def test_temporal_plausibility_in_to_dict(self):
         """to_dict includes 'temporal_plausibility' key."""
@@ -1040,8 +1040,8 @@ class TestCharacterTemporalPlausibility:
 class TestLocationTemporalPlausibility:
     """Tests for temporal_plausibility in LocationQualityScores."""
 
-    def test_temporal_plausibility_in_average(self):
-        """Average includes temporal_plausibility (sum of 5 dimensions / 5.0)."""
+    def test_temporal_plausibility_excluded_from_average(self):
+        """Average excludes temporal_plausibility (sum of 4 core dims / 4.0)."""
         scores = LocationQualityScores(
             atmosphere=6.0,
             significance=6.0,
@@ -1051,8 +1051,8 @@ class TestLocationTemporalPlausibility:
         )
         assert scores.average == 6.0
 
-    def test_temporal_plausibility_affects_average(self):
-        """Changing temporal_plausibility changes the average."""
+    def test_temporal_plausibility_does_not_affect_average(self):
+        """Changing temporal_plausibility does NOT change the average (excluded)."""
         scores = LocationQualityScores(
             atmosphere=8.0,
             significance=8.0,
@@ -1060,8 +1060,8 @@ class TestLocationTemporalPlausibility:
             distinctiveness=8.0,
             temporal_plausibility=3.0,
         )
-        # (8*4 + 3) / 5 = 35/5 = 7.0
-        assert scores.average == 7.0
+        # temporal_plausibility excluded: (8*4) / 4 = 8.0
+        assert scores.average == 8.0
 
     def test_temporal_plausibility_in_to_dict(self):
         """to_dict includes 'temporal_plausibility' key."""
@@ -1105,8 +1105,8 @@ class TestLocationTemporalPlausibility:
 class TestFactionTemporalPlausibility:
     """Tests for temporal_plausibility in FactionQualityScores."""
 
-    def test_temporal_plausibility_in_average(self):
-        """Average includes temporal_plausibility (sum of 5 dimensions / 5.0)."""
+    def test_temporal_plausibility_excluded_from_average(self):
+        """Average excludes temporal_plausibility (sum of 4 core dims / 4.0)."""
         scores = FactionQualityScores(
             coherence=6.0,
             influence=6.0,
@@ -1116,8 +1116,8 @@ class TestFactionTemporalPlausibility:
         )
         assert scores.average == 6.0
 
-    def test_temporal_plausibility_affects_average(self):
-        """Changing temporal_plausibility changes the average."""
+    def test_temporal_plausibility_does_not_affect_average(self):
+        """Changing temporal_plausibility does NOT change the average (excluded)."""
         scores = FactionQualityScores(
             coherence=10.0,
             influence=10.0,
@@ -1125,8 +1125,8 @@ class TestFactionTemporalPlausibility:
             distinctiveness=10.0,
             temporal_plausibility=0.0,
         )
-        # (10*4 + 0) / 5 = 40/5 = 8.0
-        assert scores.average == 8.0
+        # temporal_plausibility excluded: (10*4) / 4 = 10.0
+        assert scores.average == 10.0
 
     def test_temporal_plausibility_in_to_dict(self):
         """to_dict includes 'temporal_plausibility' key."""
@@ -1170,8 +1170,8 @@ class TestFactionTemporalPlausibility:
 class TestItemTemporalPlausibility:
     """Tests for temporal_plausibility in ItemQualityScores."""
 
-    def test_temporal_plausibility_in_average(self):
-        """Average includes temporal_plausibility (sum of 5 dimensions / 5.0)."""
+    def test_temporal_plausibility_excluded_from_average(self):
+        """Average excludes temporal_plausibility (sum of 4 core dims / 4.0)."""
         scores = ItemQualityScores(
             significance=6.0,
             uniqueness=6.0,
@@ -1181,8 +1181,8 @@ class TestItemTemporalPlausibility:
         )
         assert scores.average == 6.0
 
-    def test_temporal_plausibility_affects_average(self):
-        """Changing temporal_plausibility changes the average."""
+    def test_temporal_plausibility_does_not_affect_average(self):
+        """Changing temporal_plausibility does NOT change the average (excluded)."""
         scores = ItemQualityScores(
             significance=10.0,
             uniqueness=10.0,
@@ -1190,8 +1190,8 @@ class TestItemTemporalPlausibility:
             integration=10.0,
             temporal_plausibility=5.0,
         )
-        # (10*4 + 5) / 5 = 45/5 = 9.0
-        assert scores.average == 9.0
+        # temporal_plausibility excluded: (10*4) / 4 = 10.0
+        assert scores.average == 10.0
 
     def test_temporal_plausibility_in_to_dict(self):
         """to_dict includes 'temporal_plausibility' key."""
@@ -1235,8 +1235,8 @@ class TestItemTemporalPlausibility:
 class TestConceptTemporalPlausibility:
     """Tests for temporal_plausibility in ConceptQualityScores."""
 
-    def test_temporal_plausibility_in_average(self):
-        """Average includes temporal_plausibility (sum of 5 dimensions / 5.0)."""
+    def test_temporal_plausibility_excluded_from_average(self):
+        """Average excludes temporal_plausibility (sum of 4 core dims / 4.0)."""
         scores = ConceptQualityScores(
             relevance=6.0,
             depth=6.0,
@@ -1246,8 +1246,8 @@ class TestConceptTemporalPlausibility:
         )
         assert scores.average == 6.0
 
-    def test_temporal_plausibility_affects_average(self):
-        """Changing temporal_plausibility changes the average."""
+    def test_temporal_plausibility_does_not_affect_average(self):
+        """Changing temporal_plausibility does NOT change the average (excluded)."""
         scores = ConceptQualityScores(
             relevance=10.0,
             depth=10.0,
@@ -1255,8 +1255,8 @@ class TestConceptTemporalPlausibility:
             resonance=10.0,
             temporal_plausibility=0.0,
         )
-        # (10*4 + 0) / 5 = 40/5 = 8.0
-        assert scores.average == 8.0
+        # temporal_plausibility excluded: (10*4) / 4 = 10.0
+        assert scores.average == 10.0
 
     def test_temporal_plausibility_in_to_dict(self):
         """to_dict includes 'temporal_plausibility' key."""
@@ -1301,15 +1301,15 @@ class TestEventQualityScores:
     """Tests for EventQualityScores model."""
 
     def test_average_calculation(self):
-        """Test average score calculation for event quality (5 dimensions / 5.0)."""
+        """Test average excludes temporal_plausibility (4 contributing dimensions)."""
         scores = EventQualityScores(
             significance=8.0,
-            temporal_plausibility=7.0,
+            temporal_plausibility=2.0,  # Excluded from average
             causal_coherence=6.0,
             narrative_potential=9.0,
             entity_integration=5.0,
         )
-        # (8 + 7 + 6 + 9 + 5) / 5 = 35 / 5 = 7.0
+        # temporal_plausibility excluded: (8 + 6 + 9 + 5) / 4 = 28 / 4 = 7.0
         assert scores.average == 7.0
 
     def test_average_uniform_scores(self):
@@ -1430,3 +1430,54 @@ class TestEventQualityScores:
                 significance=8.0,
                 # Missing other required fields
             )  # type: ignore[call-arg]
+
+
+class TestBaseQualityScoresEdgeCases:
+    """Edge-case tests for BaseQualityScores generic implementations."""
+
+    def test_average_returns_zero_when_no_numeric_fields(self):
+        """Average should return 0.0 for a subclass with no numeric scoring fields."""
+        from src.memory.world_quality._models import BaseQualityScores
+
+        class EmptyScores(BaseQualityScores):
+            """Subclass with no numeric fields for edge-case testing."""
+
+        scores = EmptyScores()
+        assert scores.average == 0.0
+
+    def test_to_dict_returns_average_and_feedback_only_when_no_fields(self):
+        """to_dict should return average and feedback when no numeric fields."""
+        from src.memory.world_quality._models import BaseQualityScores
+
+        class EmptyScores(BaseQualityScores):
+            """Subclass with no numeric fields for edge-case testing."""
+
+        scores = EmptyScores(feedback="test")
+        result = scores.to_dict()
+        assert result == {"average": 0.0, "feedback": "test"}
+
+    def test_weak_dimensions_empty_when_no_fields(self):
+        """weak_dimensions should return empty list when no numeric fields."""
+        from src.memory.world_quality._models import BaseQualityScores
+
+        class EmptyScores(BaseQualityScores):
+            """Subclass with no numeric fields for edge-case testing."""
+
+        scores = EmptyScores()
+        assert scores.weak_dimensions() == []
+
+    def test_init_subclass_rejects_invalid_excluded_field(self):
+        """_EXCLUDED_FROM_AVERAGE with a typo should raise TypeError at class definition."""
+        from typing import ClassVar
+
+        from pydantic import Field
+
+        from src.memory.world_quality._models import BaseQualityScores
+
+        with pytest.raises(TypeError, match="unknown fields"):
+
+            class BadScores(BaseQualityScores):
+                """Subclass with a typo in _EXCLUDED_FROM_AVERAGE."""
+
+                _EXCLUDED_FROM_AVERAGE: ClassVar[frozenset[str]] = frozenset({"typo_field"})
+                real_field: float = Field(default=5.0, ge=0.0, le=10.0)

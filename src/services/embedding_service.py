@@ -291,6 +291,11 @@ class EmbeddingService:
     ) -> bool:
         """Embed a relationship and store it in the database.
 
+        Pre-truncates the description to fit within the embedding model's
+        context budget after accounting for entity names and relation type,
+        skipping the embedding entirely if the overhead (prefix + header)
+        exceeds the context budget.
+
         Args:
             db: WorldDatabase instance with vec support.
             rel: The relationship to embed.
@@ -301,7 +306,69 @@ class EmbeddingService:
             True if the embedding was stored, False otherwise.
         """
         model = self._get_model()
-        text = f"{source_name} {rel.relation_type} {target_name}: {rel.description}"
+        prefix = get_embedding_prefix(model)
+
+        # Build the structural portion (always kept intact)
+        header = f"{source_name} {rel.relation_type} {target_name}: "
+        overhead_chars = len(prefix) + len(header)
+
+        # Estimate max chars from model context
+        with self._lock:
+            client = self._get_client()
+            context_limit = get_model_context_size(client, model)
+        if context_limit is None:
+            with _warned_context_models_lock:
+                if model not in _warned_context_models:
+                    logger.warning(
+                        "Context size unavailable for embedding model in embed_relationship, "
+                        "falling back to %d tokens (this warning will not repeat)",
+                        _FALLBACK_CONTEXT_TOKENS,
+                    )
+                    _warned_context_models.add(model)
+            context_limit = _FALLBACK_CONTEXT_TOKENS
+        max_chars = (context_limit - _EMBEDDING_CONTEXT_MARGIN_TOKENS) * _CHARS_PER_TOKEN_ESTIMATE
+
+        description = rel.description
+        available_for_desc = max_chars - overhead_chars
+        if available_for_desc <= 0:
+            if overhead_chars > max_chars:
+                # Prefix + header exceeds the budget — embed_text would truncate
+                # entity names even with an empty description.
+                logger.warning(
+                    "Relationship overhead exceeds max chars (%d > %d); "
+                    "skipping embedding to avoid truncating entity names: "
+                    "%s...%s...%s",
+                    overhead_chars,
+                    max_chars,
+                    source_name,
+                    rel.relation_type,
+                    target_name,
+                )
+                self._record_failure(rel.id)
+                return False
+            logger.warning(
+                "Relationship overhead meets embedding budget (%d >= %d chars); "
+                "embedding with empty description to preserve entity names: %s...%s...%s",
+                overhead_chars,
+                max_chars,
+                source_name,
+                rel.relation_type,
+                target_name,
+            )
+            description = ""
+        elif len(description) > available_for_desc:
+            logger.warning(
+                "Truncating relationship description for embedding "
+                "(names preserved, desc %d -> %d chars): %s...%s...%s",
+                len(description),
+                available_for_desc,
+                source_name,
+                rel.relation_type,
+                target_name,
+            )
+            description = description[:available_for_desc]
+
+        text = f"{header}{description}"
         embedding = self.embed_text(text)
         if not embedding:
             self._record_failure(rel.id)

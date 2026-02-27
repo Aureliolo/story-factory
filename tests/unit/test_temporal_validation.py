@@ -1,5 +1,6 @@
 """Tests for temporal validation service."""
 
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -12,7 +13,7 @@ from src.memory.timeline_types import (
     _parse_year,
     extract_lifecycle_from_attributes,
 )
-from src.memory.world_calendar import CalendarMonth, WorldCalendar
+from src.memory.world_calendar import CalendarMonth, HistoricalEra, WorldCalendar
 from src.services.temporal_validation_service import (
     TemporalErrorSeverity,
     TemporalErrorType,
@@ -27,6 +28,74 @@ def validation_service() -> TemporalValidationService:
     settings = MagicMock()
     settings.validate_temporal_consistency = True
     return TemporalValidationService(settings)
+
+
+class TestTemporalValidationResultIsValid:
+    """Tests for TemporalValidationResult.is_valid computed property."""
+
+    def test_is_valid_true_when_no_errors(self):
+        """is_valid returns True for a fresh result with no errors."""
+        result = TemporalValidationResult()
+        assert result.is_valid is True
+
+    def test_is_valid_false_after_adding_error(self):
+        """is_valid returns False after an error is appended."""
+        from src.services.temporal_validation_service import (
+            TemporalValidationIssue,
+        )
+
+        result = TemporalValidationResult()
+        result.errors.append(
+            TemporalValidationIssue(
+                entity_id="e1",
+                entity_name="Hero",
+                entity_type="character",
+                error_type=TemporalErrorType.INVALID_DATE,
+                severity=TemporalErrorSeverity.ERROR,
+                message="Test error",
+            )
+        )
+        assert result.is_valid is False
+
+    def test_is_valid_true_with_only_warnings(self):
+        """is_valid returns True when only warnings are present (no errors)."""
+        from src.services.temporal_validation_service import (
+            TemporalValidationIssue,
+        )
+
+        result = TemporalValidationResult()
+        result.warnings.append(
+            TemporalValidationIssue(
+                entity_id="e1",
+                entity_name="Hero",
+                entity_type="character",
+                error_type=TemporalErrorType.INVALID_DATE,
+                severity=TemporalErrorSeverity.WARNING,
+                message="Test warning",
+            )
+        )
+        assert result.is_valid is True
+
+    def test_is_valid_reflects_error_list_mutations(self):
+        """is_valid dynamically reflects the errors list — removing errors restores validity."""
+        from src.services.temporal_validation_service import (
+            TemporalValidationIssue,
+        )
+
+        result = TemporalValidationResult()
+        issue = TemporalValidationIssue(
+            entity_id="e1",
+            entity_name="Hero",
+            entity_type="character",
+            error_type=TemporalErrorType.INVALID_DATE,
+            severity=TemporalErrorSeverity.ERROR,
+            message="Test error",
+        )
+        result.errors.append(issue)
+        assert result.is_valid is False
+
+        result.errors.remove(issue)
+        assert result.is_valid is True
 
 
 @pytest.fixture
@@ -116,8 +185,6 @@ class TestTemporalValidationResult:
                 message="Minor date issue",
             )
         )
-        result.is_valid = len(result.errors) == 0
-
         assert result.is_valid is True
         assert result.warning_count == 1
         assert result.total_issues == 1
@@ -137,8 +204,6 @@ class TestTemporalValidationResult:
                 message="Timeline conflict",
             )
         )
-        result.is_valid = len(result.errors) == 0
-
         assert result.is_valid is False
         assert result.error_count == 1
 
@@ -332,7 +397,7 @@ class TestTemporalValidationService:
         self, validation_service: TemporalValidationService
     ) -> None:
         """Test score calculation with no issues."""
-        result = TemporalValidationResult(errors=[], warnings=[], is_valid=True)
+        result = TemporalValidationResult(errors=[], warnings=[])
         score = validation_service.calculate_temporal_consistency_score(result)
         assert score == 10.0
 
@@ -979,7 +1044,7 @@ class TestValidateWorld:
         assert result.error_count >= 1
 
     def test_validate_world_handles_settings_error(
-        self, validation_service: TemporalValidationService
+        self, validation_service: TemporalValidationService, caplog: pytest.LogCaptureFixture
     ) -> None:
         """Test that world validation handles errors when loading settings."""
         entity = Entity(
@@ -994,13 +1059,19 @@ class TestValidateWorld:
         mock_world_db.list_entities.return_value = [entity]
         mock_world_db.list_relationships.return_value = []
         # Simulate error loading world settings (e.g., table doesn't exist)
-        mock_world_db.get_world_settings.side_effect = Exception("Table not found")
+        import sqlite3
+
+        mock_world_db.get_world_settings.side_effect = sqlite3.OperationalError("Table not found")
 
         # Should not raise - should handle gracefully
-        result = validation_service.validate_world(mock_world_db)
+        with caplog.at_level(logging.WARNING):
+            result = validation_service.validate_world(mock_world_db)
 
         assert result.is_valid is True
         assert result.error_count == 0
+        # Calendar failure is logged, not added to result (would skew quality scoring)
+        assert result.warning_count == 0
+        assert any("Calendar-based validation skipped" in m for m in caplog.messages)
 
 
 class TestDeathDateValidation:
@@ -1341,3 +1412,89 @@ class TestSentinelYearRejection:
     def test_sentinel_years_frozenset_contents(self) -> None:
         """Test SENTINEL_YEARS contains exactly the expected values."""
         assert SENTINEL_YEARS == frozenset({-1, 0, 9999})
+
+
+class TestEraMismatchDetection:
+    """Tests for _check_era_name_mismatch in temporal validation."""
+
+    @pytest.fixture
+    def calendar_with_eras(self) -> WorldCalendar:
+        """Create a calendar with historical eras for era mismatch testing."""
+        return WorldCalendar(
+            current_era_name="Third Age",
+            era_abbreviation="TA",
+            era_start_year=1,
+            months=[CalendarMonth(name="Firstmoon", days=31)],
+            days_per_week=7,
+            day_names=["Day1", "Day2", "Day3", "Day4", "Day5", "Day6", "Day7"],
+            current_story_year=500,
+            eras=[
+                HistoricalEra(name="First Age", start_year=1, end_year=100),
+                HistoricalEra(name="Second Age", start_year=101, end_year=300),
+                HistoricalEra(name="Third Age", start_year=301, end_year=None),
+            ],
+        )
+
+    def test_era_mismatch_detected(self, validation_service, calendar_with_eras):
+        """Test that era name mismatch produces INVALID_ERA warning."""
+        entity = Entity(id="ent-001", name="Hero", type="character")
+        timestamp = StoryTimestamp(year=50, era_name="Wrong Era")
+        result = TemporalValidationResult()
+
+        validation_service._check_era_name_mismatch(
+            entity, timestamp, calendar_with_eras, "birth", result
+        )
+
+        assert len(result.warnings) == 1
+        assert result.warnings[0].error_type == TemporalErrorType.INVALID_ERA
+        assert "Wrong Era" in result.warnings[0].message
+        assert "First Age" in result.warnings[0].message
+
+    def test_no_mismatch_when_era_matches(self, validation_service, calendar_with_eras):
+        """Test no warning when entity era matches calendar era."""
+        entity = Entity(id="ent-001", name="Hero", type="character")
+        timestamp = StoryTimestamp(year=50, era_name="First Age")
+        result = TemporalValidationResult()
+
+        validation_service._check_era_name_mismatch(
+            entity, timestamp, calendar_with_eras, "birth", result
+        )
+
+        assert len(result.warnings) == 0
+
+    def test_skips_when_year_is_none(self, validation_service, calendar_with_eras):
+        """Test early return when timestamp has no year."""
+        entity = Entity(id="ent-001", name="Hero", type="character")
+        timestamp = StoryTimestamp(year=None, era_name="First Age")
+        result = TemporalValidationResult()
+
+        validation_service._check_era_name_mismatch(
+            entity, timestamp, calendar_with_eras, "birth", result
+        )
+
+        assert len(result.warnings) == 0
+
+    def test_skips_when_era_name_is_empty(self, validation_service, calendar_with_eras):
+        """Test early return when timestamp has no era_name."""
+        entity = Entity(id="ent-001", name="Hero", type="character")
+        timestamp = StoryTimestamp(year=50, era_name="")
+        result = TemporalValidationResult()
+
+        validation_service._check_era_name_mismatch(
+            entity, timestamp, calendar_with_eras, "birth", result
+        )
+
+        assert len(result.warnings) == 0
+
+    def test_skips_when_era_not_resolved(self, validation_service, calendar_with_eras):
+        """Test early return when calendar can't resolve era for year."""
+        entity = Entity(id="ent-001", name="Hero", type="character")
+        # Year -500 is outside all era ranges
+        timestamp = StoryTimestamp(year=-500, era_name="Ancient Era")
+        result = TemporalValidationResult()
+
+        validation_service._check_era_name_mismatch(
+            entity, timestamp, calendar_with_eras, "birth", result
+        )
+
+        assert len(result.warnings) == 0

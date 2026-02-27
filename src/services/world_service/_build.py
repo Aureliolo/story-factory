@@ -20,7 +20,6 @@ from src.services.world_service._warmup import _warm_models
 from src.utils.exceptions import (
     DatabaseClosedError,
     GenerationCancelledError,
-    WorldGenerationError,
 )
 from src.utils.validation import validate_not_none, validate_type
 
@@ -182,10 +181,14 @@ def build_world(
                     calendar_iterations,
                     calendar_scores.average,
                 )
-            except GenerationCancelledError, DatabaseClosedError:
+            except GenerationCancelledError, DatabaseClosedError, MemoryError, RecursionError:
                 raise
             except Exception as e:
-                logger.warning("Calendar generation failed (non-fatal), continuing without: %s", e)
+                logger.warning(
+                    "Calendar generation failed (non-fatal), continuing without: %s",
+                    e,
+                    exc_info=True,
+                )
 
         # Steps 2-10: entity generation (inside try/finally for calendar context cleanup)
         _build_world_entities(
@@ -400,6 +403,8 @@ def _build_world_entities(
                             sub_entity_name=p.entity_name,
                         )
                     )
+                except MemoryError, RecursionError:
+                    raise
                 except Exception:
                     logger.warning("Sub-step progress callback failed", exc_info=True)
 
@@ -437,10 +442,14 @@ def _build_world_entities(
             )
             counts["events"] = event_count
             logger.info("Generated %d world events", event_count)
-        except GenerationCancelledError:
+        except GenerationCancelledError, DatabaseClosedError, MemoryError, RecursionError:
             raise
-        except (WorldGenerationError, ValueError) as e:
-            logger.warning("Event generation failed (non-fatal), continuing without events: %s", e)
+        except Exception as e:
+            logger.warning(
+                "Event generation failed (non-fatal), continuing without events: %s",
+                e,
+                exc_info=True,
+            )
 
     # Step 9: Validate temporal consistency (non-fatal, before embedding)
     if svc.settings.validate_temporal_consistency:
@@ -457,7 +466,7 @@ def _build_world_entities(
                 result.error_count,
                 result.warning_count,
             )
-        except GenerationCancelledError, DatabaseClosedError:
+        except GenerationCancelledError, DatabaseClosedError, MemoryError, RecursionError:
             raise
         except Exception as e:
             logger.warning("Temporal validation failed (non-fatal): %s", e, exc_info=True)
@@ -468,7 +477,7 @@ def _build_world_entities(
     try:
         embed_counts = services.embedding.embed_all_world_data(world_db, state)
         logger.info("World embedding complete: %s", embed_counts)
-    except GenerationCancelledError, DatabaseClosedError:
+    except GenerationCancelledError, DatabaseClosedError, MemoryError, RecursionError:
         raise
     except Exception as e:
         logger.warning(

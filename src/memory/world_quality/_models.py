@@ -5,8 +5,7 @@ quality refinement loop used across all entity types.
 """
 
 import logging
-from abc import ABC, abstractmethod
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -239,12 +238,14 @@ class RefinementHistory(BaseModel):
         }
 
 
-class BaseQualityScores(BaseModel, ABC):
-    """Abstract base class for all quality score models.
+class BaseQualityScores(BaseModel):
+    """Base class for all quality score models.
 
     Provides the common interface (feedback, average, to_dict, weak_dimensions)
     that the generic quality refinement loop requires. Each subclass defines
-    its own dimension-specific fields and implements these methods.
+    its own dimension-specific fields. The ``average``, ``to_dict``, and
+    ``weak_dimensions`` implementations are generic — subclasses only need
+    to set ``_EXCLUDED_FROM_AVERAGE`` to exclude inflated dimensions.
 
     populate_by_name=True allows constructing with either the Python field name
     or the alias, so existing code using field names keeps working while the
@@ -253,28 +254,91 @@ class BaseQualityScores(BaseModel, ABC):
 
     model_config = ConfigDict(populate_by_name=True)
 
+    # Dimensions excluded from the average computation. Subclasses override
+    # this set to exclude dimensions that inflate the aggregate (e.g.
+    # temporal_plausibility which is routinely over-scored by the judge LLM).
+    _EXCLUDED_FROM_AVERAGE: ClassVar[frozenset[str]] = frozenset()
+
     feedback: str = ""
 
-    @property
-    @abstractmethod
-    def average(self) -> float:
-        """Calculate average score across all dimensions."""
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Validate that _EXCLUDED_FROM_AVERAGE entries are real fields."""
+        super().__init_subclass__(**kwargs)
+        if hasattr(cls, "_EXCLUDED_FROM_AVERAGE") and cls._EXCLUDED_FROM_AVERAGE:
+            # Collect annotations from the full MRO (model_fields isn't
+            # populated yet during Pydantic metaclass processing).
+            all_annotations: set[str] = set()
+            for klass in cls.__mro__:
+                all_annotations.update(getattr(klass, "__annotations__", {}))
+            all_annotations.discard("feedback")
+            invalid = cls._EXCLUDED_FROM_AVERAGE - all_annotations
+            if invalid:
+                raise TypeError(
+                    f"{cls.__name__}._EXCLUDED_FROM_AVERAGE contains unknown "
+                    f"fields: {sorted(invalid)}"
+                )
 
-    @abstractmethod
-    def to_dict(self) -> dict[str, float | str]:
-        """Convert to dictionary for storage in entity attributes."""
+    def _score_fields(self) -> list[tuple[str, str, float]]:
+        """Return (field_name, display_name, value) for all numeric scoring dimensions.
 
-    @abstractmethod
-    def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
+        Uses the Pydantic alias as the display name when set, falling back to
+        the Python field name.  The ``feedback`` field is excluded.
         """
-        List dimension names whose scores are below the given threshold.
+        result: list[tuple[str, str, float]] = []
+        for name, field_info in self.__class__.model_fields.items():
+            if name == "feedback":
+                continue
+            value = getattr(self, name)
+            if isinstance(value, (int, float)):
+                display_name = field_info.alias if field_info.alias else name
+                result.append((name, display_name, float(value)))
+        return result
+
+    @property
+    def average(self) -> float:
+        """Calculate average score across non-excluded dimensions.
+
+        Dimensions listed in ``_EXCLUDED_FROM_AVERAGE`` are omitted from the
+        mean but are still checked against the ``dimension_minimum`` floor
+        by the quality refinement loop.
+        """
+        fields = self._score_fields()
+        included = [
+            val for name, _display, val in fields if name not in self._EXCLUDED_FROM_AVERAGE
+        ]
+        if not included:
+            logger.warning(
+                "%s: all dimensions excluded from average — returning 0.0",
+                type(self).__name__,
+            )
+            return 0.0
+        return sum(included) / len(included)
+
+    def to_dict(self) -> dict[str, float | str]:
+        """Convert to dictionary for storage in entity attributes.
+
+        Keys use the Pydantic alias (when set) for backward-compatible storage.
+        Always includes ``average`` and ``feedback``.
+        """
+        result: dict[str, float | str] = {}
+        for _name, display_name, value in self._score_fields():
+            result[display_name] = value
+        result["average"] = self.average
+        result["feedback"] = self.feedback
+        return result
+
+    def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
+        """List dimension names whose scores are below the given threshold.
 
         Parameters:
-            threshold (float): Score cutoff; dimensions with values less than `threshold` are considered weak.
+            threshold: Score cutoff; dimensions with values less than
+                ``threshold`` are considered weak.
 
         Returns:
-            list[str]: Names of dimensions with scores below `threshold`.
+            Names of dimensions with scores below ``threshold``, using the
+            Pydantic alias (when set) for consistency with ``to_dict()``.
         """
+        return [display for _name, display, val in self._score_fields() if val < threshold]
 
     @property
     def minimum_score(self) -> float:
@@ -321,7 +385,7 @@ class RefinementConfig(BaseModel):
         default=0.9, ge=0.0, le=2.0, description="Temperature for creation"
     )
     judge_temperature: float = Field(
-        default=0.1, ge=0.0, le=2.0, description="Temperature for judging"
+        default=0.3, ge=0.0, le=2.0, description="Temperature for judging"
     )
     refinement_temperature: float = Field(
         default=0.7, ge=0.0, le=2.0, description="Temperature for refinement"
@@ -363,6 +427,12 @@ class RefinementConfig(BaseModel):
         le=10.0,
         description="Per-dimension minimum floor — any dimension below this forces refinement "
         "(0.0 disables the check)",
+    )
+    hail_mary_min_attempts: int = Field(
+        default=5,
+        ge=1,
+        le=100,
+        description="Minimum recorded hail-mary attempts before the win-rate gate activates",
     )
 
     def get_threshold(self, entity_type: str) -> float:
@@ -489,6 +559,7 @@ class RefinementConfig(BaseModel):
                 - world_quality_early_stopping_variance_tolerance
                 - world_quality_score_plateau_tolerance
                 - world_quality_dimension_minimum
+                - world_quality_hail_mary_min_attempts
 
         Returns:
             RefinementConfig: Configuration populated from the corresponding settings attributes.
@@ -517,6 +588,7 @@ class RefinementConfig(BaseModel):
             early_stopping_variance_tolerance=settings.world_quality_early_stopping_variance_tolerance,
             score_plateau_tolerance=settings.world_quality_score_plateau_tolerance,
             dimension_minimum=settings.world_quality_dimension_minimum,
+            hail_mary_min_attempts=settings.world_quality_hail_mary_min_attempts,
         )
 
 

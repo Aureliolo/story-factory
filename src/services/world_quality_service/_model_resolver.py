@@ -91,13 +91,17 @@ def get_creator_model(service: WorldQualityService, entity_type: str | None = No
     if cached is not None:
         return cached
 
-    # Resolve and store the model
+    # Resolve and store the model (double-check avoids duplicate log on race)
     model = resolve_model_for_role(service, agent_role)
-    service._model_cache.store_creator_model(agent_role, model)
-    logger.info(
-        "Resolved creator model '%s' for entity_type=%s (role=%s)", model, entity_type, agent_role
-    )
-    return model
+    stored = service._model_cache.store_creator_model(agent_role, model)
+    if stored == model:
+        logger.info(
+            "Resolved creator model '%s' for entity_type=%s (role=%s)",
+            model,
+            entity_type,
+            agent_role,
+        )
+    return stored
 
 
 def get_judge_model(service: WorldQualityService, entity_type: str | None = None) -> str:
@@ -166,8 +170,12 @@ def get_judge_model(service: WorldQualityService, entity_type: str | None = None
                     )
 
     # Store the resolved model (including any swapped alternative)
-    service._model_cache.store_judge_model(agent_role, model)
-    logger.info(
-        "Resolved judge model '%s' for entity_type=%s (role=%s)", model, entity_type, agent_role
-    )
-    return model
+    stored = service._model_cache.store_judge_model(agent_role, model)
+    if stored == model:
+        logger.info(
+            "Resolved judge model '%s' for entity_type=%s (role=%s)",
+            model,
+            entity_type,
+            agent_role,
+        )
+    return stored

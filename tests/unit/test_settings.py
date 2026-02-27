@@ -2051,6 +2051,31 @@ class TestMissingValidationCoverage:
         ):
             settings.validate()
 
+    def test_validate_raises_on_invalid_hail_mary_min_attempts_low(self):
+        """Should raise ValueError for hail_mary_min_attempts below 1."""
+        settings = Settings()
+        settings.world_quality_hail_mary_min_attempts = 0
+        with pytest.raises(
+            ValueError, match="world_quality_hail_mary_min_attempts must be between"
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_hail_mary_min_attempts_high(self):
+        """Should raise ValueError for hail_mary_min_attempts above 100."""
+        settings = Settings()
+        settings.world_quality_hail_mary_min_attempts = 101
+        with pytest.raises(
+            ValueError, match="world_quality_hail_mary_min_attempts must be between"
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_bool_hail_mary_min_attempts(self):
+        """Should raise ValueError for boolean hail_mary_min_attempts (bool is subclass of int)."""
+        settings = Settings()
+        settings.world_quality_hail_mary_min_attempts = True
+        with pytest.raises(ValueError, match="must be an integer"):
+            settings.validate()
+
     # --- Per-entity quality thresholds ---
 
     def test_validate_per_entity_thresholds_default(self):
@@ -3586,3 +3611,35 @@ class TestRagContextValidation:
         changed = _validate_rag_context(settings)
         assert changed is True
         assert settings.embedding_model == "mxbai-embed-large"
+
+
+class TestModelCacheTTLValidation:
+    """Tests for model service cache TTL validation."""
+
+    def test_validate_raises_on_health_ttl_too_low(self):
+        """Should reject model_health_cache_ttl below 1.0."""
+        settings = Settings()
+        settings.model_health_cache_ttl = 0.5
+        with pytest.raises(ValueError, match="model_health_cache_ttl"):
+            settings.validate()
+
+    def test_validate_raises_on_installed_ttl_too_high(self):
+        """Should reject model_installed_cache_ttl above 300.0."""
+        settings = Settings()
+        settings.model_installed_cache_ttl = 500.0
+        with pytest.raises(ValueError, match="model_installed_cache_ttl"):
+            settings.validate()
+
+    def test_validate_raises_on_vram_ttl_too_low(self):
+        """Should reject model_vram_cache_ttl below 1.0."""
+        settings = Settings()
+        settings.model_vram_cache_ttl = 0.0
+        with pytest.raises(ValueError, match="model_vram_cache_ttl"):
+            settings.validate()
+
+    def test_validate_raises_on_ttl_boolean_type(self):
+        """Should reject boolean values for TTL fields (bool is subclass of int)."""
+        settings = Settings()
+        settings.model_health_cache_ttl = True
+        with pytest.raises(ValueError, match="must be a number"):
+            settings.validate()

@@ -318,7 +318,7 @@ class Settings:
         default_factory=PER_ENTITY_QUALITY_DEFAULTS.copy
     )
     world_quality_creator_temp: float = 0.9  # Temperature for creative generation
-    world_quality_judge_temp: float = 0.1  # Temperature for quality judgment
+    world_quality_judge_temp: float = 0.3  # Temperature for quality judgment
     world_quality_refinement_temp: float = 0.7  # Temperature for refinement passes
     world_quality_early_stopping_patience: int = 2  # Stop after N consecutive score degradations
 
@@ -332,6 +332,7 @@ class Settings:
     world_quality_early_stopping_variance_tolerance: float = 0.3  # Score variance tolerance
     world_quality_score_plateau_tolerance: float = 0.1  # Max score diff for plateau detection
     world_quality_dimension_minimum: float = 6.0  # Any dimension below this forces refinement
+    world_quality_hail_mary_min_attempts: int = 5  # Min attempts before hail-mary win-rate gate
 
     # Circuit breaker settings (#175)
     circuit_breaker_enabled: bool = True  # Enable circuit breaker for LLM calls
@@ -450,6 +451,12 @@ class Settings:
     # Retry configuration
     llm_retry_delay: float = 2.0  # Base delay in seconds between retries
     llm_retry_backoff: float = 2.0  # Exponential backoff multiplier
+
+    # Model service cache TTLs (seconds) — control how often the header
+    # refresh loop re-queries Ollama for health, installed models, and VRAM.
+    model_health_cache_ttl: float = 15.0  # Health check cache lifetime
+    model_installed_cache_ttl: float = 10.0  # Installed model list cache lifetime
+    model_vram_cache_ttl: float = 15.0  # VRAM query cache lifetime
 
     # Verification delays
     model_verification_sleep: float = 0.1  # Delay for model download verification

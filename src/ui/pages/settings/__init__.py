@@ -93,6 +93,9 @@ class SettingsPage:
         # Store expansion refs for expand/collapse all
         self._expansions: list[ui.expansion] = []
 
+        # World-generation min/max input widgets, populated by _advanced.py
+        self._world_gen_inputs: dict[str, tuple[ui.number, ui.number]] = {}
+
         # Register undo/redo handlers for this page
         self.state.on_undo(self._do_undo)
         self.state.on_redo(self._do_redo)

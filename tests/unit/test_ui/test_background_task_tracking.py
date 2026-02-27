@@ -97,6 +97,42 @@ class TestBackgroundTaskCounter:
         assert not _is_busy(state)
 
 
+class TestBackgroundTaskContextManager:
+    """Tests for the background_task context manager."""
+
+    def test_ends_task_on_normal_exit(self):
+        """Test that background_task calls end_background_task on normal exit."""
+        state = AppState()
+
+        with state.background_task("build"):
+            assert _is_busy(state)
+
+        assert not _is_busy(state)
+
+    def test_ends_task_on_exception(self):
+        """Test that background_task calls end_background_task even when the body raises."""
+        state = AppState()
+
+        with pytest.raises(RuntimeError, match="boom"):
+            with state.background_task("build"):
+                assert _is_busy(state)
+                raise RuntimeError("boom")
+
+        # Counter must be back to zero despite the exception
+        assert not _is_busy(state)
+
+    def test_ends_task_on_keyboard_interrupt(self):
+        """Test that background_task calls end_background_task on KeyboardInterrupt."""
+        state = AppState()
+
+        with pytest.raises(KeyboardInterrupt):
+            with state.background_task("build"):
+                assert _is_busy(state)
+                raise KeyboardInterrupt
+
+        assert not _is_busy(state)
+
+
 class TestSetProjectGuard:
     """Tests for set_project raising when busy."""
 
@@ -187,7 +223,7 @@ class TestProjectListCache:
     """Tests for project list caching in AppState."""
 
     def test_cache_returns_cached_value_within_ttl(self):
-        """Test that cached value is returned within the 2-second TTL."""
+        """Test that cached value is returned within the cache TTL window."""
         state = AppState()
         call_count = 0
 
@@ -290,8 +326,11 @@ class TestProjectListCache:
         """Test that cache expires after TTL and triggers refresh."""
         from unittest.mock import patch
 
+        from src.ui.state import _PROJECT_LIST_CACHE_TTL
+
         state = AppState()
         call_count = 0
+        start_time = 1000.0
 
         def fetch_projects():
             """Fetch mock projects with incrementing ID."""
@@ -300,21 +339,21 @@ class TestProjectListCache:
             return [{"id": str(call_count)}]
 
         with patch("src.ui.state.time") as mock_time:
-            # First call at time 1000.0
-            mock_time.time.return_value = 1000.0
+            # First call
+            mock_time.time.return_value = start_time
             result1 = state.get_cached_projects(fetch_projects)
             initial_call_count = call_count
             assert initial_call_count == 1
             assert result1[0]["id"] == "1"
 
-            # Second call at 1.5s (within 2s TTL) - should return cached
-            mock_time.time.return_value = 1001.5
+            # Second call within TTL - should return cached
+            mock_time.time.return_value = start_time + _PROJECT_LIST_CACHE_TTL / 2
             result2 = state.get_cached_projects(fetch_projects)
             assert call_count == initial_call_count  # Same count, cache hit
             assert result2 is result1
 
-            # Third call at 2.5s (beyond 2s TTL) - should refresh
-            mock_time.time.return_value = 1002.5
+            # Third call beyond TTL - should refresh
+            mock_time.time.return_value = start_time + _PROJECT_LIST_CACHE_TTL + 1
             result3 = state.get_cached_projects(fetch_projects)
             assert call_count == initial_call_count + 1  # Incremented, cache miss
             assert result3[0]["id"] == "2"

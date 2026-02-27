@@ -14,7 +14,7 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING
 
 from src.memory.world_quality import BaseQualityScores
-from src.utils.exceptions import WorldGenerationError, summarize_llm_error
+from src.utils.exceptions import DuplicateNameError, WorldGenerationError, summarize_llm_error
 
 if TYPE_CHECKING:
     from src.services.world_quality_service import EntityGenerationProgress, WorldQualityService
@@ -160,6 +160,10 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
     consecutive_failures = 0
     shuffles_remaining = MAX_BATCH_SHUFFLE_RETRIES
     completed_count = 0
+    duplicates_found = 0
+    # Cap duplicate retries to prevent unbounded submission when workers
+    # persistently produce duplicates (e.g. all entity-pair slots are taken).
+    max_duplicate_retries = count * (MAX_BATCH_SHUFFLE_RETRIES + 1)
 
     logger.info(
         "Starting parallel %s generation: %d entities with max_workers=%d",
@@ -183,7 +187,7 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
                 True if a task was submitted, False otherwise.
             """
             nonlocal next_index
-            if next_index >= count:
+            if next_index >= count + min(duplicates_found, max_duplicate_retries):
                 return False
             if cancel_check and cancel_check():
                 return False
@@ -194,13 +198,13 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
             if progress_callback:
                 progress_callback(
                     EntityGenerationProgress(
-                        current=idx + 1,
+                        current=min(idx + 1, count),
                         total=count,
                         entity_type=entity_type,
                         phase="generating",
                         elapsed_seconds=time.time() - batch_start_time,
                         estimated_remaining_seconds=svc._calculate_eta(
-                            completed_times, count - completed_count
+                            completed_times, max(count - completed_count, 0)
                         ),
                     )
                 )
@@ -246,14 +250,14 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
                     if progress_callback:
                         progress_callback(
                             EntityGenerationProgress(
-                                current=completed_count,
+                                current=min(len(results), count),
                                 total=count,
                                 entity_type=entity_type,
                                 entity_name=entity_name,
                                 phase="complete",
                                 elapsed_seconds=time.time() - batch_start_time,
                                 estimated_remaining_seconds=svc._calculate_eta(
-                                    completed_times, count - completed_count
+                                    completed_times, max(count - len(results), 0)
                                 ),
                             )
                         )
@@ -263,6 +267,23 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
                         "%s task %d was cancelled before completion",
                         entity_type.capitalize(),
                         task_idx + 1,
+                    )
+
+                except DuplicateNameError as e:
+                    # Don't count duplicates as consecutive failures —
+                    # they're expected race outcomes in parallel generation.
+                    # Extend the submission bound so a replacement task
+                    # is submitted, keeping the final result count on target.
+                    # Record in errors so all-duplicate runs raise instead
+                    # of silently returning [].
+                    duplicate_msg = summarize_llm_error(e, max_length=200)
+                    duplicates_found += 1
+                    errors.append(duplicate_msg)
+                    logger.warning(
+                        "Duplicate %s from parallel worker (task %d): %s",
+                        entity_type,
+                        task_idx + 1,
+                        duplicate_msg,
                     )
 
                 except WorldGenerationError as e:
@@ -396,9 +417,13 @@ def _collect_late_results[T, S: BaseQualityScores](
                 entity_name,
             )
         except Exception as late_err:
-            errors.append(str(late_err)[:200])
-            logger.debug(
+            if isinstance(late_err, (MemoryError, RecursionError)):
+                raise
+            late_msg = summarize_llm_error(late_err, max_length=200)
+            errors.append(late_msg)
+            logger.warning(
                 "Discarded late %s during early termination: %s",
                 entity_type,
-                late_err,
+                late_msg,
+                exc_info=True,
             )
