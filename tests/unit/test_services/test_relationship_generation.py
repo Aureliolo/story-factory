@@ -845,6 +845,7 @@ class TestRequiredEntityConstraint:
 
         svc = MagicMock()
         svc.analytics_db = None
+        svc._make_model_preparers.return_value = (None, None)
         config = MagicMock()
         config.creator_temperature = 0.9
         config.judge_temperature = 0.1
@@ -1002,6 +1003,7 @@ class TestRequiredEntityConstraint:
 
         svc = MagicMock()
         svc.analytics_db = None
+        svc._make_model_preparers.return_value = (None, None)
         config = MagicMock()
         config.creator_temperature = 0.9
         config.judge_temperature = 0.1
@@ -1055,6 +1057,7 @@ class TestRequiredEntityConstraint:
 
         svc = MagicMock()
         svc.analytics_db = None
+        svc._make_model_preparers.return_value = (None, None)
         config = MagicMock()
         config.creator_temperature = 0.9
         config.judge_temperature = 0.1
@@ -1566,6 +1569,7 @@ class TestNormalizationConsolidation:
 
         svc = MagicMock()
         svc.analytics_db = None
+        svc._make_model_preparers.return_value = (None, None)
         svc._get_creator_model.return_value = "test-model:8b"
         svc._get_judge_model.return_value = "test-model:8b"
         svc.get_calendar_context.return_value = ""
@@ -1621,6 +1625,7 @@ class TestRelationshipAutoPass:
         svc = MagicMock()
         svc.analytics_db = MagicMock()
         svc.analytics_db.get_first_pass_rate.return_value = 1.0  # 100% first-pass
+        svc._make_model_preparers.return_value = (None, None)
         svc._get_creator_model.return_value = "test-model:8b"
         svc._get_judge_model.return_value = "test-model:8b"
         svc.get_calendar_context.return_value = ""
@@ -1673,6 +1678,7 @@ class TestRelationshipAutoPass:
         svc = MagicMock()
         svc.analytics_db = MagicMock()
         svc.analytics_db.get_first_pass_rate.return_value = 0.94  # Below 95%
+        svc._make_model_preparers.return_value = (None, None)
         svc._get_creator_model.return_value = "test-model:8b"
         svc._get_judge_model.return_value = "test-model:8b"
         svc.get_calendar_context.return_value = ""
@@ -1721,6 +1727,7 @@ class TestRelationshipAutoPass:
         )
 
         svc = MagicMock(spec=[])
+        svc._make_model_preparers = MagicMock(return_value=(None, None))
         svc._get_creator_model = MagicMock(return_value="test-model:8b")
         svc._get_judge_model = MagicMock(return_value="test-model:8b")
         svc.get_calendar_context = MagicMock(return_value="")
@@ -1775,6 +1782,7 @@ class TestRelationshipAutoPass:
         svc = MagicMock()
         svc.analytics_db = MagicMock()
         svc.analytics_db.get_first_pass_rate.return_value = 0.95  # Exact boundary
+        svc._make_model_preparers.return_value = (None, None)
         svc._get_creator_model.return_value = "test-model:8b"
         svc._get_judge_model.return_value = "test-model:8b"
         svc.get_calendar_context.return_value = ""
@@ -1825,6 +1833,7 @@ class TestRelationshipAutoPass:
         analytics_db = MagicMock()
         analytics_db.get_first_pass_rate.side_effect = RuntimeError("DB connection lost")
         svc.analytics_db = analytics_db
+        svc._make_model_preparers.return_value = (None, None)
         svc._get_creator_model.return_value = "test-model:8b"
         svc._get_judge_model.return_value = "test-model:8b"
         svc.get_calendar_context.return_value = ""
@@ -1885,6 +1894,7 @@ class TestRelationshipAutoPass:
         analytics_db = MagicMock()
         analytics_db.get_first_pass_rate.side_effect = sqlite3.OperationalError("disk I/O error")
         svc.analytics_db = analytics_db
+        svc._make_model_preparers.return_value = (None, None)
         svc._get_creator_model.return_value = "test-model:8b"
         svc._get_judge_model.return_value = "test-model:8b"
         svc.get_calendar_context.return_value = ""

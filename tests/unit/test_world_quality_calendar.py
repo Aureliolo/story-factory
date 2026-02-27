@@ -56,6 +56,7 @@ def mock_svc(settings):
     )
     svc._get_creator_model.return_value = "test-model:8b"
     svc._get_judge_model.return_value = "test-model:8b"
+    svc._make_model_preparers.return_value = (None, None)
     svc._log_refinement_analytics = MagicMock()
     return svc
 
@@ -596,6 +597,8 @@ class TestServiceWrapperMethods:
     def test_generate_calendar_with_quality_wrapper(self, settings, story_state):
         """Test the public generate_calendar_with_quality delegates correctly."""
         mode_service = MagicMock()
+        mode_service.get_model_for_agent.return_value = "test-model"
+        mode_service.settings.vram_strategy = "sequential"
         svc = WorldQualityService(settings, mode_service)
 
         expected_scores = CalendarQualityScores(
