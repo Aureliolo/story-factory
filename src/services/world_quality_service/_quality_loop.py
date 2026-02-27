@@ -111,6 +111,8 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     # Auto-pass: skip the entire judge/refine loop when historical data shows
     # the judge is nearly always a no-op (e.g. relationship first-pass rate >= 95%).
     if auto_pass_score is not None:
+        if entity is None and prepare_creator:
+            prepare_creator()
         t_create = time.perf_counter()
         entity = create_fn(0) if entity is None else entity
         if entity is not None and not is_empty(entity):

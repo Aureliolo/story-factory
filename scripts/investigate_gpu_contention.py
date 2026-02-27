@@ -51,6 +51,23 @@ from src.memory.world_quality._entity_scores import CharacterQualityScores
 from src.memory.world_quality._story_scores import RelationshipQualityScores
 
 logger = logging.getLogger(__name__)
+
+# Schema for creator calls — matches CHARACTER_CREATION_PROMPT output fields.
+# CharacterQualityScores is for judge calls only; using it for creation would
+# mismatch the prompt (creation asks for name/role/backstory, not quality dimensions).
+CHARACTER_CREATION_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "role": {"type": "string"},
+        "description": {"type": "string"},
+        "backstory": {"type": "string"},
+        "goals": {"type": "string"},
+        "flaws": {"type": "string"},
+        "arc": {"type": "string"},
+    },
+    "required": ["name", "role", "description", "backstory", "goals", "flaws", "arc"],
+}
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
@@ -180,7 +197,8 @@ class GpuMonitor:
                 "temp_c": float(parts[5]),
                 "power_w": float(parts[6]) if parts[6] != "[N/A]" else None,
             }
-        except subprocess.TimeoutExpired, ValueError, IndexError, OSError:
+        except (subprocess.TimeoutExpired, ValueError, IndexError, OSError) as e:
+            logger.debug("GPU query failed: %s: %s", type(e).__name__, e)
             return None
 
 
@@ -207,7 +225,8 @@ def get_loaded_models() -> list[dict[str, Any]]:
             }
             for m in resp.json().get("models", [])
         ]
-    except httpx.HTTPError, json.JSONDecodeError:
+    except (httpx.HTTPError, json.JSONDecodeError) as e:
+        logger.warning("Failed to query loaded models from Ollama: %s: %s", type(e).__name__, e)
         return []
 
 
@@ -286,7 +305,7 @@ def timed_chat(
             "completion_tokens": 0,
             "total_tokens": 0,
             "loaded_models": get_loaded_models(),
-            "error": str(e)[:300],
+            "error": f"{type(e).__name__}: {str(e)[:280]}",
         }
 
 
@@ -309,7 +328,8 @@ def run_baseline(
     logger.info("PHASE 1: BASELINE (single model, no contention)")
     logger.info("=" * 60)
 
-    char_schema = CharacterQualityScores.model_json_schema()
+    creation_schema = CHARACTER_CREATION_SCHEMA
+    judge_char_schema = CharacterQualityScores.model_json_schema()
     rel_schema = RelationshipQualityScores.model_json_schema()
 
     # --- Creator baseline ---
@@ -324,7 +344,7 @@ def run_baseline(
         result = timed_chat(
             model=creator_model,
             prompt=CHARACTER_CREATION_PROMPT,
-            json_schema=char_schema,
+            json_schema=creation_schema,
             temperature=0.9,
             timeout=timeout,
             label=f"baseline_creator_{i + 1}",
@@ -342,7 +362,7 @@ def run_baseline(
         result = timed_chat(
             model=judge_model,
             prompt=CHARACTER_JUDGE_PROMPT,
-            json_schema=char_schema,
+            json_schema=judge_char_schema,
             temperature=0.3,
             timeout=timeout,
             label=f"baseline_judge_char_{i + 1}",
@@ -382,7 +402,8 @@ def run_contention(
     logger.info("PHASE 2: CONTENTION (both models concurrent)")
     logger.info("=" * 60)
 
-    char_schema = CharacterQualityScores.model_json_schema()
+    creation_schema = CHARACTER_CREATION_SCHEMA
+    judge_schema = CharacterQualityScores.model_json_schema()
 
     # Ensure both models are loaded
     unload_model(creator_model)
@@ -402,7 +423,7 @@ def run_contention(
                     timed_chat,
                     creator_model,
                     CHARACTER_CREATION_PROMPT,
-                    char_schema,
+                    creation_schema,
                     0.9,
                     timeout,
                     f"contention_creator_{i + 1}",
@@ -411,7 +432,7 @@ def run_contention(
                     timed_chat,
                     judge_model,
                     CHARACTER_JUDGE_PROMPT,
-                    char_schema,
+                    judge_schema,
                     0.3,
                     timeout,
                     f"contention_judge_{i + 1}",
@@ -440,7 +461,8 @@ def run_serialized(
     logger.info("PHASE 3: SERIALIZED (unload between calls)")
     logger.info("=" * 60)
 
-    char_schema = CharacterQualityScores.model_json_schema()
+    creation_schema = CHARACTER_CREATION_SCHEMA
+    judge_schema = CharacterQualityScores.model_json_schema()
 
     serialized_results = []
     for i in range(samples):
@@ -453,7 +475,7 @@ def run_serialized(
         creator_result = timed_chat(
             model=creator_model,
             prompt=CHARACTER_CREATION_PROMPT,
-            json_schema=char_schema,
+            json_schema=creation_schema,
             temperature=0.9,
             timeout=timeout,
             label=f"serialized_creator_{i + 1}",
@@ -466,7 +488,7 @@ def run_serialized(
         judge_result = timed_chat(
             model=judge_model,
             prompt=CHARACTER_JUDGE_PROMPT,
-            json_schema=char_schema,
+            json_schema=judge_schema,
             temperature=0.3,
             timeout=timeout,
             label=f"serialized_judge_{i + 1}",
@@ -621,8 +643,24 @@ def analyze_results(results: dict[str, Any]) -> dict[str, Any]:
 # =====================================================================
 
 
-def resolve_models() -> tuple[str, str]:
-    """Resolve creator and judge models from settings or defaults."""
+def resolve_models(cli_creator: str | None, cli_judge: str | None) -> tuple[str, str]:
+    """Resolve creator and judge models from CLI args or settings.
+
+    Args:
+        cli_creator: Explicit creator model from --creator flag.
+        cli_judge: Explicit judge model from --judge flag.
+
+    Returns:
+        Tuple of (creator_model, judge_model).
+
+    Raises:
+        ValueError: If models cannot be resolved from settings and no CLI overrides given.
+    """
+    # CLI overrides take priority
+    if cli_creator and cli_judge:
+        logger.info("Using CLI models: creator=%s, judge=%s", cli_creator, cli_judge)
+        return cli_creator, cli_judge
+
     try:
         from src.settings import Settings
 
@@ -631,25 +669,42 @@ def resolve_models() -> tuple[str, str]:
         # Check per-agent model config
         if settings.use_per_agent_models:
             agent_models = settings.agent_models
-            creator = agent_models.get("writer", "auto")
-            judge = agent_models.get("judge", "auto")
-            if creator != "auto" and judge != "auto":
-                logger.info("Resolved from settings: creator=%s, judge=%s", creator, judge)
-                return creator, judge
+            if "writer" not in agent_models or "judge" not in agent_models:
+                raise ValueError(
+                    "use_per_agent_models is enabled but 'writer' and/or 'judge' keys "
+                    f"are missing from agent_models. Found keys: {list(agent_models.keys())}. "
+                    "Use --creator and --judge to specify models explicitly."
+                )
+            creator = agent_models["writer"]
+            judge = agent_models["judge"]
+            if creator == "auto" or judge == "auto":
+                raise ValueError(
+                    f"agent_models has 'auto' values (writer={creator!r}, judge={judge!r}). "
+                    "Use --creator and --judge to specify models explicitly."
+                )
+            # Apply CLI override for single model if provided
+            creator = cli_creator or creator
+            judge = cli_judge or judge
+            logger.info("Resolved from settings: creator=%s, judge=%s", creator, judge)
+            return creator, judge
 
         # Check default model
         if settings.default_model and settings.default_model != "auto":
             logger.info("Single model mode: %s (no contention possible)", settings.default_model)
             return settings.default_model, settings.default_model
 
-    except Exception as e:
-        logger.warning("Could not load settings: %s — using defaults", e)
+        raise ValueError(
+            "Settings loaded but no model configuration found "
+            "(use_per_agent_models=False, no default_model). "
+            "Use --creator and --judge to specify models explicitly."
+        )
 
-    # Fallback to known models
-    creator = "huihui_ai/mistral-small-abliterated:24b"
-    judge = "huihui_ai/qwen3-abliterated:30b"
-    logger.info("Using default models: creator=%s, judge=%s", creator, judge)
-    return creator, judge
+    except Exception as e:
+        logger.error("Could not resolve models from settings: %s", e, exc_info=True)
+        raise ValueError(
+            f"Failed to resolve models: {e}. "
+            "Use --creator and --judge to specify models explicitly."
+        ) from e
 
 
 def main() -> None:
@@ -671,11 +726,7 @@ def main() -> None:
     )
 
     # Resolve models
-    creator_model, judge_model = resolve_models()
-    if args.creator:
-        creator_model = args.creator
-    if args.judge:
-        judge_model = args.judge
+    creator_model, judge_model = resolve_models(args.creator, args.judge)
 
     print(f"\n{'=' * 60}")
     print("GPU CONTENTION INVESTIGATION (Issue #424)")
@@ -713,30 +764,33 @@ def main() -> None:
         },
     }
 
-    # Phase 1: Baseline
-    print(f"\n{'=' * 60}")
-    print("Phase 1: BASELINE (single model, no contention)")
-    print(f"{'=' * 60}\n")
-    results["baseline"] = run_baseline(creator_model, judge_model, args.samples, args.timeout)
+    try:
+        # Phase 1: Baseline
+        print(f"\n{'=' * 60}")
+        print("Phase 1: BASELINE (single model, no contention)")
+        print(f"{'=' * 60}\n")
+        results["baseline"] = run_baseline(creator_model, judge_model, args.samples, args.timeout)
 
-    # Phase 2: Contention
-    print(f"\n{'=' * 60}")
-    print("Phase 2: CONTENTION (both models concurrent)")
-    print(f"{'=' * 60}\n")
-    results["contention"] = run_contention(creator_model, judge_model, args.samples, args.timeout)
+        # Phase 2: Contention
+        print(f"\n{'=' * 60}")
+        print("Phase 2: CONTENTION (both models concurrent)")
+        print(f"{'=' * 60}\n")
+        results["contention"] = run_contention(
+            creator_model, judge_model, args.samples, args.timeout
+        )
 
-    # Phase 3: Serialized
-    print(f"\n{'=' * 60}")
-    print("Phase 3: SERIALIZED (unload between calls)")
-    print(f"{'=' * 60}\n")
-    results["serialized"] = run_serialized(creator_model, judge_model, args.samples, args.timeout)
-
-    # Stop GPU monitor
-    results["gpu_samples"] = gpu_monitor.stop()
-
-    # Cleanup
-    unload_model(creator_model)
-    unload_model(judge_model)
+        # Phase 3: Serialized
+        print(f"\n{'=' * 60}")
+        print("Phase 3: SERIALIZED (unload between calls)")
+        print(f"{'=' * 60}\n")
+        results["serialized"] = run_serialized(
+            creator_model, judge_model, args.samples, args.timeout
+        )
+    finally:
+        # Guarantee monitor shutdown and model unload even if a phase raises
+        results["gpu_samples"] = gpu_monitor.stop()
+        unload_model(creator_model)
+        unload_model(judge_model)
 
     # Analyze
     results["analysis"] = analyze_results(results)
@@ -803,6 +857,7 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     output_path = Path(args.output) if args.output else output_dir / f"gpu_contention_{ts}.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     output_path.write_text(json.dumps(results, indent=2, default=str))
     print(f"\nFull results saved to: {output_path}")

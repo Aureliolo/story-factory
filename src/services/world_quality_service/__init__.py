@@ -542,11 +542,27 @@ class WorldQualityService(EntityDelegatesMixin):
 
         def prepare_creator() -> None:
             """Unload judge model and prepare creator model for VRAM."""
-            _prepare_model(self.mode_service, creator_model)
+            try:
+                _prepare_model(self.mode_service, creator_model)
+            except Exception as e:
+                logger.warning(
+                    "Failed to prepare creator model '%s' for VRAM "
+                    "(continuing without preparation): %s",
+                    creator_model,
+                    e,
+                )
 
         def prepare_judge() -> None:
             """Unload creator model and prepare judge model for VRAM."""
-            _prepare_model(self.mode_service, judge_model)
+            try:
+                _prepare_model(self.mode_service, judge_model)
+            except Exception as e:
+                logger.warning(
+                    "Failed to prepare judge model '%s' for VRAM "
+                    "(continuing without preparation): %s",
+                    judge_model,
+                    e,
+                )
 
         return prepare_creator, prepare_judge
 
