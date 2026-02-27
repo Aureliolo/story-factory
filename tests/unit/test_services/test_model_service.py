@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.services.model_service import ModelService
+from src.services.model_service import ModelService, _TTLCached
 from src.settings import Settings
 
 
@@ -1635,3 +1635,105 @@ class TestColdStartDetection:
         assert result.is_healthy is True
         assert result.cold_start_models == ()
         assert any("Skipping cold-start detection" in r.message for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# _TTLCached direct unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestTTLCachedDirect:
+    """Direct unit tests for _TTLCached cache primitive."""
+
+    def test_get_returns_none_when_never_set(self):
+        """get() returns None when no value has been stored."""
+        cache: _TTLCached[str] = _TTLCached(ttl=10.0)
+        assert cache.get(now=1.0) is None
+
+    def test_get_returns_value_within_ttl(self):
+        """get() returns the stored value when within TTL window."""
+        cache: _TTLCached[str] = _TTLCached(ttl=10.0)
+        cache.set("hello", now=1.0)
+        assert cache.get(now=5.0) == "hello"
+
+    def test_get_returns_none_after_ttl_expires(self):
+        """get() returns None once TTL has expired."""
+        cache: _TTLCached[str] = _TTLCached(ttl=10.0)
+        cache.set("hello", now=1.0)
+        assert cache.get(now=11.1) is None
+
+    def test_get_returns_value_at_exact_ttl_boundary(self):
+        """get() returns the value when elapsed == ttl (uses strict <)."""
+        cache: _TTLCached[str] = _TTLCached(ttl=10.0)
+        cache.set("hello", now=1.0)
+        # Elapsed exactly 10.0 — should expire (< not <=)
+        assert cache.get(now=11.0) is None
+
+    def test_invalidate_clears_cached_value(self):
+        """invalidate() clears the value so get() returns None."""
+        cache: _TTLCached[int] = _TTLCached(ttl=10.0)
+        cache.set(42, now=1.0)
+        cache.invalidate()
+        assert cache.get(now=2.0) is None
+
+    def test_set_overwrites_previous_value(self):
+        """set() replaces a previously stored value."""
+        cache: _TTLCached[str] = _TTLCached(ttl=10.0)
+        cache.set("first", now=1.0)
+        cache.set("second", now=5.0)
+        assert cache.get(now=6.0) == "second"
+
+    def test_rejects_non_positive_ttl(self):
+        """_TTLCached raises ValueError for zero or negative TTL."""
+        with pytest.raises(ValueError, match="TTL must be positive"):
+            _TTLCached(ttl=0.0)
+        with pytest.raises(ValueError, match="TTL must be positive"):
+            _TTLCached(ttl=-5.0)
+
+
+# ---------------------------------------------------------------------------
+# Defensive copy and dedup tests
+# ---------------------------------------------------------------------------
+
+
+class TestListInstalledDefensiveCopy:
+    """Tests that list_installed returns a defensive copy of cached data."""
+
+    def test_mutating_returned_list_does_not_corrupt_cache(self, model_service):
+        """Mutating the returned list should not affect subsequent cached calls."""
+        with patch("src.services.model_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_instance.list.return_value = MagicMock(
+                models=[MagicMock(model="model-a:latest"), MagicMock(model="model-b:latest")]
+            )
+
+            result1 = model_service.list_installed()
+            # Mutate the returned list
+            result1.append("injected-model:latest")
+
+            # Second call (within TTL) should return clean cached data
+            result2 = model_service.list_installed()
+
+        assert "injected-model:latest" not in result2
+        assert len(result2) == 2
+
+
+class TestColdStartDedup:
+    """Tests that cold-start detection deduplicates models across default and agent settings."""
+
+    def test_model_in_both_default_and_agent_appears_once(self, model_service, caplog):
+        """A model configured as both default and agent model should appear once in cold_start."""
+        shared_model = "shared-model:8b"
+        model_service.settings.default_model = shared_model
+        model_service.settings.agent_models = {"writer": shared_model}
+
+        with patch("src.services.model_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            with patch("src.services.model_service.get_available_vram", return_value=24):
+                # No models running — all configured models are cold
+                with patch.object(model_service, "get_running_models", return_value=[]):
+                    result = model_service.check_health()
+
+        assert result.cold_start_models.count(shared_model) == 1

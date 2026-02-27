@@ -773,6 +773,8 @@ class TestEmbedRelationship:
         )
         mock_client = MagicMock()
         mock_embed_text = MagicMock(return_value=FAKE_EMBEDDING)
+        # Clear the warn-once set so the fallback warning fires deterministically
+        embedding_service_mod._warned_context_models.discard(service.settings.embedding_model)
         with (
             patch.object(service, "_get_client", return_value=mock_client),
             patch(
@@ -781,7 +783,7 @@ class TestEmbedRelationship:
             ),
             patch("src.services.embedding_service.get_embedding_prefix", return_value="pfx:"),
             patch.object(service, "embed_text", mock_embed_text),
-            caplog.at_level(logging.DEBUG),
+            caplog.at_level(logging.WARNING),
         ):
             result = service.embed_relationship(mock_db, rel, "A", "B")
 

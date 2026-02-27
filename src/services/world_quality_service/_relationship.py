@@ -273,7 +273,7 @@ def generate_relationship_with_quality(
         # Derive auto-pass scores from the configured threshold so they stay
         # consistent with the quality loop's threshold comparison.
         threshold = config.get_threshold("relationship")
-        logger.info(
+        logger.debug(
             "Relationship first-pass rate %.0f%% >= 95%%, auto-passing judge "
             "(auto-pass score=%.1f)",
             first_pass_rate * 100,

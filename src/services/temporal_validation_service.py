@@ -190,6 +190,17 @@ class TemporalValidationService:
                 logger.debug(f"Loaded calendar for validation: {calendar.current_era_name}")
         except (sqlite3.Error, KeyError, ValueError) as e:
             logger.warning("Could not load world calendar: %s", e)
+            result.warnings.append(
+                TemporalValidationIssue(
+                    entity_id="",
+                    entity_name="",
+                    entity_type="world",
+                    error_type=TemporalErrorType.INVALID_DATE,
+                    severity=TemporalErrorSeverity.WARNING,
+                    message=(f"Calendar-based validation skipped: could not load calendar ({e})"),
+                    suggestion="Check world settings and rebuild calendar if needed",
+                )
+            )
 
         # Validate each entity
         for entity in all_entities:

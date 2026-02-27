@@ -677,6 +677,29 @@ class TestGenerateBatchParallel:
         duplicate_msgs = [m for m in caplog.messages if "Duplicate" in m]
         assert len(duplicate_msgs) >= 1
 
+    def test_all_duplicates_eventually_terminate(self, mock_svc, caplog):
+        """Persistent DuplicateNameError should terminate and raise WorldGenerationError."""
+        from src.utils.exceptions import DuplicateNameError
+
+        def always_duplicate(_i):
+            raise DuplicateNameError("Name already exists")
+
+        with caplog.at_level(logging.WARNING):
+            with pytest.raises(WorldGenerationError, match="Failed to generate any"):
+                _generate_batch_parallel(
+                    svc=mock_svc,
+                    count=3,
+                    entity_type="test",
+                    generate_fn=always_duplicate,
+                    get_name=lambda e: e["name"],
+                    quality_threshold=7.5,
+                    max_workers=2,
+                )
+
+        # Should have logged duplicate warnings
+        duplicate_msgs = [m for m in caplog.messages if "Duplicate" in m]
+        assert len(duplicate_msgs) >= 3
+
 
 # ---------------------------------------------------------------------------
 # _collect_late_results tests

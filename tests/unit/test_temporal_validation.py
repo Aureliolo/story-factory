@@ -29,6 +29,74 @@ def validation_service() -> TemporalValidationService:
     return TemporalValidationService(settings)
 
 
+class TestTemporalValidationResultIsValid:
+    """Tests for TemporalValidationResult.is_valid computed property."""
+
+    def test_is_valid_true_when_no_errors(self):
+        """is_valid returns True for a fresh result with no errors."""
+        result = TemporalValidationResult()
+        assert result.is_valid is True
+
+    def test_is_valid_false_after_adding_error(self):
+        """is_valid returns False after an error is appended."""
+        from src.services.temporal_validation_service import (
+            TemporalValidationIssue,
+        )
+
+        result = TemporalValidationResult()
+        result.errors.append(
+            TemporalValidationIssue(
+                entity_id="e1",
+                entity_name="Hero",
+                entity_type="character",
+                error_type=TemporalErrorType.INVALID_DATE,
+                severity=TemporalErrorSeverity.ERROR,
+                message="Test error",
+            )
+        )
+        assert result.is_valid is False
+
+    def test_is_valid_true_with_only_warnings(self):
+        """is_valid returns True when only warnings are present (no errors)."""
+        from src.services.temporal_validation_service import (
+            TemporalValidationIssue,
+        )
+
+        result = TemporalValidationResult()
+        result.warnings.append(
+            TemporalValidationIssue(
+                entity_id="e1",
+                entity_name="Hero",
+                entity_type="character",
+                error_type=TemporalErrorType.INVALID_DATE,
+                severity=TemporalErrorSeverity.WARNING,
+                message="Test warning",
+            )
+        )
+        assert result.is_valid is True
+
+    def test_is_valid_reflects_error_list_mutations(self):
+        """is_valid dynamically reflects the errors list — removing errors restores validity."""
+        from src.services.temporal_validation_service import (
+            TemporalValidationIssue,
+        )
+
+        result = TemporalValidationResult()
+        issue = TemporalValidationIssue(
+            entity_id="e1",
+            entity_name="Hero",
+            entity_type="character",
+            error_type=TemporalErrorType.INVALID_DATE,
+            severity=TemporalErrorSeverity.ERROR,
+            message="Test error",
+        )
+        result.errors.append(issue)
+        assert result.is_valid is False
+
+        result.errors.remove(issue)
+        assert result.is_valid is True
+
+
 @pytest.fixture
 def sample_calendar() -> WorldCalendar:
     """Create a sample calendar for testing."""
@@ -999,6 +1067,9 @@ class TestValidateWorld:
 
         assert result.is_valid is True
         assert result.error_count == 0
+        # Calendar loading failure should be reported as a warning
+        assert result.warning_count >= 1
+        assert any("Calendar-based validation skipped" in w.message for w in result.warnings)
 
 
 class TestDeathDateValidation:

@@ -198,13 +198,13 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
             if progress_callback:
                 progress_callback(
                     EntityGenerationProgress(
-                        current=idx + 1,
+                        current=min(idx + 1, count),
                         total=count,
                         entity_type=entity_type,
                         phase="generating",
                         elapsed_seconds=time.time() - batch_start_time,
                         estimated_remaining_seconds=svc._calculate_eta(
-                            completed_times, count - completed_count
+                            completed_times, max(count - completed_count, 0)
                         ),
                     )
                 )
@@ -250,14 +250,14 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
                     if progress_callback:
                         progress_callback(
                             EntityGenerationProgress(
-                                current=completed_count,
+                                current=min(len(results), count),
                                 total=count,
                                 entity_type=entity_type,
                                 entity_name=entity_name,
                                 phase="complete",
                                 elapsed_seconds=time.time() - batch_start_time,
                                 estimated_remaining_seconds=svc._calculate_eta(
-                                    completed_times, count - completed_count
+                                    completed_times, max(count - len(results), 0)
                                 ),
                             )
                         )
@@ -274,12 +274,16 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
                     # they're expected race outcomes in parallel generation.
                     # Extend the submission bound so a replacement task
                     # is submitted, keeping the final result count on target.
+                    # Record in errors so all-duplicate runs raise instead
+                    # of silently returning [].
+                    duplicate_msg = summarize_llm_error(e, max_length=200)
                     duplicates_found += 1
+                    errors.append(duplicate_msg)
                     logger.warning(
                         "Duplicate %s from parallel worker (task %d): %s",
                         entity_type,
                         task_idx + 1,
-                        summarize_llm_error(e, max_length=200),
+                        duplicate_msg,
                     )
 
                 except WorldGenerationError as e:

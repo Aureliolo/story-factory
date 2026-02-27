@@ -220,6 +220,12 @@ def _generate_batch[T, S: BaseQualityScores](
                         ),
                     )
                 )
+        except DuplicateNameError as e:
+            # Don't count duplicates as consecutive failures —
+            # they're expected outcomes when entity-pair slots fill up.
+            duplicate_msg = summarize_llm_error(e, max_length=200)
+            errors.append(duplicate_msg)
+            logger.warning("Duplicate %s %d/%d: %s", entity_type, i + 1, count, duplicate_msg)
         except WorldGenerationError as e:
             error_msg = summarize_llm_error(e, max_length=200)
             errors.append(error_msg)
