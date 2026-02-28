@@ -418,37 +418,23 @@ def quality_refinement_loop[T, S: BaseQualityScores](
 
             if rounded_score >= entity_threshold and not below_floor:
                 # H1 fix: if monotonicity guard reverted entity to best iteration,
-                # return scores from that iteration for consistency.
+                # the best iteration's scores will always violate the dimension
+                # floor (the only reason the peak iteration didn't return is a
+                # floor violation — if it met threshold AND floor, it returned
+                # immediately). Continue refinement for a chance at clean scores.
                 if entity_reverted and history.best_iteration > 0:
-                    best_record = history.iterations[history.best_iteration - 1]
-                    scores = score_cls(**best_record.scores)
-                    # Re-validate dimension floor on the swapped-in scores
-                    best_below_floor = (
-                        scores.minimum_score < dimension_floor if dimension_floor > 0.0 else False
-                    )
-                    if best_below_floor:
-                        logger.info(
-                            "%s '%s' best iteration %d scores violate dimension "
-                            "floor (min=%.1f < floor=%.1f), continuing refinement",
-                            entity_type.capitalize(),
-                            get_name(entity),
-                            history.best_iteration,
-                            scores.minimum_score,
-                            dimension_floor,
-                        )
-                        continue
+                    best_rec = history.iterations[history.best_iteration - 1]
+                    reverted_scores = score_cls(**best_rec.scores)
                     logger.info(
-                        "%s '%s' met quality threshold via best iteration %d "
-                        "(current=%d, best_score=%.1f, current_score=%.1f)",
+                        "%s '%s' best iteration %d scores violate dimension "
+                        "floor (min=%.1f < floor=%.1f), continuing refinement",
                         entity_type.capitalize(),
                         get_name(entity),
                         history.best_iteration,
-                        current_iter,
-                        scores.average,
-                        history.iterations[current_iter - 1].average_score,
+                        reverted_scores.minimum_score,
+                        dimension_floor,
                     )
-                    history.final_iteration = history.best_iteration
-                    history.final_score = history.peak_score
+                    continue
                 else:
                     logger.info(
                         "%s '%s' met quality threshold (%.1f >= %.1f)",
