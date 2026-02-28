@@ -613,6 +613,64 @@ class TestGenerateEventWithQuality:
                 entity_context="Test context",
             )
 
+    @patch("src.services.world_quality_service._event._judge_event_quality")
+    @patch("src.services.world_quality_service._event._create_event")
+    def test_generate_event_rejects_duplicate_description(
+        self, mock_create, mock_judge, service, story_state
+    ):
+        """Test that duplicate descriptions are rejected and retried."""
+        # First call returns duplicate of existing, second returns unique
+        mock_create.side_effect = [
+            {"description": "Existing event", "year": 1200, "participants": [], "consequences": []},
+            {"description": "A unique event", "year": 1300, "participants": [], "consequences": []},
+        ]
+        mock_judge.return_value = EventQualityScores(
+            significance=8.0,
+            temporal_plausibility=8.0,
+            causal_coherence=8.0,
+            narrative_potential=8.0,
+            entity_integration=8.0,
+            feedback="Good",
+        )
+
+        event, _scores, _iterations = service.generate_event_with_quality(
+            story_state,
+            existing_descriptions=["Existing event"],
+            entity_context="Test context",
+        )
+
+        # Should have used the unique (non-duplicate) description
+        assert event["description"] == "A unique event"
+        assert mock_create.call_count == 2
+
+    @patch("src.services.world_quality_service._event._judge_event_quality")
+    @patch("src.services.world_quality_service._event._create_event")
+    def test_generate_event_rejects_empty_description(
+        self, mock_create, mock_judge, service, story_state
+    ):
+        """Test that empty descriptions trigger retry."""
+        mock_create.side_effect = [
+            {"description": "", "year": 1200, "participants": [], "consequences": []},
+            {"description": "Valid event", "year": 1300, "participants": [], "consequences": []},
+        ]
+        mock_judge.return_value = EventQualityScores(
+            significance=8.0,
+            temporal_plausibility=8.0,
+            causal_coherence=8.0,
+            narrative_potential=8.0,
+            entity_integration=8.0,
+            feedback="Good",
+        )
+
+        event, _scores, _iterations = service.generate_event_with_quality(
+            story_state,
+            existing_descriptions=[],
+            entity_context="Test context",
+        )
+
+        assert event["description"] == "Valid event"
+        assert mock_create.call_count == 2
+
 
 class TestGenerateEventsWithQualityBatch:
     """Tests for generate_events_with_quality batch wrapper."""
@@ -621,12 +679,21 @@ class TestGenerateEventsWithQualityBatch:
     @patch("src.services.world_quality_service._event._create_event")
     def test_batch_generates_events(self, mock_create, mock_judge, service, story_state):
         """Test batch wrapper calls single-event generator and collects results."""
-        mock_create.return_value = {
-            "description": "A great battle",
-            "year": 1200,
-            "participants": [],
-            "consequences": [],
-        }
+        # Return unique descriptions to avoid dedup rejection
+        mock_create.side_effect = [
+            {
+                "description": "A great battle",
+                "year": 1200,
+                "participants": [],
+                "consequences": [],
+            },
+            {
+                "description": "A mysterious plague",
+                "year": 1350,
+                "participants": [],
+                "consequences": [],
+            },
+        ]
         mock_judge.return_value = EventQualityScores(
             significance=8.0,
             temporal_plausibility=8.0,
@@ -644,8 +711,9 @@ class TestGenerateEventsWithQualityBatch:
         )
 
         assert len(results) == 2
-        for event_dict, scores in results:
-            assert event_dict["description"] == "A great battle"
+        assert results[0][0]["description"] == "A great battle"
+        assert results[1][0]["description"] == "A mysterious plague"
+        for _event_dict, scores in results:
             assert scores.average == 8.0
 
 
@@ -700,6 +768,60 @@ class TestFormatHelpers:
         assert "Consequences:" in result
         assert "Peace restored" in result
         assert "Kingdom united" in result
+
+
+class TestIsDuplicateDescription:
+    """Tests for _is_duplicate_description helper."""
+
+    def test_exact_match_is_duplicate(self):
+        """Test that an exact match is detected as duplicate."""
+        from src.services.world_quality_service._event import _is_duplicate_description
+
+        assert _is_duplicate_description("A great battle", ["A great battle"]) is True
+
+    def test_case_insensitive_match(self):
+        """Test that case-insensitive prefix matching detects duplicates."""
+        from src.services.world_quality_service._event import _is_duplicate_description
+
+        assert _is_duplicate_description("A GREAT BATTLE", ["a great battle"]) is True
+
+    def test_no_match(self):
+        """Test that non-matching descriptions are not duplicates."""
+        from src.services.world_quality_service._event import _is_duplicate_description
+
+        assert _is_duplicate_description("A mysterious plague", ["A great battle"]) is False
+
+    def test_empty_existing(self):
+        """Test that empty existing list never matches."""
+        from src.services.world_quality_service._event import _is_duplicate_description
+
+        assert _is_duplicate_description("Anything", []) is False
+
+    def test_truncation_at_prefix_len(self):
+        """Descriptions matching in the first 60 chars but differing after are duplicates."""
+        from src.services.world_quality_service._event import (
+            _EVENT_DESCRIPTION_PREFIX_LEN,
+            _is_duplicate_description,
+        )
+
+        base = "A" * _EVENT_DESCRIPTION_PREFIX_LEN
+        assert _is_duplicate_description(base + " extra text", [base + " different text"]) is True
+
+    def test_different_within_prefix_len(self):
+        """Descriptions differing within the first 60 chars are not duplicates."""
+        from src.services.world_quality_service._event import (
+            _EVENT_DESCRIPTION_PREFIX_LEN,
+            _is_duplicate_description,
+        )
+
+        prefix = "A" * (_EVENT_DESCRIPTION_PREFIX_LEN - 1)
+        assert _is_duplicate_description(prefix + "X", [prefix + "Y"]) is False
+
+    def test_whitespace_stripped_before_comparison(self):
+        """Leading/trailing whitespace is stripped before truncation and comparison."""
+        from src.services.world_quality_service._event import _is_duplicate_description
+
+        assert _is_duplicate_description("  A great battle  ", ["A great battle"]) is True
 
 
 class TestCharacterJudgeCalendarContext:

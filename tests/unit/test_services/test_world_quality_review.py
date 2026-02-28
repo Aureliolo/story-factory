@@ -316,6 +316,62 @@ class TestReviewPlotQuality:
         assert result is refined_plot
         mock_gen.assert_called_once()
 
+    def test_refine_plot_prompt_includes_improvement_focus(
+        self, service, story_state, test_plot_outline
+    ):
+        """Plot refinement prompt includes per-dimension improvement instructions (M4 fix)."""
+        low_scores = PlotQualityScores(
+            coherence=3.0,
+            tension_arc=3.0,
+            character_integration=3.0,
+            originality=3.0,
+            feedback="Weak in all areas",
+        )
+        refined_plot = PlotOutline(
+            plot_summary="Refined journey",
+            plot_points=[PlotPoint(description="The refined call", chapter=1)],
+        )
+
+        with patch(
+            "src.services.world_quality_service._plot.generate_structured",
+            return_value=refined_plot,
+        ) as mock_gen:
+            service._refine_plot(test_plot_outline, low_scores, story_state, 0.7)
+
+        prompt = mock_gen.call_args.kwargs.get("prompt", mock_gen.call_args[1].get("prompt", ""))
+        # Per-dimension actionable instructions must appear
+        assert "cause-effect" in prompt.lower() or "logical connections" in prompt.lower()
+        assert "escalating stakes" in prompt.lower() or "turning points" in prompt.lower()
+        assert "character arcs" in prompt.lower()
+        assert "genre expectations" in prompt.lower() or "unconventional" in prompt.lower()
+        # The old bare "WEAK AREAS TO IMPROVE" must NOT appear
+        assert "WEAK AREAS TO IMPROVE" not in prompt
+
+    def test_refine_plot_prompt_above_threshold_says_enhance_all(
+        self, service, story_state, test_plot_outline
+    ):
+        """When all scores are above threshold, prompt says 'Enhance all areas'."""
+        high_scores = PlotQualityScores(
+            coherence=9.0,
+            tension_arc=9.0,
+            character_integration=9.0,
+            originality=9.0,
+            feedback="Pretty good",
+        )
+        refined_plot = PlotOutline(
+            plot_summary="Refined journey",
+            plot_points=[PlotPoint(description="The refined call", chapter=1)],
+        )
+
+        with patch(
+            "src.services.world_quality_service._plot.generate_structured",
+            return_value=refined_plot,
+        ) as mock_gen:
+            service._refine_plot(test_plot_outline, high_scores, story_state, 0.7)
+
+        prompt = mock_gen.call_args.kwargs.get("prompt", mock_gen.call_args[1].get("prompt", ""))
+        assert "Enhance all areas" in prompt
+
     def test_judge_plot_quality_logs_exception_on_error(
         self, service, story_state, test_plot_outline
     ):

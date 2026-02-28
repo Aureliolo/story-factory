@@ -10,8 +10,8 @@ from src.memory.timeline_types import (
     SENTINEL_YEARS,
     EntityLifecycle,
     StoryTimestamp,
-    _parse_year,
     extract_lifecycle_from_attributes,
+    parse_year,
 )
 from src.memory.world_calendar import CalendarMonth, HistoricalEra, WorldCalendar
 from src.services.temporal_validation_service import (
@@ -1498,55 +1498,55 @@ class TestMissingTemporalDataWarning:
 
 
 class TestSentinelYearRejection:
-    """Tests for sentinel year rejection in _parse_year (#395)."""
+    """Tests for sentinel year rejection in parse_year (#395)."""
 
     def test_sentinel_minus_one_rejected(self) -> None:
         """Test that -1 is rejected as a sentinel value."""
-        assert _parse_year(-1, "birth_year") is None
+        assert parse_year(-1, "birth_year") is None
 
     def test_sentinel_zero_rejected(self) -> None:
         """Test that 0 is rejected as a sentinel value."""
-        assert _parse_year(0, "birth_year") is None
+        assert parse_year(0, "birth_year") is None
 
     def test_sentinel_9999_rejected(self) -> None:
         """Test that 9999 is rejected as a sentinel value."""
-        assert _parse_year(9999, "founding_year") is None
+        assert parse_year(9999, "founding_year") is None
 
     def test_sentinel_minus_one_as_string_rejected(self) -> None:
         """Test that '-1' string is rejected as sentinel."""
-        assert _parse_year("-1", "death_year") is None
+        assert parse_year("-1", "death_year") is None
 
     def test_sentinel_zero_as_string_rejected(self) -> None:
         """Test that '0' string is rejected as sentinel."""
-        assert _parse_year("0", "birth_year") is None
+        assert parse_year("0", "birth_year") is None
 
     def test_sentinel_9999_as_string_rejected(self) -> None:
         """Test that '9999' string is rejected as sentinel."""
-        assert _parse_year("9999", "destruction_year") is None
+        assert parse_year("9999", "destruction_year") is None
 
     def test_sentinel_minus_one_as_float_rejected(self) -> None:
         """Test that -1.0 float is rejected as sentinel."""
-        assert _parse_year(-1.0, "birth_year") is None
+        assert parse_year(-1.0, "birth_year") is None
 
     def test_sentinel_zero_as_float_rejected(self) -> None:
         """Test that 0.0 float is rejected as sentinel."""
-        assert _parse_year(0.0, "birth_year") is None
+        assert parse_year(0.0, "birth_year") is None
 
     def test_sentinel_9999_as_float_rejected(self) -> None:
         """Test that 9999.0 float is rejected as sentinel."""
-        assert _parse_year(9999.0, "destruction_year") is None
+        assert parse_year(9999.0, "destruction_year") is None
 
     def test_valid_negative_year_accepted(self) -> None:
         """Test that valid negative years (not -1) are accepted."""
-        assert _parse_year(-500, "birth_year") == -500
+        assert parse_year(-500, "birth_year") == -500
 
     def test_valid_positive_year_accepted(self) -> None:
         """Test that normal positive years are accepted."""
-        assert _parse_year(500, "birth_year") == 500
+        assert parse_year(500, "birth_year") == 500
 
     def test_valid_year_one_accepted(self) -> None:
         """Test that year 1 is accepted (not a sentinel)."""
-        assert _parse_year(1, "founding_year") == 1
+        assert parse_year(1, "founding_year") == 1
 
     def test_sentinel_years_frozenset_contents(self) -> None:
         """Test SENTINEL_YEARS contains exactly the expected values."""
@@ -1625,6 +1625,21 @@ class TestEraMismatchDetection:
 
         assert len(result.warnings) == 0
 
+    def test_no_mismatch_when_era_name_has_prefix_suffix(
+        self, validation_service, calendar_with_eras
+    ):
+        """Test that era names normalize 'The' prefix and 'Era' suffix for comparison."""
+        entity = Entity(id="ent-001", name="Hero", type="character")
+        # "The First Age Era" should normalize to match "First Age"
+        timestamp = StoryTimestamp(year=50, era_name="The First Age Era")
+        result = TemporalValidationResult()
+
+        validation_service._check_era_name_mismatch(
+            entity, timestamp, calendar_with_eras, "birth", result
+        )
+
+        assert len(result.warnings) == 0
+
     def test_skips_when_era_not_resolved(self, validation_service, calendar_with_eras):
         """Test early return when calendar can't resolve era for year."""
         entity = Entity(id="ent-001", name="Hero", type="character")
@@ -1637,3 +1652,57 @@ class TestEraMismatchDetection:
         )
 
         assert len(result.warnings) == 0
+
+
+class TestNormalizeEraName:
+    """Direct unit tests for the _normalize_era_name helper."""
+
+    def test_strips_the_prefix(self):
+        """'The' article prefix is stripped."""
+        from src.services.temporal_validation_service import _normalize_era_name
+
+        assert _normalize_era_name("The Golden Age") == "golden age"
+
+    def test_strips_era_suffix(self):
+        """' Era' suffix is stripped."""
+        from src.services.temporal_validation_service import _normalize_era_name
+
+        assert _normalize_era_name("Dark Era") == "dark"
+
+    def test_strips_both_prefix_and_suffix(self):
+        """Both 'The' prefix and ' Era' suffix are stripped together."""
+        from src.services.temporal_validation_service import _normalize_era_name
+
+        assert _normalize_era_name("The Ancient Era") == "ancient"
+
+    def test_case_insensitive(self):
+        """Normalization is case-insensitive via casefold."""
+        from src.services.temporal_validation_service import _normalize_era_name
+
+        assert _normalize_era_name("THE FIRST AGE") == "first age"
+
+    def test_strips_a_prefix(self):
+        """'A' article prefix is stripped."""
+        from src.services.temporal_validation_service import _normalize_era_name
+
+        assert _normalize_era_name("A Golden Age") == "golden age"
+
+    def test_strips_an_prefix(self):
+        """'An' article prefix is stripped."""
+        from src.services.temporal_validation_service import _normalize_era_name
+
+        assert _normalize_era_name("An Ancient Time") == "ancient time"
+
+    def test_whitespace_only(self):
+        """Whitespace-only input normalizes to empty string."""
+        from src.services.temporal_validation_service import _normalize_era_name
+
+        assert _normalize_era_name("   ") == ""
+
+    def test_idempotent(self):
+        """Normalizing an already-normalized name produces the same result."""
+        from src.services.temporal_validation_service import _normalize_era_name
+
+        once = _normalize_era_name("The First Age Era")
+        twice = _normalize_era_name(once)
+        assert once == twice

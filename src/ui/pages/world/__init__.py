@@ -31,6 +31,7 @@ from nicegui.elements.input import Input
 from nicegui.elements.select import Select
 from nicegui.elements.textarea import Textarea
 
+from src.memory.entities import Entity
 from src.memory.world_health import CycleInfo
 from src.services import ServiceContainer
 from src.ui.components.graph import GraphComponent
@@ -143,6 +144,8 @@ class WorldPage:
         self._generation_dialog: ui.dialog | None = None
         # Per-render cache for entity options (populated in build(), cleared after)
         self._cached_entity_options: dict[str, str] | None = None
+        # Pre-fetched entity list for the browser (populated in build(), cleared after)
+        self._prefetched_entities: list[Entity] | None = None
 
     # ========== Build ==========
 
@@ -159,14 +162,17 @@ class WorldPage:
 
         # Pre-fetch entity options once for all child sections to avoid duplicate API calls
         if self.state.world_db:
-            entities = self.services.world.list_entities(self.state.world_db)
-            self._cached_entity_options = {e.id: e.name for e in entities}
+            entity_list = list(self.services.world.list_entities(self.state.world_db))
+            self._cached_entity_options = {e.id: e.name for e in entity_list}
+            # Store full list for the entity browser to reuse during initial build
+            self._prefetched_entities = entity_list
             logger.debug(
                 "Pre-fetched %d entity options for world page",
                 len(self._cached_entity_options),
             )
         else:
             self._cached_entity_options = {}
+            self._prefetched_entities = []
 
         try:
             # World generation toolbar
@@ -200,9 +206,10 @@ class WorldPage:
                 self._build_relationships_section()
                 self._build_analysis_section()
         finally:
-            # Clear cached entity options after build so post-build interactions fetch fresh data
+            # Clear caches after build so post-build interactions fetch fresh data
             self._cached_entity_options = None
-            logger.debug("World page build complete, entity options cache cleared")
+            self._prefetched_entities = None
+            logger.debug("World page build complete, entity/options caches cleared")
 
     # ========== Inline (small) helpers ==========
 

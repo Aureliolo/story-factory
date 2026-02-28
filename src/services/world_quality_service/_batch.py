@@ -18,6 +18,7 @@ from src.memory.world_quality import (
     LocationQualityScores,
     RelationshipQualityScores,
 )
+from src.services.world_quality_service._event import _EVENT_DESCRIPTION_PREFIX_LEN
 from src.utils.exceptions import DuplicateNameError, WorldGenerationError, summarize_llm_error
 
 logger = logging.getLogger(__name__)
@@ -553,16 +554,21 @@ def generate_events_with_quality(
         WorldGenerationError: If no events could be generated.
     """
     descriptions = existing_descriptions.copy()
+    rejected: list[str] = []
     return _generate_batch(
         svc=svc,
         count=count,
         entity_type="event",
         generate_fn=lambda _i: svc.generate_event_with_quality(
-            story_state, descriptions, entity_context
+            story_state, descriptions, entity_context, rejected_descriptions=rejected
         ),
-        get_name=lambda evt: evt.get("description", "Unknown")[:60],
+        get_name=lambda evt: evt.get("description", "Unknown")[:_EVENT_DESCRIPTION_PREFIX_LEN],
         on_success=lambda evt: (
-            descriptions.append(evt["description"]) if evt.get("description") else None
+            descriptions.append(evt["description"])
+            if evt.get("description")
+            else logger.warning(
+                "Event passed quality loop but has no description — dedup list stale"
+            )
         ),
         cancel_check=cancel_check,
         progress_callback=progress_callback,

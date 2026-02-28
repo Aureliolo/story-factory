@@ -511,9 +511,10 @@ class WorldQualityService(EntityDelegatesMixin):
         """Return (prepare_creator, prepare_judge) callbacks for VRAM management.
 
         When the creator and judge models differ for a given entity type, returns
-        callbacks that call ``prepare_model()`` to unload the other model before
-        switching. When both roles use the same model, returns ``(None, None)``
-        to skip unnecessary VRAM management.
+        callbacks that call ``prepare_model()`` to ensure the target model is
+        loaded in VRAM, evicting others as the VRAM strategy requires. When both
+        roles use the same model, returns ``(None, None)`` to skip unnecessary
+        VRAM management.
 
         Args:
             entity_type: Entity type (e.g. "character", "location") used to
@@ -541,7 +542,7 @@ class WorldQualityService(EntityDelegatesMixin):
         )
 
         def prepare_creator() -> None:
-            """Unload judge model and prepare creator model for VRAM."""
+            """Ensure creator model is loaded in VRAM, evicting others if needed."""
             try:
                 _prepare_model(self.mode_service, creator_model)
             except Exception as e:
@@ -553,7 +554,7 @@ class WorldQualityService(EntityDelegatesMixin):
                 )
 
         def prepare_judge() -> None:
-            """Unload creator model and prepare judge model for VRAM."""
+            """Ensure judge model is loaded in VRAM, evicting others if needed."""
             try:
                 _prepare_model(self.mode_service, judge_model)
             except Exception as e:
@@ -717,10 +718,15 @@ class WorldQualityService(EntityDelegatesMixin):
         story_state: StoryState,
         existing_descriptions: list[str],
         entity_context: str,
+        rejected_descriptions: list[str] | None = None,
     ) -> tuple[dict[str, Any], EventQualityScores, int]:
         """Generate an event using the creator-judge-refine quality loop."""
         return _generate_event_with_quality(
-            self, story_state, existing_descriptions, entity_context
+            self,
+            story_state,
+            existing_descriptions,
+            entity_context,
+            rejected_descriptions=rejected_descriptions,
         )
 
     # -- Calendar --

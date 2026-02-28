@@ -98,7 +98,8 @@ def build_entity_browser(page) -> None:
             .classes("w-full gap-1 overflow-auto flex-grow p-2 bg-gray-800 rounded-lg")
             .style("max-height: calc(100vh - 520px); min-height: 200px")
         )
-        refresh_entity_list(page)
+        # Use pre-fetched entities from page build to avoid a redundant DB call
+        refresh_entity_list(page, prefetched_entities=page._prefetched_entities)
 
         # Add button
         ui.button(
@@ -134,20 +135,28 @@ def build_entity_browser(page) -> None:
     load_prefs_deferred(_PAGE_KEY, lambda prefs: _apply_prefs(page, prefs))
 
 
-def refresh_entity_list(page) -> None:
+def refresh_entity_list(page, prefetched_entities: list[Entity] | None = None) -> None:
     """Refresh the entity list display.
 
     Args:
         page: WorldPage instance.
+        prefetched_entities: Optional pre-fetched entity list to avoid a
+            redundant ``list_entities`` call during initial page build.
     """
     if not page._entity_list or not page.state.world_db:
         return
 
     page._entity_list.clear()
 
-    # Fetch all entities ONCE and cache for empty-state check
-    all_entities = page.services.world.list_entities(page.state.world_db)
-    entities = list(all_entities)  # Work on a copy for filtering
+    # Use pre-fetched entities when available to avoid a redundant
+    # list_entities() DB call during initial page build — entities were
+    # already fetched in WorldPage.build() for the options cache.
+    if prefetched_entities is not None:
+        all_entities = list(prefetched_entities)
+    else:
+        all_entities = list(page.services.world.list_entities(page.state.world_db))
+
+    entities = all_entities
 
     # Filter by type
     if page.state.entity_filter_types:

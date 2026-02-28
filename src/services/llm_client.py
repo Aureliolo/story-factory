@@ -99,11 +99,19 @@ def get_model_context_size(client: ollama.Client, model: str) -> int | None:
             return None
 
 
+# Track models that have already triggered a context-size warning so each
+# model only logs the warning once per process lifetime, reducing log spam
+# when validate_context_size() is called on every structured generation.
+_warned_context_size_models: set[str] = set()
+_warned_context_size_models_lock = threading.Lock()
+
+
 def validate_context_size(client: ollama.Client, model: str, configured_context_size: int) -> int:
     """Validate configured context size against the model's actual limit.
 
     If the model's native context limit is smaller than the configured value,
-    logs a warning and returns the model's limit to prevent silent truncation.
+    logs a warning (once per model) and returns the model's limit to prevent
+    silent truncation.
 
     Args:
         client: Ollama client instance.
@@ -115,13 +123,20 @@ def validate_context_size(client: ollama.Client, model: str, configured_context_
     """
     model_limit = get_model_context_size(client, model)
     if model_limit is not None and model_limit < configured_context_size:
-        logger.warning(
-            "Model %s has context limit of %d tokens, but configured context_size "
-            "is %d. Capping to model limit to prevent truncation.",
-            model,
-            model_limit,
-            configured_context_size,
-        )
+        should_warn = False
+        with _warned_context_size_models_lock:
+            if model not in _warned_context_size_models:
+                _warned_context_size_models.add(model)
+                should_warn = True
+        if should_warn:
+            logger.warning(
+                "Model %s has context limit of %d tokens, but configured context_size "
+                "is %d. Capping to model limit to prevent truncation. "
+                "(This warning is logged once per model.)",
+                model,
+                model_limit,
+                configured_context_size,
+            )
         return model_limit
     return configured_context_size
 

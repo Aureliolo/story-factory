@@ -71,8 +71,8 @@ def refresh_health_dashboard(page, notify: bool = True) -> None:
     if notify:
         try:
             ui.notify("Health metrics refreshed", type="positive")
-        except RuntimeError:
-            logger.warning("Could not show notification — parent UI element was deleted")
+        except RuntimeError as exc:
+            logger.debug("Could not show notification — parent UI element was deleted: %s", exc)
 
 
 async def handle_fix_orphan(page, entity_id: str) -> None:

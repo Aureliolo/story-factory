@@ -201,7 +201,25 @@ def _refine_plot(
     """
     logger.debug("Refining plot outline for story %s", story_state.id)
     brief = story_state.brief
-    weak = scores.weak_dimensions(svc.get_config().get_threshold("plot"))
+    threshold = svc.get_config().get_threshold("plot")
+
+    # Build specific improvement instructions from feedback
+    improvement_focus: list[str] = []
+    if scores.coherence < threshold:
+        improvement_focus.append(
+            "Strengthen logical connections between plot points and ensure cause-effect chains"
+        )
+    if scores.tension_arc < threshold:
+        improvement_focus.append(
+            "Build escalating stakes with clear turning points and a satisfying climax"
+        )
+    if scores.character_integration < threshold:
+        improvement_focus.append("Deepen how character arcs drive and are driven by plot events")
+    if scores.originality < threshold:
+        improvement_focus.append(
+            "Subvert genre expectations — introduce an unconventional story structure, "
+            "an unexpected antagonist motivation, or a protagonist choice that defies the trope"
+        )
 
     # Format plot points for the prompt
     plot_points_text = []
@@ -228,7 +246,8 @@ QUALITY SCORES (0-10):
 
 FEEDBACK: {scores.feedback}
 
-WEAK AREAS TO IMPROVE: {", ".join(weak) if weak else "None - minor improvements only"}
+SPECIFIC IMPROVEMENTS NEEDED:
+{chr(10).join(f"- {imp}" for imp in improvement_focus) if improvement_focus else "- Enhance all areas"}
 
 Enhance the weak areas while maintaining the core story direction.
 Keep the same number of plot points but improve their quality and progression.

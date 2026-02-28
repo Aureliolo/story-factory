@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from src.services import llm_client
 from src.services.llm_client import (
     _model_context_cache,
+    _warned_context_size_models,
     generate_structured,
     get_model_context_size,
     get_ollama_client,
@@ -39,12 +40,14 @@ def mock_settings():
 
 @pytest.fixture(autouse=True)
 def clear_client_cache():
-    """Clear the Ollama client and model context caches before each test."""
+    """Clear the Ollama client, model context, and warning caches before each test."""
     llm_client._ollama_clients.clear()
     _model_context_cache.clear()
+    _warned_context_size_models.clear()
     yield
     llm_client._ollama_clients.clear()
     _model_context_cache.clear()
+    _warned_context_size_models.clear()
 
 
 def _make_chat_response(json_content: str) -> Iterator:
@@ -690,3 +693,85 @@ class TestValidateContextSize:
         result = validate_context_size(mock_client, "unknown-model:8b", 32768)
 
         assert result == 32768
+
+    def test_validate_context_size_warns_only_once_per_model(self, caplog):
+        """Second call with same model should not emit a warning."""
+        mock_client = MagicMock()
+        mock_client.show.return_value = _make_show_response(
+            {"llama.context_length": 4096},
+        )
+
+        with caplog.at_level(logging.WARNING, logger="src.services.llm_client"):
+            validate_context_size(mock_client, "warn-once-model:8b", 32768)
+
+        assert any("Capping to model limit" in r.message for r in caplog.records)
+
+        caplog.clear()
+        with caplog.at_level(logging.WARNING, logger="src.services.llm_client"):
+            result = validate_context_size(mock_client, "warn-once-model:8b", 32768)
+
+        assert result == 4096
+        warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warning_records) == 0
+
+    def test_validate_context_size_warns_for_each_model(self, caplog):
+        """Different models should each get their own warning."""
+        mock_client = MagicMock()
+        mock_client.show.return_value = _make_show_response(
+            {"llama.context_length": 4096},
+        )
+
+        with caplog.at_level(logging.WARNING, logger="src.services.llm_client"):
+            validate_context_size(mock_client, "model-a:8b", 32768)
+            validate_context_size(mock_client, "model-b:8b", 32768)
+
+        warning_records = [
+            r
+            for r in caplog.records
+            if r.levelno == logging.WARNING and "Capping to model limit" in r.message
+        ]
+        assert len(warning_records) == 2
+
+    def test_validate_context_size_concurrent_warns_once(self):
+        """Concurrent calls for the same model should emit at most one warning."""
+        import threading
+
+        mock_client = MagicMock()
+        mock_client.show.return_value = _make_show_response(
+            {"llama.context_length": 4096},
+        )
+
+        warnings_logged: list[str] = []
+        original_warning = logging.getLogger("src.services.llm_client").warning
+
+        def capture_warning(msg, *args, **kwargs):
+            """Intercept logger.warning calls and record formatted messages."""
+            warnings_logged.append(msg % args if args else msg)
+            original_warning(msg, *args, **kwargs)
+
+        barrier = threading.Barrier(4)
+        results: list[int] = []
+
+        def worker():
+            """Call validate_context_size from a thread, syncing via barrier."""
+            barrier.wait()
+            r = validate_context_size(mock_client, "concurrent-model:8b", 32768)
+            results.append(r)
+
+        with patch.object(
+            logging.getLogger("src.services.llm_client"), "warning", side_effect=capture_warning
+        ):
+            threads = [threading.Thread(target=worker) for _ in range(4)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=5)
+
+        # Ensure all worker threads completed; fail fast on partial execution
+        assert all(not t.is_alive() for t in threads), "All worker threads must finish"
+        assert len(results) == 4, "Expected one result per worker thread"
+        # All threads should return the capped value
+        assert all(r == 4096 for r in results)
+        # Warning should be emitted at most once
+        cap_warnings = [w for w in warnings_logged if "Capping to model limit" in w]
+        assert len(cap_warnings) == 1

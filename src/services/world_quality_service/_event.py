@@ -16,6 +16,11 @@ from src.utils.exceptions import WorldGenerationError, summarize_llm_error
 
 logger = logging.getLogger(__name__)
 
+# Truncation length for event description dedup — descriptions matching in the
+# first N characters (case-insensitive) are considered duplicates.  Keep in sync
+# with the ``get_name`` lambdas that truncate for logging/display.
+_EVENT_DESCRIPTION_PREFIX_LEN = 60
+
 
 def _format_participants(participants: list[Any]) -> str:
     """Format an event's participant list for prompt display.
@@ -52,11 +57,31 @@ def _format_consequences(consequences: list[Any]) -> str:
     return "Consequences:\n" + "\n".join(f"  - {c}" for c in consequences)
 
 
+def _is_duplicate_description(description: str, existing: list[str]) -> bool:
+    """Check if an event description is a near-duplicate of an existing one.
+
+    Uses case-insensitive truncated comparison (first ``_EVENT_DESCRIPTION_PREFIX_LEN``
+    chars) since event descriptions are identified by their truncated form in
+    the quality loop.
+
+    Args:
+        description: The new event description to check.
+        existing: List of existing event descriptions.
+
+    Returns:
+        True if the description is a duplicate.
+    """
+    n = _EVENT_DESCRIPTION_PREFIX_LEN
+    normalized = description.strip().casefold()[:n]
+    return any(d.strip().casefold()[:n] == normalized for d in existing)
+
+
 def generate_event_with_quality(
     svc,
     story_state: StoryState,
     existing_descriptions: list[str],
     entity_context: str,
+    rejected_descriptions: list[str] | None = None,
 ) -> tuple[dict[str, Any], EventQualityScores, int]:
     """Generate a world event with iterative quality refinement.
 
@@ -68,6 +93,8 @@ def generate_event_with_quality(
         story_state: Current story state with brief.
         existing_descriptions: Descriptions of existing events to avoid duplicates.
         entity_context: Pre-formatted string of all entities/relationships/lifecycle data.
+        rejected_descriptions: Descriptions rejected as duplicates within the current
+            batch, fed back into the creator prompt to avoid regeneration.
 
     Returns:
         Tuple of (event_dict, quality_scores, iterations_used).
@@ -80,13 +107,43 @@ def generate_event_with_quality(
     if not brief:
         raise ValueError("Story must have a brief for event generation")
 
+    if rejected_descriptions is None:
+        rejected_descriptions = []
+
+    # Combine existing + rejected for dedup checking and prompt injection
+    all_known = existing_descriptions + rejected_descriptions
+
     prep_creator, prep_judge = svc._make_model_preparers("event")
+
+    def _is_empty(evt: dict[str, Any]) -> bool:
+        """Check if event has no description or is a duplicate of an already-known event.
+
+        Returns True for events with empty/whitespace-only descriptions (no side
+        effect) or for duplicates of known events.
+
+        Side effect: appends duplicate descriptions to ``rejected_descriptions``
+        and ``all_known`` so subsequent creator prompts and dedup checks within
+        the same quality-loop invocation avoid regenerating them.
+        """
+        raw_desc = evt.get("description", "")
+        desc = raw_desc.strip() if isinstance(raw_desc, str) else ""
+        if not desc:
+            return True
+        if _is_duplicate_description(desc, all_known):
+            logger.warning(
+                "Generated duplicate event description '%s', rejecting",
+                desc[:_EVENT_DESCRIPTION_PREFIX_LEN],
+            )
+            rejected_descriptions.append(desc)
+            all_known.append(desc)  # Keep snapshot in sync for within-invocation dedup
+            return True
+        return False
 
     return quality_refinement_loop(
         entity_type="event",
         create_fn=lambda retries: svc._create_event(
             story_state,
-            existing_descriptions,
+            all_known,
             entity_context,
             retry_temperature(config, retries),
         ),
@@ -101,9 +158,9 @@ def generate_event_with_quality(
             story_state,
             config.get_refinement_temperature(iteration),
         ),
-        get_name=lambda evt: evt.get("description", "Unknown")[:60],
+        get_name=lambda evt: evt.get("description", "Unknown")[:_EVENT_DESCRIPTION_PREFIX_LEN],
         serialize=lambda evt: evt.copy(),
-        is_empty=lambda evt: not evt.get("description"),
+        is_empty=_is_empty,
         score_cls=EventQualityScores,
         config=config,
         svc=svc,
@@ -227,7 +284,7 @@ Era: {event.get("era_name", "N/A")}
 
 Rate each dimension 0-10:
 - significance: How world-shaping is this event? Does it change the status quo?
-- temporal_plausibility: VERIFY against CALENDAR above — event year MUST fall within a defined era's [start_year, end_year] range. Score 8-10 ONLY if the event's year is inside a valid era AND the event type makes sense for that era. Score 5-7 if timing is plausible but era alignment is unclear. Score 2-4 if the event year falls outside all defined eras or contradicts the calendar. If the CALENDAR block states "No calendar available", score exactly 3.0 (insufficient context to verify).
+- temporal_plausibility: VERIFY against CALENDAR above — event year MUST fall within a defined era's [start_year, end_year] range. Score 8-10 ONLY if the event's year is inside a valid era AND the event type makes sense for that era. Score 5-7 if timing is plausible but era alignment is unclear. Score 2-4 if the event year falls outside all defined eras or contradicts the calendar. If the event year is "N/A" (not yet assigned), score 5.0 (neutral — date is pending, not wrong). If the CALENDAR block states "No calendar available", score 5.0 (insufficient context to verify).
 - causal_coherence: Are causes and consequences logically connected?
 - narrative_potential: Does it create story opportunities and tension?
 - entity_integration: Do participant roles make sense for their entity types?
@@ -258,13 +315,13 @@ DO NOT wrap in "properties" or "description" - return ONLY the flat scores objec
             if multi_call:
                 logger.warning(
                     "Event quality judgment failed for '%s': %s",
-                    event.get("description", "Unknown")[:60],
+                    event.get("description", "Unknown")[:_EVENT_DESCRIPTION_PREFIX_LEN],
                     summary,
                 )
             else:
                 logger.error(
                     "Event quality judgment failed for '%s': %s",
-                    event.get("description", "Unknown")[:60],
+                    event.get("description", "Unknown")[:_EVENT_DESCRIPTION_PREFIX_LEN],
                     summary,
                 )
             raise WorldGenerationError(f"Event quality judgment failed: {summary}") from e
@@ -282,7 +339,7 @@ def _refine_event(
     """Refine an event based on quality feedback using structured generation."""
     logger.debug(
         "Refining event '%s' for story %s",
-        event.get("description", "Unknown")[:60],
+        event.get("description", "Unknown")[:_EVENT_DESCRIPTION_PREFIX_LEN],
         story_state.id,
     )
     brief = story_state.brief
@@ -359,7 +416,7 @@ Return ONLY the improved event."""
         summary = summarize_llm_error(e)
         logger.error(
             "Event refinement failed for '%s': %s",
-            event.get("description", "Unknown")[:60],
+            event.get("description", "Unknown")[:_EVENT_DESCRIPTION_PREFIX_LEN],
             summary,
         )
         raise WorldGenerationError(f"Event refinement failed: {summary}") from e

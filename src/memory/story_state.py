@@ -10,11 +10,24 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from src.memory.content_guidelines import ContentProfile
 from src.memory.entities import EventRole
 from src.memory.templates import PersonalityTrait, TargetLength, normalize_traits
+from src.memory.timeline_types import parse_year
 
 if TYPE_CHECKING:
     from src.memory._chapter_versions import ChapterVersionManager
 
 logger = logging.getLogger(__name__)
+
+
+def _reject_sentinel_year(v: Any, field_name: str) -> int | None:
+    """Reject LLM sentinel year values (0, -1, 9999) at the Pydantic model level.
+
+    Wraps ``parse_year`` from timeline_types to provide sentinel filtering
+    for plain ``int | None`` Pydantic fields that bypass ``parse_year`` during
+    normal construction.
+    """
+    if v is None:
+        return None
+    return parse_year(v, field_name)
 
 
 class Character(BaseModel):
@@ -36,6 +49,12 @@ class Character(BaseModel):
     birth_era: str | None = None
     death_era: str | None = None
     temporal_notes: str = ""
+
+    @field_validator("birth_year", "death_year", mode="before")
+    @classmethod
+    def reject_sentinel_years(cls, v: Any, info: Any) -> int | None:
+        """Reject LLM sentinel year values (0, -1, 9999)."""
+        return _reject_sentinel_year(v, info.field_name)
 
     @field_validator("personality_traits", mode="before")
     @classmethod
@@ -121,6 +140,12 @@ class Faction(BaseModel):
     founding_era: str | None = None
     temporal_notes: str = ""
 
+    @field_validator("founding_year", "dissolution_year", mode="before")
+    @classmethod
+    def reject_sentinel_years(cls, v: Any, info: Any) -> int | None:
+        """Reject LLM sentinel year values (0, -1, 9999)."""
+        return _reject_sentinel_year(v, info.field_name)
+
 
 class Item(BaseModel):
     """A significant item or object in the story world."""
@@ -138,6 +163,12 @@ class Item(BaseModel):
     creation_era: str | None = None
     temporal_notes: str = ""
 
+    @field_validator("creation_year", mode="before")
+    @classmethod
+    def reject_sentinel_years(cls, v: Any, info: Any) -> int | None:
+        """Reject LLM sentinel year values (0, -1, 9999)."""
+        return _reject_sentinel_year(v, info.field_name)
+
 
 class Concept(BaseModel):
     """A thematic concept or idea in the story world."""
@@ -154,6 +185,12 @@ class Concept(BaseModel):
     emergence_era: str | None = None
     temporal_notes: str = ""
 
+    @field_validator("emergence_year", mode="before")
+    @classmethod
+    def reject_sentinel_years(cls, v: Any, info: Any) -> int | None:
+        """Reject LLM sentinel year values (0, -1, 9999)."""
+        return _reject_sentinel_year(v, info.field_name)
+
 
 class Location(BaseModel):
     """A location in the story world."""
@@ -168,6 +205,12 @@ class Location(BaseModel):
     destruction_year: int | None = None
     founding_era: str | None = None
     temporal_notes: str = ""
+
+    @field_validator("founding_year", "destruction_year", mode="before")
+    @classmethod
+    def reject_sentinel_years(cls, v: Any, info: Any) -> int | None:
+        """Reject LLM sentinel year values (0, -1, 9999)."""
+        return _reject_sentinel_year(v, info.field_name)
 
 
 class Relationship(BaseModel):
@@ -201,6 +244,12 @@ class WorldEventCreation(BaseModel):
     era_name: str = ""
     participants: list[EventParticipantEntry] = Field(default_factory=list)
     consequences: list[str] = Field(default_factory=list)
+
+    @field_validator("year", mode="before")
+    @classmethod
+    def reject_sentinel_years(cls, v: Any, info: Any) -> int | None:
+        """Reject LLM sentinel year values (0, -1, 9999)."""
+        return _reject_sentinel_year(v, info.field_name)
 
 
 class PlotPoint(BaseModel):
@@ -759,6 +808,12 @@ class CharacterCreation(BaseModel):
     birth_era: str | None = None
     death_era: str | None = None
     temporal_notes: str = ""
+
+    @field_validator("birth_year", "death_year", mode="before")
+    @classmethod
+    def reject_sentinel_years(cls, v: Any, info: Any) -> int | None:
+        """Reject LLM sentinel year values (0, -1, 9999)."""
+        return _reject_sentinel_year(v, info.field_name)
 
     @field_validator("personality_traits", mode="before")
     @classmethod
