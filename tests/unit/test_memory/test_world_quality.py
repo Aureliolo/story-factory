@@ -859,6 +859,20 @@ class TestPlotQualityScores:
         assert "coherence" not in weak
         assert "character_integration" not in weak
 
+    def test_weak_dimensions_identifies_coherence_and_character_integration(self):
+        """Test weak_dimensions identifies coherence and character_integration below threshold."""
+        scores = PlotQualityScores(
+            coherence=5.0,
+            tension_arc=8.0,
+            character_integration=4.0,
+            originality=8.0,
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "coherence" in weak
+        assert "character_integration" in weak
+        assert "tension_arc" not in weak
+        assert "originality" not in weak
+
     def test_weak_dimensions_returns_empty_when_all_above(self):
         """Test weak_dimensions returns empty list when all scores high."""
         scores = PlotQualityScores(
