@@ -120,7 +120,7 @@ STRICT RULES:
 - DO NOT use case variations (e.g., "Hope" vs "HOPE")
 - DO NOT use similar names (e.g., "Redemption" vs "The Redemption")
 - Create something COMPLETELY DIFFERENT
-{f"REJECTED NAMES (do NOT reuse): {', '.join(rejected_names)}" if rejected_names else ""}
+{f"REJECTED NAMES (do NOT reuse): {', '.join(dict.fromkeys(rejected_names))}" if rejected_names else ""}
 Create a concept that:
 1. Is relevant to the story's themes
 2. Has philosophical depth

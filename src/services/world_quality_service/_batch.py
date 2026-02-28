@@ -731,7 +731,7 @@ def generate_relationships_with_quality(
             return rel if rel else None
         except (WorldGenerationError, ValueError) as e:
             logger.warning("Phased create failed: %s", e)
-            return None
+            raise  # Let Phase 1's error handler catch and record it
 
     def _is_empty_rel(rel: dict[str, Any]) -> bool:
         """Check if a relationship is empty or a duplicate.
@@ -741,11 +741,16 @@ def generate_relationships_with_quality(
         support since the batch path does not use it.
         """
         if not rel.get("source") or not rel.get("target"):
+            logger.debug(
+                "Relationship missing source/target (source=%r, target=%r), treating as empty",
+                rel.get("source"),
+                rel.get("target"),
+            )
             return True
         source = rel.get("source", "")
         target = rel.get("target", "")
         raw_type = rel.get("relation_type") or "related_to"
-        normalize_relation_type(raw_type)
+        rel["relation_type"] = normalize_relation_type(raw_type)
         if _is_duplicate_relationship(source, target, safe_rels.snapshot()):
             logger.warning(
                 "Phased pipeline: duplicate relationship %s -> %s, rejecting",
@@ -829,7 +834,7 @@ def generate_relationships_with_quality(
                 logger.debug(
                     "Phased pipeline callables prepared for relationship batch (creator != judge)"
                 )
-        except Exception as e:
+        except (ValueError, KeyError, LookupError) as e:
             logger.warning(
                 "Failed to resolve model preparers for phased pipeline: %s. "
                 "Falling back to sequential path.",

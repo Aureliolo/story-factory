@@ -34,7 +34,7 @@ RELATIONSHIP_TO_ENTITY_RATIO_CAP = 1.5
 
 # Pattern matching LLM echoing numbered prompt criteria into descriptions
 # e.g. "{3: Strong story relevance - connections to themes/characters}"
-_PROMPT_ECHO_PATTERN = re.compile(r"\{?\d+\s*[:\.]\s*[A-Z][^}]*\}?$", re.MULTILINE)
+_PROMPT_ECHO_PATTERN = re.compile(r"\{\d+\s*[:\.]\s*[A-Z][^}]*\}$", re.MULTILINE)
 
 
 def _clean_description(description: str) -> str:

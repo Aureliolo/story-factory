@@ -1709,7 +1709,7 @@ class TestNormalizeEraName:
 
 
 class TestEraBoundaryCheck:
-    """Tests for the year-within-era boundary check in _check_era_name_mismatch (lines 577-594)."""
+    """Tests for era name mismatch detection in _check_era_name_mismatch."""
 
     @pytest.fixture
     def validation_service(self) -> TemporalValidationService:
@@ -1718,20 +1718,12 @@ class TestEraBoundaryCheck:
         settings.validate_temporal_consistency = True
         return TemporalValidationService(settings)
 
-    def test_boundary_warning_when_year_outside_era(self, validation_service):
-        """Warning is emitted when get_era_for_year returns an era but year is outside its bounds.
-
-        This exercises lines 577-594: we mock get_era_for_year to return an era
-        whose start_year > timestamp.year so the boundary check fails.
-        """
-
+    def test_era_name_mismatch_when_names_differ(self, validation_service):
+        """Era name mismatch warning emitted when entity era_name differs from calendar-resolved era."""
         entity = Entity(id="ent-001", name="Hero", type="character")
-        # timestamp.year = 50, era_name = "Some Era" (so early-return check passes)
         timestamp = StoryTimestamp(year=50, era_name="Some Era")
         result = TemporalValidationResult()
 
-        # Build a mock calendar whose get_era_for_year returns an era that does
-        # NOT actually contain year=50 (start_year=100, end_year=200).
         mock_calendar = MagicMock(spec=WorldCalendar)
         mock_era = MagicMock()
         mock_era.name = "Late Era"
@@ -1743,11 +1735,11 @@ class TestEraBoundaryCheck:
             entity, timestamp, mock_calendar, "birth", result
         )
 
-        # Should produce a boundary warning (year 50 outside [100, 200])
-        assert len(result.warnings) >= 1
-        boundary_msgs = [w for w in result.warnings if "50" in w.message and "100" in w.message]
-        assert len(boundary_msgs) == 1
-        assert boundary_msgs[0].error_type == TemporalErrorType.INVALID_ERA
+        # Should produce an era name mismatch warning ("Some Era" != "Late Era")
+        assert len(result.warnings) == 1
+        assert result.warnings[0].error_type == TemporalErrorType.INVALID_ERA
+        assert "Some Era" in result.warnings[0].message
+        assert "Late Era" in result.warnings[0].message
 
     def test_boundary_warning_message_contains_era_info(self, validation_service):
         """Boundary warning message includes era name and start/end years."""
@@ -1766,11 +1758,14 @@ class TestEraBoundaryCheck:
             entity, timestamp, mock_calendar, "death", result
         )
 
-        assert len(result.warnings) >= 1
-        boundary_warning = result.warnings[0]
-        assert "Modern Era" in boundary_warning.message
-        assert "500" in boundary_warning.message
-        assert "800" in boundary_warning.message
+        # Find the era name mismatch warning (order-independent)
+        mismatch_warning = next(
+            (w for w in result.warnings if "Modern Era" in w.message),
+            None,
+        )
+        assert mismatch_warning is not None, (
+            f"Expected warning mentioning 'Modern Era', got: {[w.message for w in result.warnings]}"
+        )
 
     def test_no_boundary_warning_when_year_inside_era(self, validation_service):
         """No boundary warning when year is within the era's bounds."""

@@ -199,7 +199,7 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
                         judge,
                     )
                     max_workers = 1
-        except Exception as e:
+        except (ValueError, KeyError, LookupError) as e:
             logger.warning(
                 "Failed to resolve models for max_workers decision on %s: %s. "
                 "Keeping max_workers=%d",
@@ -608,6 +608,8 @@ def _generate_batch_phased[T, S: BaseQualityScores](
             logger.error(
                 "Phase 1: failed to create %s %d/%d: %s", entity_type, i + 1, count, error_msg
             )
+        except MemoryError, RecursionError, KeyboardInterrupt, SystemExit:
+            raise
         except Exception as e:
             create_errors += 1
             error_msg = summarize_llm_error(e, max_length=200)
@@ -684,6 +686,8 @@ def _generate_batch_phased[T, S: BaseQualityScores](
             # Entity created successfully but judge failed — still worth
             # attempting refinement (which includes its own judge call).
             judged.append((idx, entity, None, False))  # type: ignore[arg-type]
+        except MemoryError, RecursionError, KeyboardInterrupt, SystemExit:
+            raise
         except Exception as e:
             judge_errors += 1
             error_msg = summarize_llm_error(e, max_length=200)
@@ -718,7 +722,7 @@ def _generate_batch_phased[T, S: BaseQualityScores](
                     on_success(entity)
                 entity_name = get_name(entity)
                 results.append((entity, scores))
-                completed_times.append(time.time() - batch_start_time)
+                completed_times.append(time.time() - entity_start)
                 passed_count += 1
                 logger.info(
                     "Phase 3: %s '%s' passed threshold (%.1f >= %.1f), emitting directly",
@@ -831,6 +835,8 @@ def _generate_batch_phased[T, S: BaseQualityScores](
                 entity_name,
                 error_msg,
             )
+        except MemoryError, RecursionError, KeyboardInterrupt, SystemExit:
+            raise
         except Exception as e:
             error_msg = summarize_llm_error(e, max_length=200)
             errors.append(error_msg)
@@ -845,7 +851,7 @@ def _generate_batch_phased[T, S: BaseQualityScores](
     total_elapsed = time.time() - batch_start_time
     logger.info(
         "Phased %s pipeline complete: %d/%d entities in %.1fs "
-        "(phase1: %d created, phase2: %d judged, phase3: %d passed + %d refined)",
+        "(phase1: %d created, phase2: %d judged, phase3: %d passed + %d/%d refined)",
         entity_type,
         len(results),
         count,
@@ -853,6 +859,7 @@ def _generate_batch_phased[T, S: BaseQualityScores](
         len(created_entities),
         len(judged),
         passed_count,
+        len(results) - passed_count,
         len(needs_refinement),
     )
 

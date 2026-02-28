@@ -119,7 +119,7 @@ STRICT RULES:
 - DO NOT use case variations (e.g., "Sword" vs "SWORD")
 - DO NOT use similar names (e.g., "The Blade" vs "Blade of Destiny")
 - Create something COMPLETELY DIFFERENT
-{f"REJECTED NAMES (do NOT reuse): {', '.join(rejected_names)}" if rejected_names else ""}
+{f"REJECTED NAMES (do NOT reuse): {', '.join(dict.fromkeys(rejected_names))}" if rejected_names else ""}
 Create an item with:
 1. Significance - meaningful role in the plot or character development
 2. Uniqueness - distinctive appearance or properties

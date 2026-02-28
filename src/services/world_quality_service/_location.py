@@ -118,7 +118,7 @@ STRICT RULES:
 - DO NOT use case variations (e.g., "Forest" vs "FOREST")
 - DO NOT use similar names (e.g., "Dark Woods" vs "The Dark Wood")
 - Create something COMPLETELY DIFFERENT
-{f"REJECTED NAMES (do NOT reuse): {', '.join(rejected_names)}" if rejected_names else ""}
+{f"REJECTED NAMES (do NOT reuse): {', '.join(dict.fromkeys(rejected_names))}" if rejected_names else ""}
 Create a location with:
 1. Rich atmosphere - sensory details, mood
 2. Narrative significance - symbolic or plot meaning

@@ -26,7 +26,7 @@ def _extract_characters_to_world(state: StoryState, world_db: WorldDatabase) -> 
     for char in state.characters:
         existing = world_db.get_entity_by_name(char.name, entity_type="character")
         if existing:
-            logger.debug(f"Character already exists: {char.name}")
+            logger.debug("Character already exists: %s", char.name)
             char_id_map[char.name] = existing.id
             continue
 

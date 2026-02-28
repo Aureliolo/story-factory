@@ -527,6 +527,57 @@ class TestQualityLoopErrorHandling:
         assert result_scores.average == 9.0
         assert create_count >= 2  # At least initial create + retry after empty refine
 
+    def test_short_description_treated_as_empty_retried(self, mock_svc, config):
+        """Entity with valid name but <50 char description is treated as empty and retried.
+
+        The is_empty lambda used by faction/item/location/concept rejects entities
+        whose description is shorter than 50 characters. A 49-character description
+        should trigger a creation retry.
+        """
+        config.max_iterations = 3
+        config.early_stopping_patience = 10
+
+        short_desc = "A" * 49  # 49 chars — below the 50-char threshold
+        long_desc = "B" * 60  # 60 chars — above the threshold
+
+        create_count = 0
+
+        def create_fn(retries):
+            """First creation returns short description, second returns valid."""
+            nonlocal create_count
+            create_count += 1
+            if create_count == 1:
+                return {"name": "Dark Guild", "description": short_desc}
+            return {"name": "Dark Guild", "description": long_desc}
+
+        faction_scores = FactionQualityScores(
+            coherence=9.0,
+            influence=9.0,
+            conflict_potential=9.0,
+            distinctiveness=9.0,
+            temporal_plausibility=9.0,
+            feedback="Excellent faction",
+        )
+
+        result_entity, result_scores, _iterations = quality_refinement_loop(
+            entity_type="faction",
+            create_fn=create_fn,
+            judge_fn=lambda e: faction_scores,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e.get("name", "Unknown"),
+            serialize=lambda e: e.copy(),
+            is_empty=lambda fac: not fac.get("name") or len(fac.get("description", "")) < 50,
+            score_cls=FactionQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # First entity (49-char description) was rejected; second (60-char) accepted
+        assert create_count == 2
+        assert result_entity["description"] == long_desc
+        assert result_scores.average == 9.0
+
     def test_judge_error_resets_scores_prevents_stale_refinement(self, mock_svc, config):
         """After a judge error, scores are reset so next iteration re-judges instead of refining."""
         config.max_iterations = 4
@@ -2638,6 +2689,46 @@ class TestHailMaryWinRateTracking:
         )
         # Hail-mary was NOT attempted → record_hail_mary_attempt not called
         mock_svc.analytics_db.record_hail_mary_attempt.assert_not_called()
+
+    def test_hail_mary_allowed_at_boundary_win_rate(self, mock_svc, config):
+        """Hail-mary proceeds when win rate is 0.17 (between old 0.20 and new 0.15 threshold).
+
+        The threshold was lowered from 0.20 to 0.15.  A win rate of 0.17
+        is above the new threshold and should allow hail-mary to proceed.
+        """
+        config.max_iterations = 2
+        config.early_stopping_patience = 10
+
+        mock_svc.analytics_db = MagicMock()
+        mock_svc.analytics_db.get_hail_mary_win_rate.return_value = 0.17  # 17%
+
+        judge_calls = 0
+
+        def judge_fn(entity):
+            """Return constant low scores."""
+            nonlocal judge_calls
+            judge_calls += 1
+            return _make_scores(6.0)
+
+        quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: {"name": "Hero"},
+            judge_fn=judge_fn,
+            refine_fn=lambda e, s, i: {"name": f"Hero v{i}"},
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        mock_svc.analytics_db.get_hail_mary_win_rate.assert_called_once_with(
+            entity_type="character", min_attempts=config.hail_mary_min_attempts
+        )
+        # Hail-mary WAS attempted because 0.17 >= 0.15
+        mock_svc.analytics_db.record_hail_mary_attempt.assert_called_once()
 
     def test_hail_mary_proceeds_with_insufficient_data(self, mock_svc, config):
         """Hail-mary proceeds when win rate is None (insufficient data)."""

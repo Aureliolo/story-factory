@@ -159,7 +159,7 @@ class TestEmbedEntityTruncation:
 
         assert result is False
         mock_embed_text.assert_not_called()
-        assert any("skipping embedding to avoid truncating" in r.message for r in caplog.records)
+        assert any("overhead exceeds max chars" in r.message for r in caplog.records)
 
     def test_embed_entity_skips_records_failure(self, service, mock_db):
         """Records failure when overhead exceeds max_chars and embedding is skipped."""
@@ -349,7 +349,7 @@ class TestEmbedEventTruncation:
 
         assert result is False
         mock_embed_text.assert_not_called()
-        assert any("skipping embedding to avoid truncating" in r.message for r in caplog.records)
+        assert any("overhead exceeds max chars" in r.message for r in caplog.records)
 
     def test_embed_event_skips_records_failure(self, service, mock_db):
         """Records failure when overhead exceeds max_chars and embedding is skipped."""

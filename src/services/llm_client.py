@@ -74,6 +74,9 @@ def get_model_context_size(client: ollama.Client, model: str) -> int | None:
             TimeoutError,
             httpx.TimeoutException,
             httpx.TransportError,
+            httpcore.RemoteProtocolError,
+            httpcore.ReadError,
+            httpcore.NetworkError,
         ) as e:
             # Cache None for network errors — prevents hammering Ollama on every
             # embed_text() call when the server is down.

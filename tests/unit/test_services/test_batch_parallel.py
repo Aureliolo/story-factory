@@ -2270,7 +2270,7 @@ class TestRelationshipPhasedPipeline:
                 count=2,  # count >= 2 → max_workers = min(2, 2) = 2 > 1
             )
 
-        assert len(results) >= 0
+        assert isinstance(results, list)
         assert any("phased pipeline callables prepared" in msg.lower() for msg in caplog.messages)
 
     def test_create_only_called_during_phased_generation(self, caplog):
@@ -2319,7 +2319,7 @@ class TestRelationshipPhasedPipeline:
             )
 
         # _create_relationship should have been called via _create_only in Phase 1
-        assert svc._create_relationship.called or len(results) >= 0
+        assert svc._create_relationship.called or isinstance(results, list)
 
     def test_create_only_handles_world_generation_error(self, caplog):
         """_create_only returns None when _create_relationship raises (lines 732-734)."""
@@ -2396,7 +2396,7 @@ class TestRelationshipPhasedPipeline:
         story_state = self._make_story_state()
 
         # Simulate exception in _make_model_preparers
-        svc._make_model_preparers.side_effect = RuntimeError("Model not found")
+        svc._make_model_preparers.side_effect = ValueError("Model not found")
 
         call_count = [0]
 

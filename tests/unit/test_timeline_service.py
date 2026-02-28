@@ -676,9 +676,10 @@ class TestExtractLifecycleWithCalendar:
         attributes = {"lifecycle": {"birth": {"era_name": ""}}}
         lifecycle = extract_lifecycle_from_attributes(attributes, calendar=calendar)
         assert lifecycle is not None
+        assert lifecycle.birth is not None
+        assert lifecycle.birth.year is None
         # birth.year is None → no backfill; era_name remains "" (no calendar lookup)
-        if lifecycle.birth is not None and lifecycle.birth.year is None:
-            assert not lifecycle.birth.era_name
+        assert not lifecycle.birth.era_name
 
     def test_no_backfill_when_era_not_found_for_year(self):
         """No backfill when calendar has no era covering the year."""

@@ -213,7 +213,9 @@ class RefinementHistory(BaseModel):
                 "improved": False,
                 "reason": "Not enough iterations to compare",
                 "best_iteration": self.best_iteration,
-                "scoring_rounds": self.actual_scoring_rounds or len(self.iterations),
+                "scoring_rounds": self.actual_scoring_rounds
+                if self.actual_scoring_rounds is not None
+                else len(self.iterations),
                 "score_progression": score_progression,
                 "first_score": first_score,
                 "peak_score": self.peak_score,
@@ -238,7 +240,9 @@ class RefinementHistory(BaseModel):
             "peak_score": self.peak_score,
             "final_score": last_score,
             "best_iteration": self.best_iteration,
-            "scoring_rounds": len(self.iterations),
+            "scoring_rounds": self.actual_scoring_rounds
+            if self.actual_scoring_rounds is not None
+            else len(self.iterations),
             "score_progression": score_progression,
             "worsened_after_peak": last_score < self.peak_score,
             "consecutive_degradations": self.consecutive_degradations,

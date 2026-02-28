@@ -323,6 +323,8 @@ class WorldQualityService(EntityDelegatesMixin):
                 self._cached_calendar_string = f"\nCALENDAR & TIMELINE:\n{context_text}\n"
             else:
                 self._cached_calendar_string = None
+            # Reset cache-hit log flag so the first read of new context logs once
+            self._calendar_cache_hit_logged = False
             if self._calendar_context is None:
                 logger.warning(
                     "Calendar dict provided but no context extracted — calendar may be malformed: %s",
@@ -347,13 +349,15 @@ class WorldQualityService(EntityDelegatesMixin):
         """
         with self._calendar_context_lock:
             cached = self._cached_calendar_string
+            should_log_cache_hit = cached is not None and not self._calendar_cache_hit_logged
+            if should_log_cache_hit:
+                self._calendar_cache_hit_logged = True
         if cached is not None:
-            if not self._calendar_cache_hit_logged:
+            if should_log_cache_hit:
                 logger.debug(
                     "get_calendar_context: returning cached calendar context (%d chars)",
                     len(cached),
                 )
-                self._calendar_cache_hit_logged = True
             return cached
         # Slow path: no calendar has been set yet
         logger.debug("get_calendar_context: returning sentinel calendar context")

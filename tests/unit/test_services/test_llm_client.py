@@ -403,6 +403,75 @@ class TestGenerateStructured:
         assert mock_client.chat.call_count == 2
 
     @patch("src.services.llm_client.get_ollama_client")
+    def test_retries_on_httpcore_remote_protocol_error(self, mock_get_client, mock_settings):
+        """Test that httpcore.RemoteProtocolError triggers retries."""
+        import httpcore
+
+        mock_client = MagicMock()
+        mock_client.chat.side_effect = [
+            httpcore.RemoteProtocolError("peer closed connection"),
+            _make_chat_response('{"name": "test", "value": 42}'),
+        ]
+        mock_get_client.return_value = mock_client
+
+        result = generate_structured(
+            settings=mock_settings,
+            model="test-model",
+            prompt="User prompt",
+            response_model=SampleModel,
+            max_retries=2,
+        )
+
+        assert result.name == "test"
+        assert mock_client.chat.call_count == 2
+
+    @patch("src.services.llm_client.get_ollama_client")
+    def test_retries_on_httpcore_read_error(self, mock_get_client, mock_settings):
+        """Test that httpcore.ReadError triggers retries."""
+        import httpcore
+
+        mock_client = MagicMock()
+        mock_client.chat.side_effect = [
+            httpcore.ReadError("read operation failed"),
+            _make_chat_response('{"name": "test", "value": 42}'),
+        ]
+        mock_get_client.return_value = mock_client
+
+        result = generate_structured(
+            settings=mock_settings,
+            model="test-model",
+            prompt="User prompt",
+            response_model=SampleModel,
+            max_retries=2,
+        )
+
+        assert result.name == "test"
+        assert mock_client.chat.call_count == 2
+
+    @patch("src.services.llm_client.get_ollama_client")
+    def test_retries_on_httpcore_network_error(self, mock_get_client, mock_settings):
+        """Test that httpcore.NetworkError triggers retries."""
+        import httpcore
+
+        mock_client = MagicMock()
+        mock_client.chat.side_effect = [
+            httpcore.NetworkError("network unreachable"),
+            _make_chat_response('{"name": "test", "value": 42}'),
+        ]
+        mock_get_client.return_value = mock_client
+
+        result = generate_structured(
+            settings=mock_settings,
+            model="test-model",
+            prompt="User prompt",
+            response_model=SampleModel,
+            max_retries=2,
+        )
+
+        assert result.name == "test"
+        assert mock_client.chat.call_count == 2
+
+    @patch("src.services.llm_client.get_ollama_client")
     def test_response_error_fails_fast(self, mock_get_client, mock_settings):
         """Test that ollama.ResponseError does not retry."""
         mock_client = MagicMock()

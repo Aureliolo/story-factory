@@ -183,7 +183,7 @@ STRICT RULES:
 - Names that contain existing faction names are NOT acceptable
 - Prefix variations (e.g., "The Order" vs "Order") are NOT acceptable
 - Create something COMPLETELY DIFFERENT from the above
-{f"REJECTED NAMES (do NOT reuse): {', '.join(rejected_names)}" if rejected_names else ""}{location_context}
+{f"REJECTED NAMES (do NOT reuse): {', '.join(dict.fromkeys(rejected_names))}" if rejected_names else ""}{location_context}
 === DIVERSITY GUIDANCE (follow these for this faction) ===
 NAMING: {naming_hint}
 STRUCTURE: {structure_hint}

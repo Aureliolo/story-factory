@@ -999,3 +999,106 @@ class TestSemaphoreTimeout:
                 agent.generate_structured("Test prompt", SampleOutputModel)
 
         mock_semaphore.acquire.assert_called_once()
+
+
+class TestBaseAgentHttpcoreRetries:
+    """Tests for httpcore exception retries in generate() and generate_structured()."""
+
+    @patch("src.agents.base.time.sleep")
+    def test_generate_retries_on_httpcore_remote_protocol_error(self, mock_sleep):
+        """Test generate retries on httpcore.RemoteProtocolError."""
+        import httpcore
+
+        agent = create_mock_agent()
+        agent.client.chat.side_effect = [
+            httpcore.RemoteProtocolError("peer closed connection"),
+            _make_stream_response("Success after httpcore retry"),
+        ]
+
+        result = agent.generate("Prompt")
+
+        assert result == "Success after httpcore retry"
+        assert agent.client.chat.call_count == 2
+
+    @patch("src.agents.base.time.sleep")
+    def test_generate_retries_on_httpcore_read_error(self, mock_sleep):
+        """Test generate retries on httpcore.ReadError."""
+        import httpcore
+
+        agent = create_mock_agent()
+        agent.client.chat.side_effect = [
+            httpcore.ReadError("read operation failed"),
+            _make_stream_response("Success after read error retry"),
+        ]
+
+        result = agent.generate("Prompt")
+
+        assert result == "Success after read error retry"
+        assert agent.client.chat.call_count == 2
+
+    @patch("src.agents.base.time.sleep")
+    def test_generate_retries_on_httpcore_network_error(self, mock_sleep):
+        """Test generate retries on httpcore.NetworkError."""
+        import httpcore
+
+        agent = create_mock_agent()
+        agent.client.chat.side_effect = [
+            httpcore.NetworkError("network unreachable"),
+            _make_stream_response("Success after network error retry"),
+        ]
+
+        result = agent.generate("Prompt")
+
+        assert result == "Success after network error retry"
+        assert agent.client.chat.call_count == 2
+
+    @patch("src.agents.base.time.sleep")
+    def test_generate_structured_retries_on_httpcore_remote_protocol_error(self, mock_sleep):
+        """Test generate_structured retries on httpcore.RemoteProtocolError."""
+        import httpcore
+
+        agent = create_mock_agent()
+        agent.client.chat.side_effect = [
+            httpcore.RemoteProtocolError("peer closed connection"),
+            TestBaseAgentGenerateStructured._make_chat_response('{"name": "Recovered"}'),
+        ]
+
+        result = agent.generate_structured("Test prompt", SampleOutputModel, max_retries=2)
+
+        assert result.name == "Recovered"
+        assert agent.client.chat.call_count == 2
+        mock_sleep.assert_called_once_with(1)
+
+    @patch("src.agents.base.time.sleep")
+    def test_generate_structured_retries_on_httpcore_read_error(self, mock_sleep):
+        """Test generate_structured retries on httpcore.ReadError."""
+        import httpcore
+
+        agent = create_mock_agent()
+        agent.client.chat.side_effect = [
+            httpcore.ReadError("read operation failed"),
+            TestBaseAgentGenerateStructured._make_chat_response('{"name": "Recovered"}'),
+        ]
+
+        result = agent.generate_structured("Test prompt", SampleOutputModel, max_retries=2)
+
+        assert result.name == "Recovered"
+        assert agent.client.chat.call_count == 2
+        mock_sleep.assert_called_once_with(1)
+
+    @patch("src.agents.base.time.sleep")
+    def test_generate_structured_retries_on_httpcore_network_error(self, mock_sleep):
+        """Test generate_structured retries on httpcore.NetworkError."""
+        import httpcore
+
+        agent = create_mock_agent()
+        agent.client.chat.side_effect = [
+            httpcore.NetworkError("network unreachable"),
+            TestBaseAgentGenerateStructured._make_chat_response('{"name": "Recovered"}'),
+        ]
+
+        result = agent.generate_structured("Test prompt", SampleOutputModel, max_retries=2)
+
+        assert result.name == "Recovered"
+        assert agent.client.chat.call_count == 2
+        mock_sleep.assert_called_once_with(1)
