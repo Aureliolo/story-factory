@@ -1970,7 +1970,7 @@ class TestAutoCorrectEraNames:
             description="A hero",
             attributes={
                 "lifecycle": {
-                    "birth": {"year": 9999, "era_name": "Unknown"},
+                    "birth": {"year": 5000, "era_name": "Unknown"},
                 }
             },
         )
