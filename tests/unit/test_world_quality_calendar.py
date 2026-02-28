@@ -732,3 +732,111 @@ class TestJudgeMultiCallBranch:
             pytest.raises(WorldGenerationError, match="Calendar quality judgment failed"),
         ):
             _judge_calendar_quality(svc, sample_calendar_dict, story_state, 0.1)
+
+
+class TestStripArticles:
+    """Tests for the _strip_articles helper (line 33 in _calendar.py)."""
+
+    def test_strips_the_prefix(self):
+        """'the ' prefix is stripped."""
+        from src.services.world_quality_service._calendar import _strip_articles
+
+        assert _strip_articles("the Golden Age") == "golden age"
+
+    def test_strips_a_prefix(self):
+        """'a ' prefix is stripped."""
+        from src.services.world_quality_service._calendar import _strip_articles
+
+        assert _strip_articles("a New Dawn") == "new dawn"
+
+    def test_strips_an_prefix(self):
+        """'an ' prefix is stripped."""
+        from src.services.world_quality_service._calendar import _strip_articles
+
+        assert _strip_articles("an Ancient Era") == "ancient era"
+
+    def test_no_article_returned_unchanged(self):
+        """Text without a leading article is returned normalized but unchanged."""
+        from src.services.world_quality_service._calendar import _strip_articles
+
+        assert _strip_articles("Golden Age") == "golden age"
+
+    def test_strips_only_first_article(self):
+        """Only the leading article is stripped, not articles within the text."""
+        from src.services.world_quality_service._calendar import _strip_articles
+
+        # "the " is stripped, leaving "age of the dragons" unchanged
+        assert _strip_articles("the Age of the Dragons") == "age of the dragons"
+
+    def test_empty_string(self):
+        """Empty string returns empty string."""
+        from src.services.world_quality_service._calendar import _strip_articles
+
+        assert _strip_articles("") == ""
+
+    def test_whitespace_stripped(self):
+        """Leading/trailing whitespace is stripped around articles."""
+        from src.services.world_quality_service._calendar import _strip_articles
+
+        assert _strip_articles("  the Golden Age  ") == "golden age"
+
+
+class TestArticleStrippedEraMatch:
+    """Tests for the article-stripped era name match fallback (line 260 in _calendar.py)."""
+
+    def test_article_stripped_match_logged(self, caplog):
+        """Article-stripped match is used when exact and case-insensitive lookups fail.
+
+        'The Golden Age' vs 'Golden Age': exact and case-insensitive both fail
+        because the strings differ by the article, but after stripping 'the '
+        both normalize to 'golden age' and the era is found.
+        """
+        from src.services.world_quality_service._calendar import _generated_data_to_world_calendar
+
+        data = GeneratedCalendarData(
+            era_name="The Golden Age",  # Has 'The ' prefix
+            era_abbreviation="GA",
+            current_year=200,
+            months=[{"name": "Sunmonth", "days": 30, "description": "Warm"}],
+            day_names=["Day1"],
+            historical_eras=[
+                {
+                    "name": "Golden Age",  # No 'The' prefix in era list
+                    "start_year": 100,
+                    "end_year": None,
+                    "description": "The golden era",
+                }
+            ],
+        )
+        with caplog.at_level("DEBUG"):
+            calendar = _generated_data_to_world_calendar(data)
+
+        # era_start_year should be 100 (from the matched "Golden Age" era)
+        assert calendar.era_start_year == 100
+        # Debug log from article-stripped match should appear
+        assert any("article-stripped" in m.lower() for m in caplog.messages)
+
+    def test_article_stripped_match_an_prefix(self, caplog):
+        """Article-stripped match works with 'An ' prefix."""
+        from src.services.world_quality_service._calendar import _generated_data_to_world_calendar
+
+        data = GeneratedCalendarData(
+            era_name="An Ancient Age",  # Has 'An ' prefix
+            era_abbreviation="AA",
+            current_year=50,
+            months=[{"name": "Coldmonth", "days": 30, "description": ""}],
+            day_names=["Day1"],
+            historical_eras=[
+                {
+                    "name": "Ancient Age",  # No 'An ' prefix
+                    "start_year": 1,
+                    "end_year": None,
+                    "description": "",
+                }
+            ],
+        )
+        with caplog.at_level("DEBUG"):
+            calendar = _generated_data_to_world_calendar(data)
+
+        assert calendar.era_start_year == 1
+        assert any("article-stripped" in m.lower() for m in caplog.messages)

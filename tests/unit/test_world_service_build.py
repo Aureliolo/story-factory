@@ -3307,3 +3307,44 @@ class TestHealthScoreCircularPenalty:
         # quality = 8.0 * 10 = 80.0
         # final = 100.0 * 0.6 + 80.0 * 0.4 = 60.0 + 32.0 = 92.0
         assert score == 92.0
+
+
+class TestCleanDescription:
+    """Tests for _clean_description in _build.py (line 48 debug log)."""
+
+    def test_cleans_prompt_echo_artifact(self, caplog):
+        """Debug log fires when prompt-echo artifacts are stripped."""
+        import logging
+
+        from src.services.world_service._build import _clean_description
+
+        description = (
+            "A wise mentor figure.\n{3: Strong story relevance - connections to themes/characters}"
+        )
+        with caplog.at_level(logging.DEBUG, logger="src.services.world_service._build"):
+            result = _clean_description(description)
+
+        assert "Strong story relevance" not in result
+        assert any("Stripped prompt echo" in m for m in caplog.messages)
+
+    def test_no_log_when_nothing_cleaned(self, caplog):
+        """No debug log when description has no prompt-echo artifacts."""
+        import logging
+
+        from src.services.world_service._build import _clean_description
+
+        description = "A simple description with no artifacts."
+        with caplog.at_level(logging.DEBUG, logger="src.services.world_service._build"):
+            result = _clean_description(description)
+
+        assert result == description
+        assert not any("Stripped prompt echo" in m for m in caplog.messages)
+
+    def test_returns_cleaned_text(self):
+        """The function returns the cleaned text without the artifact."""
+        from src.services.world_service._build import _clean_description
+
+        description = "A character.\n{1: Unique trait - makes hero stand out}"
+        result = _clean_description(description)
+        assert "Unique trait" not in result
+        assert "A character." in result
