@@ -99,8 +99,7 @@ def build_entity_browser(page) -> None:
             .style("max-height: calc(100vh - 520px); min-height: 200px")
         )
         # Use pre-fetched entities from page build to avoid a redundant DB call
-        prefetched = getattr(page, "_prefetched_entities", None)
-        refresh_entity_list(page, prefetched_entities=prefetched)
+        refresh_entity_list(page, prefetched_entities=page._prefetched_entities)
 
         # Add button
         ui.button(

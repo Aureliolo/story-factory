@@ -504,7 +504,7 @@ def _check_sentinel(year: int, field_name: str) -> int | None:
     return year
 
 
-def _parse_year(value: object, field_name: str) -> int | None:
+def parse_year(value: object, field_name: str) -> int | None:
     """Coerce a raw LLM year value to int, with type-aware logging.
 
     Handles: bool (rejected), int (pass-through), float (truncated to int),
@@ -537,9 +537,9 @@ def _parse_year(value: object, field_name: str) -> int | None:
 
 
 def _filter_sentinel_year_in_dict(data: dict, field_prefix: str) -> dict:
-    """Return a copy of *data* with any sentinel year value parsed through ``_parse_year``.
+    """Return a copy of *data* with any sentinel year value parsed through ``parse_year``.
 
-    Dict-constructed ``StoryTimestamp(**data)`` bypasses ``_parse_year``, so
+    Dict-constructed ``StoryTimestamp(**data)`` bypasses ``parse_year``, so
     sentinel values (-1, 0, 9999) would slip through.  This helper applies
     the same sentinel rejection used by ``founding_year`` / ``destruction_year``
     to the ``year`` key in timestamp dicts (birth, death, first/last appearance).
@@ -549,9 +549,29 @@ def _filter_sentinel_year_in_dict(data: dict, field_prefix: str) -> dict:
     if "year" not in data or data["year"] is None:
         logger.debug("No year to filter in %s dict (keys: %s)", field_prefix, list(data.keys()))
         return {**data}
-    parsed = _parse_year(data["year"], f"{field_prefix}.year")
+    parsed = parse_year(data["year"], f"{field_prefix}.year")
     logger.debug("Filtered %s.year: %r -> %r", field_prefix, data["year"], parsed)
     return {**data, "year": parsed}
+
+
+def _format_timestamp_dict(data: dict[str, Any]) -> str:
+    """Format a timestamp dict as a human-readable string for ``raw_text``.
+
+    Produces display strings like ``"Year 1042, Golden Age"`` instead of
+    Python dict repr (``"{'year': 1042, 'era_name': 'Golden Age'}"``).
+    Falls back to empty string when no displayable fields are present.
+    """
+    parts: list[str] = []
+    year = data.get("year")
+    if year is not None:
+        parts.append(f"Year {year}")
+    era = data.get("era_name")
+    if era:
+        parts.append(str(era))
+    month = data.get("month")
+    if month is not None:
+        parts.append(f"Month {month}")
+    return ", ".join(parts)
 
 
 def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifecycle | None:
@@ -593,7 +613,7 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
         if isinstance(birth_data, dict):
             filtered = _filter_sentinel_year_in_dict(birth_data, "birth")
             if "raw_text" not in filtered:
-                filtered = {**filtered, "raw_text": str(birth_data)}
+                filtered = {**filtered, "raw_text": _format_timestamp_dict(birth_data)}
             try:
                 result.birth = StoryTimestamp(**filtered)
             except ValidationError as exc:
@@ -605,7 +625,7 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
         if isinstance(death_data, dict):
             filtered = _filter_sentinel_year_in_dict(death_data, "death")
             if "raw_text" not in filtered:
-                filtered = {**filtered, "raw_text": str(death_data)}
+                filtered = {**filtered, "raw_text": _format_timestamp_dict(death_data)}
             try:
                 result.death = StoryTimestamp(**filtered)
             except ValidationError as exc:
@@ -617,7 +637,7 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
         if isinstance(first_data, dict):
             filtered = _filter_sentinel_year_in_dict(first_data, "first_appearance")
             if "raw_text" not in filtered:
-                filtered = {**filtered, "raw_text": str(first_data)}
+                filtered = {**filtered, "raw_text": _format_timestamp_dict(first_data)}
             try:
                 result.first_appearance = StoryTimestamp(**filtered)
             except ValidationError as exc:
@@ -629,7 +649,7 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
         if isinstance(last_data, dict):
             filtered = _filter_sentinel_year_in_dict(last_data, "last_appearance")
             if "raw_text" not in filtered:
-                filtered = {**filtered, "raw_text": str(last_data)}
+                filtered = {**filtered, "raw_text": _format_timestamp_dict(last_data)}
             try:
                 result.last_appearance = StoryTimestamp(**filtered)
             except ValidationError as exc:
@@ -641,14 +661,14 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
     if notes := lifecycle_data.get("temporal_notes"):
         result.temporal_notes = str(notes)
 
-    # Use 'is not None' so that sentinel values like 0 reach _parse_year for proper rejection
+    # Use 'is not None' so that sentinel values like 0 reach parse_year for proper rejection
     founding = lifecycle_data.get("founding_year")
     if founding is not None:
-        result.founding_year = _parse_year(founding, "founding_year")
+        result.founding_year = parse_year(founding, "founding_year")
 
     destruction = lifecycle_data.get("destruction_year")
     if destruction is not None:
-        result.destruction_year = _parse_year(destruction, "destruction_year")
+        result.destruction_year = parse_year(destruction, "destruction_year")
 
     logger.debug(
         "Extracted lifecycle: birth=%s, death=%s, founding=%s, destruction=%s",

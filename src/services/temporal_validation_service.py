@@ -27,7 +27,7 @@ _ERA_STRIP_SUFFIXES = (" era",)
 def _normalize_era_name(name: str) -> str:
     """Normalize an era name for fuzzy comparison.
 
-    Case-folds the name, strips a leading article ("the", "a", "an") and a
+    Case-folds the name, strips leading articles ("the", "a", "an") and a
     trailing " era" suffix.  For example, ``"The Human Epoch"`` and
     ``"human epoch"`` compare equal, as do ``"Golden Era"`` and ``"Golden"``.
     """

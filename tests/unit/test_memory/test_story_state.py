@@ -20,6 +20,7 @@ from src.memory.story_state import (
     Scene,
     StoryBrief,
     StoryState,
+    WorldEventCreation,
 )
 from src.memory.templates import CharacterTemplate, PersonalityTrait
 
@@ -2012,7 +2013,7 @@ class TestSentinelYearValidation:
         )
         assert cc.death_year is None
 
-    # --- Float and string coercion through _parse_year ---
+    # --- Float and string coercion through parse_year ---
     def test_item_creation_year_float_zero_rejected(self):
         """Float 0.0 is rejected as sentinel after truncation to int."""
         item = Item(name="Sword", description="A blade", creation_year=0.0)
@@ -2027,3 +2028,44 @@ class TestSentinelYearValidation:
         """Bool values are rejected (bool is subclass of int)."""
         item = Item(name="Sword", description="A blade", creation_year=True)
         assert item.creation_year is None
+
+    # --- WorldEventCreation.year ---
+    def test_world_event_creation_year_zero_rejected(self):
+        """WorldEventCreation with year=0 is rejected as sentinel."""
+        evt = WorldEventCreation(description="A great battle", year=0)
+        assert evt.year is None
+
+    def test_world_event_creation_year_minus_one_rejected(self):
+        """WorldEventCreation with year=-1 is rejected as sentinel."""
+        evt = WorldEventCreation(description="A great battle", year=-1)
+        assert evt.year is None
+
+    def test_world_event_creation_year_9999_rejected(self):
+        """WorldEventCreation with year=9999 is rejected as sentinel."""
+        evt = WorldEventCreation(description="A great battle", year=9999)
+        assert evt.year is None
+
+    def test_world_event_creation_year_valid_passes(self):
+        """WorldEventCreation with valid year passes through."""
+        evt = WorldEventCreation(description="A great battle", year=500)
+        assert evt.year == 500
+
+    def test_world_event_creation_year_none_passes(self):
+        """WorldEventCreation with year=None is accepted."""
+        evt = WorldEventCreation(description="A great battle", year=None)
+        assert evt.year is None
+
+    def test_world_event_creation_year_float_zero_rejected(self):
+        """Float 0.0 is rejected as sentinel after truncation to int."""
+        evt = WorldEventCreation(description="A great battle", year=0.0)
+        assert evt.year is None
+
+    def test_world_event_creation_year_string_zero_rejected(self):
+        """String '0' is rejected as sentinel after parsing."""
+        evt = WorldEventCreation(description="A great battle", year="0")
+        assert evt.year is None
+
+    def test_world_event_creation_year_bool_rejected(self):
+        """Bool values are rejected (bool is subclass of int)."""
+        evt = WorldEventCreation(description="A great battle", year=True)
+        assert evt.year is None

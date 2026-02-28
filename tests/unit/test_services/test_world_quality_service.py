@@ -1841,6 +1841,8 @@ class TestCreateRelationship:
 
         info_messages = [r.message for r in caplog.records if r.levelno == logging.INFO]
         assert any("Relationship creation LLM call" in m for m in info_messages)
+        assert any("model=" in m for m in info_messages)
+        assert any("s, tokens=" in m for m in info_messages)
         assert any("tokens=120+45=165" in m for m in info_messages)
 
 
@@ -1989,6 +1991,8 @@ class TestRefineRelationship:
 
         info_messages = [r.message for r in caplog.records if r.levelno == logging.INFO]
         assert any("Relationship refinement LLM call" in m for m in info_messages)
+        assert any("model=" in m for m in info_messages)
+        assert any("s, tokens=" in m for m in info_messages)
         assert any("tokens=200+80=280" in m for m in info_messages)
 
 

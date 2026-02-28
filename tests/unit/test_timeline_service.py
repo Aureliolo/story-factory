@@ -341,7 +341,7 @@ class TestParseTimestamp:
         assert ts.year == 1042
         assert ts.era_name is None
 
-    # --- JSON boolean year tests (consistency with _parse_year) ---
+    # --- JSON boolean year tests (consistency with parse_year) ---
 
     def test_parse_json_bool_true_year_is_rejected(self):
         """Boolean True year in JSON should be rejected (not coerced to 1)."""

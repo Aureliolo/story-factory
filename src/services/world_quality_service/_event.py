@@ -116,13 +116,17 @@ def generate_event_with_quality(
     prep_creator, prep_judge = svc._make_model_preparers("event")
 
     def _is_empty(evt: dict[str, Any]) -> bool:
-        """Check if event is empty or a duplicate of an already-known event.
+        """Check if event has no description or is a duplicate of an already-known event.
+
+        Returns True for events with empty/whitespace-only descriptions (no side
+        effect) or for duplicates of known events.
 
         Side effect: appends duplicate descriptions to ``rejected_descriptions``
         and ``all_known`` so subsequent creator prompts and dedup checks within
         the same quality-loop invocation avoid regenerating them.
         """
-        desc = evt.get("description", "")
+        raw_desc = evt.get("description", "")
+        desc = raw_desc.strip() if isinstance(raw_desc, str) else ""
         if not desc:
             return True
         if _is_duplicate_description(desc, all_known):

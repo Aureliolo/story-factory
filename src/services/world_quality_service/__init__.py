@@ -511,9 +511,10 @@ class WorldQualityService(EntityDelegatesMixin):
         """Return (prepare_creator, prepare_judge) callbacks for VRAM management.
 
         When the creator and judge models differ for a given entity type, returns
-        callbacks that call ``prepare_model()`` to unload the other model before
-        switching. When both roles use the same model, returns ``(None, None)``
-        to skip unnecessary VRAM management.
+        callbacks that call ``prepare_model()`` to ensure the target model is
+        loaded in VRAM, evicting others as the VRAM strategy requires. When both
+        roles use the same model, returns ``(None, None)`` to skip unnecessary
+        VRAM management.
 
         Args:
             entity_type: Entity type (e.g. "character", "location") used to

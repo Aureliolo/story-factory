@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from src.memory.content_guidelines import ContentProfile
 from src.memory.entities import EventRole
 from src.memory.templates import PersonalityTrait, TargetLength, normalize_traits
-from src.memory.timeline_types import _parse_year
+from src.memory.timeline_types import parse_year
 
 if TYPE_CHECKING:
     from src.memory._chapter_versions import ChapterVersionManager
@@ -21,13 +21,13 @@ logger = logging.getLogger(__name__)
 def _reject_sentinel_year(v: Any, field_name: str) -> int | None:
     """Reject LLM sentinel year values (0, -1, 9999) at the Pydantic model level.
 
-    Wraps ``_parse_year`` from timeline_types to provide sentinel filtering
-    for plain ``int | None`` Pydantic fields that bypass ``_parse_year`` during
+    Wraps ``parse_year`` from timeline_types to provide sentinel filtering
+    for plain ``int | None`` Pydantic fields that bypass ``parse_year`` during
     normal construction.
     """
     if v is None:
         return None
-    return _parse_year(v, field_name)
+    return parse_year(v, field_name)
 
 
 class Character(BaseModel):

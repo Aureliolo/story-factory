@@ -343,3 +343,7 @@ class TestSetLogLevel:
         assert "Log level changed" not in caplog.text
         # The debug trace for the no-op should appear
         assert "already set to" in caplog.text
+        # Third-party loggers must remain suppressed even in the no-op path
+        assert logging.getLogger("httpx").level == logging.WARNING
+        assert logging.getLogger("httpcore").level == logging.WARNING
+        assert logging.getLogger("nicegui").level == logging.WARNING

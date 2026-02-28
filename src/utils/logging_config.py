@@ -146,6 +146,7 @@ def set_log_level(level: str) -> None:
     root_logger = logging.getLogger()
     if root_logger.level == log_level:
         logger.debug("Log level already set to %s; skipping reconfiguration", level)
+        _suppress_noisy_loggers()
         return
     logger.info("Log level changed to %s", level)
     root_logger.setLevel(log_level)

@@ -564,7 +564,11 @@ def generate_events_with_quality(
         ),
         get_name=lambda evt: evt.get("description", "Unknown")[:_EVENT_DESCRIPTION_PREFIX_LEN],
         on_success=lambda evt: (
-            descriptions.append(evt["description"]) if evt.get("description") else None
+            descriptions.append(evt["description"])
+            if evt.get("description")
+            else logger.warning(
+                "Event passed quality loop but has no description — dedup list stale"
+            )
         ),
         cancel_check=cancel_check,
         progress_callback=progress_callback,

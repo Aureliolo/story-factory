@@ -31,6 +31,7 @@ from nicegui.elements.input import Input
 from nicegui.elements.select import Select
 from nicegui.elements.textarea import Textarea
 
+from src.memory.entities import Entity
 from src.memory.world_health import CycleInfo
 from src.services import ServiceContainer
 from src.ui.components.graph import GraphComponent
@@ -144,7 +145,7 @@ class WorldPage:
         # Per-render cache for entity options (populated in build(), cleared after)
         self._cached_entity_options: dict[str, str] | None = None
         # Pre-fetched entity list for the browser (populated in build(), cleared after)
-        self._prefetched_entities: list | None = None
+        self._prefetched_entities: list[Entity] | None = None
 
     # ========== Build ==========
 

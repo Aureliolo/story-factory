@@ -745,6 +745,7 @@ class TestValidateContextSize:
         original_warning = logging.getLogger("src.services.llm_client").warning
 
         def capture_warning(msg, *args, **kwargs):
+            """Intercept logger.warning calls and record formatted messages."""
             warnings_logged.append(msg % args if args else msg)
             original_warning(msg, *args, **kwargs)
 
@@ -752,6 +753,7 @@ class TestValidateContextSize:
         results: list[int] = []
 
         def worker():
+            """Call validate_context_size from a thread, syncing via barrier."""
             barrier.wait()
             r = validate_context_size(mock_client, "concurrent-model:8b", 32768)
             results.append(r)
@@ -765,6 +767,9 @@ class TestValidateContextSize:
             for t in threads:
                 t.join(timeout=5)
 
+        # Ensure all worker threads completed; fail fast on partial execution
+        assert all(not t.is_alive() for t in threads), "All worker threads must finish"
+        assert len(results) == 4, "Expected one result per worker thread"
         # All threads should return the capped value
         assert all(r == 4096 for r in results)
         # Warning should be emitted at most once
