@@ -170,7 +170,7 @@ Rate each dimension 0-10:
 - coherence: Logical progression from inciting incident to resolution
 - tension_arc: Stakes escalate, tension builds and releases properly
 - character_integration: Plot events meaningfully advance character arcs
-- originality: Avoids predictable or cliched progressions
+- originality: Avoids predictable or cliched progressions. Score 8-10 for genuinely surprising twists and subverted expectations. Score 6-7 for fresh takes on familiar tropes with meaningful variations. Score 4-5 for recognizable genre patterns with minor modifications. Score 1-3 for paint-by-numbers plots with no surprises. Do NOT use binary 5/10 scoring — use the full range
 
 Provide specific, actionable feedback for improvement in the feedback field.
 

@@ -63,9 +63,11 @@ def prepare_model(svc: ModelModeService, model_id: str) -> None:
 
     global _last_prepared_model_id
     with _last_prepared_model_lock:
-        if model_id != _last_prepared_model_id:
-            logger.debug("Preparing model %s with VRAM strategy: %s", model_id, strategy.value)
-            _last_prepared_model_id = model_id
+        if model_id == _last_prepared_model_id:
+            logger.debug("Model %s already prepared, skipping VRAM preparation", model_id)
+            return
+        logger.debug("Preparing model %s with VRAM strategy: %s", model_id, strategy.value)
+        _last_prepared_model_id = model_id
 
     if strategy == VramStrategy.SEQUENTIAL:
         # Unload all other models
@@ -91,6 +93,29 @@ def prepare_model(svc: ModelModeService, model_id: str) -> None:
 
     # Model will be loaded on first use by Ollama
     svc._loaded_models.add(model_id)
+
+    # M6: warn if model residency is below minimum threshold
+    try:
+        installed = get_installed_models_with_sizes()
+        if model_id in installed:
+            model_size_gb = installed[model_id]
+            from src.settings import get_available_vram
+
+            available_vram = get_available_vram()
+            if model_size_gb > 0:
+                residency = min(available_vram / model_size_gb, 1.0)
+                if residency < MIN_GPU_RESIDENCY:
+                    logger.warning(
+                        "Model %s GPU residency %.0f%% is below minimum %.0f%% "
+                        "(model=%.1fGB, available_vram=%.1fGB)",
+                        model_id,
+                        residency * 100,
+                        MIN_GPU_RESIDENCY * 100,
+                        model_size_gb,
+                        available_vram,
+                    )
+    except Exception as e:
+        logger.debug("Could not check GPU residency for %s: %s", model_id, e)
 
 
 def unload_all_except(svc: ModelModeService, keep_model: str) -> None:
@@ -126,3 +151,11 @@ def unload_all_except(svc: ModelModeService, keep_model: str) -> None:
 
     # Only remove successfully unloaded models from tracking
     svc._loaded_models = (svc._loaded_models - successfully_unloaded) | {keep_model}
+
+    # Clear last-prepared cache when models are evicted so the next
+    # prepare_model() call for the kept model actually runs setup.
+    global _last_prepared_model_id
+    with _last_prepared_model_lock:
+        if _last_prepared_model_id in successfully_unloaded:
+            logger.debug("Cleared last-prepared model cache (evicted %s)", _last_prepared_model_id)
+            _last_prepared_model_id = None

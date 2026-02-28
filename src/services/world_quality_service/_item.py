@@ -211,7 +211,7 @@ Rate each dimension 0-10:
 - uniqueness: Distinctive qualities
 - narrative_potential: Opportunities for scenes
 - integration: How well it fits the world
-- temporal_plausibility: VERIFY against CALENDAR above — creation/discovery dates MUST fall within a defined era's [start_year, end_year] range. Score 8-10 ONLY if temporal references are consistent with the calendar eras AND are self-consistent. Score 5-7 if time references exist but era alignment is ambiguous. Score 2-4 if dates conflict with defined era ranges. If creation/discovery dates are "N/A" (not yet assigned), score 5.0 (neutral — dates are pending, not wrong). If the CALENDAR block states "No calendar available", score 5.0 (insufficient context to verify).
+- temporal_plausibility: VERIFY against CALENDAR above — creation/discovery dates MUST fall within a defined era's [start_year, end_year] range. Score 8-10 ONLY if temporal references are consistent with the calendar eras AND are self-consistent. Score 6-7 if dates are plausible but era alignment has minor ambiguity. Score 4-5 if dates exist but era alignment is unclear or missing. Score 2-3 if dates conflict with defined era ranges. Score 1 for outright contradictions. If creation/discovery dates are "N/A" (not yet assigned), score 5.0 (neutral — dates are pending, not wrong). If the CALENDAR block states "No calendar available", score 5.0 (insufficient context to verify). Do NOT use binary 5/10 scoring — use the full range.
 
 Provide specific, actionable feedback for improvement in the feedback field.
 

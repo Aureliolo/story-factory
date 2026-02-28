@@ -210,7 +210,7 @@ Rate each dimension 0-10:
 - narrative_significance: Plot or symbolic meaning
 - story_relevance: Connections to themes and characters
 - distinctiveness: Memorable, unique qualities
-- temporal_plausibility: VERIFY against CALENDAR above — all temporal dates (including founding and destruction) MUST fall within defined era [start_year, end_year] ranges, and chronology must be self-consistent (e.g., destruction_year >= founding_year when both exist). Score 8-10 ONLY if all temporal references satisfy these checks. Score 5-7 if time references exist but era alignment is ambiguous. Score 2-4 if any date conflicts with defined era ranges or chronology. If temporal dates are "N/A" (not yet assigned), score 5.0 (neutral — dates are pending, not wrong). If the CALENDAR block states "No calendar available", score 5.0 (insufficient context to verify).
+- temporal_plausibility: VERIFY against CALENDAR above — all temporal dates (including founding and destruction) MUST fall within defined era [start_year, end_year] ranges, and chronology must be self-consistent (e.g., destruction_year >= founding_year when both exist). Score 8-10 ONLY if all temporal references satisfy these checks. Score 6-7 if dates are plausible but era alignment has minor ambiguity. Score 4-5 if dates exist but era alignment is unclear or missing. Score 2-3 if dates conflict with defined era ranges or chronology is inconsistent. Score 1 for outright contradictions. If temporal dates are "N/A" (not yet assigned), score 5.0 (neutral — dates are pending, not wrong). If the CALENDAR block states "No calendar available", score 5.0 (insufficient context to verify). Do NOT use binary 5/10 scoring — use the full range.
 
 Provide specific improvement feedback in the feedback field.
 

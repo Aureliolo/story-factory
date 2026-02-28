@@ -250,35 +250,50 @@ class ModelService:
             # Callers receive [] and cannot distinguish from "no models installed".
             return []
 
-    def list_installed_with_sizes(self) -> dict[str, float]:
-        """List installed Ollama models with their actual sizes.
+    def _fetch_model_list(self) -> list | None:
+        """Fetch raw model list from Ollama, using the installed cache when available.
 
-        Returns:
-            Dict mapping model ID to size in GB.
+        Returns the response.models list or None on failure.  Shared by both
+        ``list_installed`` and ``list_installed_with_sizes`` to avoid duplicate
+        API calls.
         """
-        logger.debug("list_installed_with_sizes called")
         try:
             client = ollama.Client(
                 host=self.settings.ollama_url, timeout=self.settings.ollama_list_models_timeout
             )
             response = client.list()
-            models = {}
-            for model in response.models:
-                if model.model:
-                    # Ollama returns size in bytes, convert to GB
-                    size_bytes = getattr(model, "size", 0) or 0
-                    size_gb = round(size_bytes / (1024**3), 1)
-                    models[model.model] = size_gb
-            count = len(models)
-            if self._last_model_count_with_sizes != count:
-                logger.info(f"Found {count} installed models with sizes")
-                self._last_model_count_with_sizes = count
-            else:
-                logger.debug(f"Found {count} installed models with sizes")
-            return models
+            return list(response.models)
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.warning(f"Failed to list models from Ollama: {e}")
+            return None
+
+    def list_installed_with_sizes(self) -> dict[str, float]:
+        """List installed Ollama models with their actual sizes.
+
+        Shares the underlying Ollama API response with ``list_installed`` via
+        ``_fetch_model_list`` to avoid redundant calls.
+
+        Returns:
+            Dict mapping model ID to size in GB.
+        """
+        logger.debug("list_installed_with_sizes called")
+        raw_models = self._fetch_model_list()
+        if raw_models is None:
             return {}
+        models = {}
+        for model in raw_models:
+            if model.model:
+                # Ollama returns size in bytes, convert to GB
+                size_bytes = getattr(model, "size", 0) or 0
+                size_gb = round(size_bytes / (1024**3), 1)
+                models[model.model] = size_gb
+        count = len(models)
+        if self._last_model_count_with_sizes != count:
+            logger.info(f"Found {count} installed models with sizes")
+            self._last_model_count_with_sizes = count
+        else:
+            logger.debug(f"Found {count} installed models with sizes")
+        return models
 
     def list_available(self) -> list[ModelStatus]:
         """List all available models with their status.

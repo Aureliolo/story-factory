@@ -93,6 +93,7 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
     refine_with_initial_fn: Callable[[T], tuple[T, S, int]] | None = None,
     prepare_creator_fn: Callable[[], None] | None = None,
     prepare_judge_fn: Callable[[], None] | None = None,
+    register_created_fn: Callable[[T], None] | None = None,
 ) -> list[tuple[T, S]]:
     """Parallel batch generation using a rolling-window thread pool.
 
@@ -229,6 +230,7 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
             cancel_check=cancel_check,
             progress_callback=progress_callback,
             quality_threshold=quality_threshold,
+            register_created_fn=register_created_fn,
         )
 
     # Degenerate case: single worker → delegate to sequential
@@ -489,6 +491,7 @@ def _generate_batch_phased[T, S: BaseQualityScores](
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     quality_threshold: float | None = None,
+    register_created_fn: Callable[[T], None] | None = None,
 ) -> list[tuple[T, S]]:
     """Two-phase batch pipeline: batch creates, then batch judges.
 
@@ -588,13 +591,17 @@ def _generate_batch_phased[T, S: BaseQualityScores](
             entity = create_only_fn(i)
             if entity is not None and not is_empty_fn(entity):
                 created_entities.append((i, entity))
+                entity_elapsed = time.time() - entity_start
+                completed_times.append(entity_elapsed)
+                if register_created_fn:
+                    register_created_fn(entity)
                 logger.debug(
                     "Phase 1: created %s %d/%d '%s' in %.2fs",
                     entity_type,
                     i + 1,
                     count,
                     get_name(entity),
-                    time.time() - entity_start,
+                    entity_elapsed,
                 )
             else:
                 create_errors += 1

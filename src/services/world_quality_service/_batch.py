@@ -2,8 +2,7 @@
 
 import logging
 import time
-from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from typing import Any
 
 from src.memory.story_state import Chapter, Character, StoryState
@@ -19,94 +18,14 @@ from src.memory.world_quality import (
     RelationshipQualityScores,
 )
 from src.services.world_quality_service._event import _EVENT_DESCRIPTION_PREFIX_LEN
+from src.services.world_quality_service._formatting import aggregate_errors as _aggregate_errors
+from src.services.world_quality_service._formatting import log_batch_summary as _log_batch_summary
 from src.utils.exceptions import DuplicateNameError, WorldGenerationError, summarize_llm_error
 
 logger = logging.getLogger(__name__)
 
 MAX_CONSECUTIVE_BATCH_FAILURES = 3
 MAX_BATCH_SHUFFLE_RETRIES = 1
-
-
-def _log_batch_summary(
-    results: Sequence[tuple[Any, BaseQualityScores]],
-    entity_type: str,
-    quality_threshold: float,
-    elapsed: float,
-    get_name: Callable[[Any], str] | None = None,
-) -> None:
-    """Log an aggregate summary at the end of a batch generation or review.
-
-    Args:
-        results: List of (entity, scores) tuples produced by the batch.
-        entity_type: Human-readable entity type (e.g., "character").
-        quality_threshold: The configured quality threshold for pass/fail.
-        elapsed: Total batch wall-clock time in seconds.
-        get_name: Callable to extract display name from an entity. When provided,
-            used for all entity types (chapters, relationships, etc.). Falls back
-            to ``entity.get("name")`` / ``getattr(entity, "name")`` when ``None``.
-    """
-    if not results:
-        logger.info(
-            "Batch %s summary: 0 entities produced (%.1fs)",
-            entity_type,
-            elapsed,
-        )
-        return
-
-    averages = [scores.average for _, scores in results]
-    passed = sum(1 for avg in averages if round(avg, 1) >= quality_threshold)
-    total = len(results)
-    min_score = min(averages)
-    max_score = max(averages)
-    avg_score = sum(averages) / total
-
-    failed_names: list[str] = []
-    for entity, scores in results:
-        if round(scores.average, 1) < quality_threshold:
-            if get_name is not None:
-                name = get_name(entity)
-            elif isinstance(entity, dict):
-                name = entity.get("name", "Unknown")
-            else:
-                name = getattr(entity, "name", "Unknown")
-            failed_names.append(name)
-
-    summary_parts = [
-        f"passed={passed}/{total}",
-        f"scores: min={min_score:.1f} max={max_score:.1f} avg={avg_score:.1f}",
-        f"threshold={quality_threshold:.1f}",
-        f"time={elapsed:.1f}s",
-    ]
-    if failed_names:
-        summary_parts.append(f"below threshold: {', '.join(failed_names)}")
-
-    logger.info(
-        "Batch %s summary: %s",
-        entity_type,
-        ", ".join(summary_parts),
-    )
-
-
-def _aggregate_errors(errors: list[str]) -> str:
-    """Deduplicate and aggregate identical error messages.
-
-    Instead of repeating ``"Failed to generate relationship after 3 attempts"``
-    nine times, produces ``"Failed to generate relationship after 3 attempts (x9)"``.
-
-    Args:
-        errors: List of raw error messages (may contain duplicates).
-
-    Returns:
-        A single joined string with counts appended for repeated messages.
-    """
-    counts = Counter(errors)
-    parts: list[str] = []
-    for msg, count in counts.items():
-        if count > 1:
-            parts.append(f"{msg} (x{count})")
-        else:
-            parts.append(msg)
-    return "; ".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -415,9 +334,9 @@ def _review_batch[T, S: BaseQualityScores](
 def generate_factions_with_quality(
     svc,
     story_state: StoryState,
-    existing_names: list[str],
+    name_provider: Callable[[], list[str]],
     count: int = 2,
-    existing_locations: list[str] | None = None,
+    location_provider: Callable[[], list[str]] | None = None,
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable | None = None,
 ) -> list[tuple[dict[str, Any], FactionQualityScores]]:
@@ -426,9 +345,9 @@ def generate_factions_with_quality(
     Args:
         svc: WorldQualityService instance.
         story_state: Current story state.
-        existing_names: Names to avoid.
+        name_provider: Callable returning current entity names from DB (live query).
         count: Number of factions to generate.
-        existing_locations: Names of existing locations for spatial grounding.
+        location_provider: Callable returning current location names (live query).
         cancel_check: Optional callable that returns True to cancel generation.
         progress_callback: Optional callback to receive progress updates.
 
@@ -438,16 +357,18 @@ def generate_factions_with_quality(
     Raises:
         WorldGenerationError: If no factions could be generated.
     """
-    names = existing_names.copy()
+    batch_names: list[str] = []
     return _generate_batch(
         svc=svc,
         count=count,
         entity_type="faction",
         generate_fn=lambda _i: svc.generate_faction_with_quality(
-            story_state, names, existing_locations
+            story_state,
+            name_provider() + batch_names,
+            location_provider() if location_provider else None,
         ),
         get_name=lambda f: f.get("name", "Unknown"),
-        on_success=lambda f: names.append(f["name"]) if "name" in f else None,
+        on_success=lambda f: batch_names.append(f["name"]) if "name" in f else None,
         cancel_check=cancel_check,
         progress_callback=progress_callback,
     )
@@ -456,7 +377,7 @@ def generate_factions_with_quality(
 def generate_items_with_quality(
     svc,
     story_state: StoryState,
-    existing_names: list[str],
+    name_provider: Callable[[], list[str]],
     count: int = 3,
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable | None = None,
@@ -466,7 +387,7 @@ def generate_items_with_quality(
     Args:
         svc: WorldQualityService instance.
         story_state: Current story state.
-        existing_names: Names to avoid.
+        name_provider: Callable returning current entity names from DB (live query).
         count: Number of items to generate.
         cancel_check: Optional callable that returns True to cancel generation.
         progress_callback: Optional callback to receive progress updates.
@@ -477,14 +398,16 @@ def generate_items_with_quality(
     Raises:
         WorldGenerationError: If no items could be generated.
     """
-    names = existing_names.copy()
+    batch_names: list[str] = []
     return _generate_batch(
         svc=svc,
         count=count,
         entity_type="item",
-        generate_fn=lambda _i: svc.generate_item_with_quality(story_state, names),
+        generate_fn=lambda _i: svc.generate_item_with_quality(
+            story_state, name_provider() + batch_names
+        ),
         get_name=lambda item: item.get("name", "Unknown"),
-        on_success=lambda item: names.append(item["name"]) if "name" in item else None,
+        on_success=lambda item: batch_names.append(item["name"]) if "name" in item else None,
         cancel_check=cancel_check,
         progress_callback=progress_callback,
     )
@@ -493,7 +416,7 @@ def generate_items_with_quality(
 def generate_concepts_with_quality(
     svc,
     story_state: StoryState,
-    existing_names: list[str],
+    name_provider: Callable[[], list[str]],
     count: int = 2,
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable | None = None,
@@ -503,7 +426,7 @@ def generate_concepts_with_quality(
     Args:
         svc: WorldQualityService instance.
         story_state: Current story state.
-        existing_names: Names to avoid.
+        name_provider: Callable returning current entity names from DB (live query).
         count: Number of concepts to generate.
         cancel_check: Optional callable that returns True to cancel generation.
         progress_callback: Optional callback to receive progress updates.
@@ -514,14 +437,16 @@ def generate_concepts_with_quality(
     Raises:
         WorldGenerationError: If no concepts could be generated.
     """
-    names = existing_names.copy()
+    batch_names: list[str] = []
     return _generate_batch(
         svc=svc,
         count=count,
         entity_type="concept",
-        generate_fn=lambda _i: svc.generate_concept_with_quality(story_state, names),
+        generate_fn=lambda _i: svc.generate_concept_with_quality(
+            story_state, name_provider() + batch_names
+        ),
         get_name=lambda c: c.get("name", "Unknown"),
-        on_success=lambda c: names.append(c["name"]) if "name" in c else None,
+        on_success=lambda c: batch_names.append(c["name"]) if "name" in c else None,
         cancel_check=cancel_check,
         progress_callback=progress_callback,
     )
@@ -531,7 +456,7 @@ def generate_events_with_quality(
     svc,
     story_state: StoryState,
     existing_descriptions: list[str],
-    entity_context: str,
+    entity_context_provider: Callable[[], str],
     count: int = 5,
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable | None = None,
@@ -542,7 +467,8 @@ def generate_events_with_quality(
         svc: WorldQualityService instance.
         story_state: Current story state.
         existing_descriptions: Descriptions of existing events to avoid duplicates.
-        entity_context: Pre-formatted string of all entities/relationships/lifecycle data.
+        entity_context_provider: Callable returning fresh entity context string.
+            Cached by entity count to avoid rebuilding when no entities were added.
         count: Number of events to generate.
         cancel_check: Optional callable that returns True to cancel generation.
         progress_callback: Optional callback to receive progress updates.
@@ -555,12 +481,27 @@ def generate_events_with_quality(
     """
     descriptions = existing_descriptions.copy()
     rejected: list[str] = []
+
+    # Cache entity context by entity count so it's not rebuilt when no entities were added
+    _cached_context: list[str] = [""]  # mutable container for closure
+    _cached_count: list[int] = [-1]
+
+    def _get_entity_context() -> str:
+        """Return entity context, rebuilding only when entity count changes."""
+        fresh = entity_context_provider()
+        line_count = fresh.count("\n")
+        if line_count != _cached_count[0]:
+            _cached_context[0] = fresh
+            _cached_count[0] = line_count
+            logger.debug("Event entity context refreshed (%d lines)", line_count)
+        return _cached_context[0]
+
     return _generate_batch(
         svc=svc,
         count=count,
         entity_type="event",
         generate_fn=lambda _i: svc.generate_event_with_quality(
-            story_state, descriptions, entity_context, rejected_descriptions=rejected
+            story_state, descriptions, _get_entity_context(), rejected_descriptions=rejected
         ),
         get_name=lambda evt: evt.get("description", "Unknown")[:_EVENT_DESCRIPTION_PREFIX_LEN],
         on_success=lambda evt: (
@@ -578,7 +519,7 @@ def generate_events_with_quality(
 def generate_characters_with_quality(
     svc,
     story_state: StoryState,
-    existing_names: list[str],
+    name_provider: Callable[[], list[str]],
     count: int = 2,
     custom_instructions: str | None = None,
     cancel_check: Callable[[], bool] | None = None,
@@ -586,10 +527,12 @@ def generate_characters_with_quality(
 ) -> list[tuple[Character, CharacterQualityScores]]:
     """Generate multiple characters with quality refinement.
 
+    Uses parallel generation when count > 1 and concurrent requests are enabled.
+
     Args:
         svc: WorldQualityService instance.
         story_state: Current story state.
-        existing_names: Names to avoid.
+        name_provider: Callable returning current entity names from DB (live query).
         count: Number of characters to generate.
         custom_instructions: Optional custom instructions to refine generation.
         cancel_check: Optional callable that returns True to cancel generation.
@@ -601,16 +544,54 @@ def generate_characters_with_quality(
     Raises:
         WorldGenerationError: If no characters could be generated.
     """
-    names = existing_names.copy()
+    import threading
+
+    from src.services.world_quality_service._batch_parallel import _generate_batch_parallel
+
+    batch_names: list[str] = []
+    batch_names_lock = threading.Lock()
+
+    def _thread_safe_on_success(char: Character) -> None:
+        """Append character name with lock for thread-safe dedup."""
+        with batch_names_lock:
+            batch_names.append(char.name)
+
+    def _get_names() -> list[str]:
+        """Get combined names from DB provider and batch-local names."""
+        with batch_names_lock:
+            return name_provider() + list(batch_names)
+
+    # Use parallel generation when count > 1 and concurrency is enabled
+    max_workers = min(svc.settings.llm_max_concurrent_requests, count)
+    if count > 1 and max_workers > 1:
+        logger.info(
+            "Using parallel character generation: %d characters with max_workers=%d",
+            count,
+            max_workers,
+        )
+        return _generate_batch_parallel(
+            svc=svc,
+            count=count,
+            entity_type="character",
+            generate_fn=lambda _i: svc.generate_character_with_quality(
+                story_state, _get_names(), custom_instructions
+            ),
+            get_name=lambda char: char.name,
+            on_success=_thread_safe_on_success,
+            cancel_check=cancel_check,
+            progress_callback=progress_callback,
+            max_workers=max_workers,
+        )
+
     return _generate_batch(
         svc=svc,
         count=count,
         entity_type="character",
         generate_fn=lambda _i: svc.generate_character_with_quality(
-            story_state, names, custom_instructions
+            story_state, _get_names(), custom_instructions
         ),
         get_name=lambda char: char.name,
-        on_success=lambda char: names.append(char.name),
+        on_success=_thread_safe_on_success,
         cancel_check=cancel_check,
         progress_callback=progress_callback,
     )
@@ -619,7 +600,7 @@ def generate_characters_with_quality(
 def generate_locations_with_quality(
     svc,
     story_state: StoryState,
-    existing_names: list[str],
+    name_provider: Callable[[], list[str]],
     count: int = 3,
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable | None = None,
@@ -629,7 +610,7 @@ def generate_locations_with_quality(
     Args:
         svc: WorldQualityService instance.
         story_state: Current story state.
-        existing_names: Names to avoid.
+        name_provider: Callable returning current entity names from DB (live query).
         count: Number of locations to generate.
         cancel_check: Optional callable that returns True to cancel generation.
         progress_callback: Optional callback to receive progress updates.
@@ -640,14 +621,16 @@ def generate_locations_with_quality(
     Raises:
         WorldGenerationError: If no locations could be generated.
     """
-    names = existing_names.copy()
+    batch_names: list[str] = []
     return _generate_batch(
         svc=svc,
         count=count,
         entity_type="location",
-        generate_fn=lambda _i: svc.generate_location_with_quality(story_state, names),
+        generate_fn=lambda _i: svc.generate_location_with_quality(
+            story_state, name_provider() + batch_names
+        ),
         get_name=lambda loc: loc.get("name", "Unknown"),
-        on_success=lambda loc: names.append(loc["name"]) if "name" in loc else None,
+        on_success=lambda loc: batch_names.append(loc["name"]) if "name" in loc else None,
         cancel_check=cancel_check,
         progress_callback=progress_callback,
     )
@@ -656,7 +639,7 @@ def generate_locations_with_quality(
 def generate_relationships_with_quality(
     svc,
     story_state: StoryState,
-    entity_names: list[str],
+    entity_names_provider: Callable[[], list[str]],
     existing_rels: list[tuple[str, str, str]],
     count: int = 5,
     cancel_check: Callable[[], bool] | None = None,
@@ -678,7 +661,7 @@ def generate_relationships_with_quality(
     Args:
         svc: WorldQualityService instance.
         story_state: Current story state.
-        entity_names: Entity names available for relationships.
+        entity_names_provider: Callable returning fresh entity names from DB.
         existing_rels: Existing (source, target, relation_type) 3-tuples to avoid duplicates.
         count: Number of relationships to generate.
         cancel_check: Optional callable that returns True to cancel generation.
@@ -724,7 +707,7 @@ def generate_relationships_with_quality(
         try:
             rel: dict[str, Any] = svc._create_relationship(
                 story_state,
-                entity_names,
+                entity_names_provider(),
                 safe_rels.snapshot(),
                 config.creator_temperature,
             )
@@ -784,7 +767,7 @@ def generate_relationships_with_quality(
             entity_type="relationship",
             create_fn=lambda retries: svc._create_relationship(
                 story_state,
-                entity_names,
+                entity_names_provider(),
                 safe_rels.snapshot(),
                 config.creator_temperature,
             ),
@@ -830,6 +813,9 @@ def generate_relationships_with_quality(
                     "refine_with_initial_fn": _refine_with_initial,
                     "prepare_creator_fn": prep_creator,
                     "prepare_judge_fn": prep_judge,
+                    "register_created_fn": lambda r: safe_rels.append(
+                        (r["source"], r["target"], r.get("relation_type", "related_to"))
+                    ),
                 }
                 logger.debug(
                     "Phased pipeline callables prepared for relationship batch (creator != judge)"
@@ -846,7 +832,7 @@ def generate_relationships_with_quality(
         count=count,
         entity_type="relationship",
         generate_fn=lambda _i: svc.generate_relationship_with_quality(
-            story_state, entity_names, safe_rels.snapshot()
+            story_state, entity_names_provider(), safe_rels.snapshot()
         ),
         get_name=lambda r: f"{r['source']} -> {r['target']}",
         on_success=_on_relationship_success,

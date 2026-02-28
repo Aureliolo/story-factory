@@ -415,15 +415,33 @@ def quality_refinement_loop[T, S: BaseQualityScores](
             below_floor = scores.minimum_score < dimension_floor if dimension_floor > 0.0 else False
 
             if rounded_score >= entity_threshold and not below_floor:
-                logger.info(
-                    "%s '%s' met quality threshold (%.1f >= %.1f)",
-                    entity_type.capitalize(),
-                    get_name(entity),
-                    scores.average,
-                    entity_threshold,
-                )
-                history.final_iteration = current_iter
-                history.final_score = scores.average
+                # H1 fix: if monotonicity guard reverted entity to best iteration,
+                # return scores from that iteration for consistency.
+                if history.best_iteration != current_iter:
+                    best_record = history.iterations[history.best_iteration - 1]
+                    scores = score_cls(**best_record.scores)
+                    logger.info(
+                        "%s '%s' met quality threshold via best iteration %d "
+                        "(current=%d, best_score=%.1f, current_score=%.1f)",
+                        entity_type.capitalize(),
+                        get_name(entity),
+                        history.best_iteration,
+                        current_iter,
+                        scores.average,
+                        history.iterations[current_iter - 1].average_score,
+                    )
+                    history.final_iteration = history.best_iteration
+                    history.final_score = history.peak_score
+                else:
+                    logger.info(
+                        "%s '%s' met quality threshold (%.1f >= %.1f)",
+                        entity_type.capitalize(),
+                        get_name(entity),
+                        scores.average,
+                        entity_threshold,
+                    )
+                    history.final_iteration = current_iter
+                    history.final_score = scores.average
                 history.actual_scoring_rounds = scoring_rounds
                 svc._log_refinement_analytics(
                     history,
@@ -693,6 +711,26 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                         best_entity_data = history.get_best_entity()
                         entity = fresh_entity
                         scores = fresh_scores
+                        # C2 fix: recompute best_floor_met from new best iteration
+                        if dimension_floor > 0.0 and history.best_iteration:
+                            hm_best_scores = history.iterations[history.best_iteration - 1].scores
+                            hm_best_min = min(
+                                (
+                                    v
+                                    for k, v in hm_best_scores.items()
+                                    if isinstance(v, (int, float)) and k not in _SCORE_METADATA_KEYS
+                                ),
+                                default=0.0,
+                            )
+                            best_floor_met = hm_best_min >= dimension_floor
+                            logger.debug(
+                                "%s hail-mary: recomputed best_floor_met=%s "
+                                "(min_dim=%.1f, floor=%.1f)",
+                                entity_type.capitalize(),
+                                best_floor_met,
+                                hm_best_min,
+                                dimension_floor,
+                            )
                     else:
                         logger.info(
                             "%s hail-mary did not beat best score, keeping original",

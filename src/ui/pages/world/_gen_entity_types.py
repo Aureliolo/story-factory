@@ -12,7 +12,6 @@ from nicegui import ui
 
 from src.ui.pages.world._gen_dialogs import (
     create_progress_dialog,
-    get_all_entity_names,
     get_entity_names_by_type,
     make_update_progress,
     notify_partial_failure,
@@ -48,18 +47,15 @@ async def _generate_factions(
     from nicegui import run
 
     if use_quality:
-        existing_entities = page.state.world_db.list_entities()
-        existing_locations = [e.name for e in existing_entities if e.type == "location"]
-        faction_names = get_entity_names_by_type(page, "faction")
-        logger.info(f"Found {len(existing_locations)} existing locations for faction grounding")
+        world_db = page.state.world_db
 
         logger.info("Calling world quality service to generate factions...")
         faction_results = await run.io_bound(
             page.services.world_quality.generate_factions_with_quality,
             page.state.project,
-            faction_names,
+            lambda: get_entity_names_by_type(page, "faction"),
             count,
-            existing_locations,
+            lambda: [e.name for e in world_db.list_entities() if e.type == "location"],
             should_cancel,
             update_progress,
         )
@@ -120,10 +116,11 @@ async def _generate_factions(
                     added_names.append(faction["name"])
                     base_loc = faction.get("base_location", "")
                     if base_loc:
+                        current_entities = world_db.list_entities()
                         location_entity = next(
                             (
                                 e
-                                for e in existing_entities
+                                for e in current_entities
                                 if e.name == base_loc and e.type == "location"
                             ),
                             None,
@@ -185,12 +182,11 @@ async def _generate_items(
     from nicegui import run
 
     if use_quality:
-        item_names = get_entity_names_by_type(page, "item")
         logger.info("Calling world quality service to generate items...")
         item_results = await run.io_bound(
             page.services.world_quality.generate_items_with_quality,
             page.state.project,
-            item_names,
+            lambda: get_entity_names_by_type(page, "item"),
             count,
             should_cancel,
             update_progress,
@@ -294,12 +290,11 @@ async def _generate_concepts(
     from nicegui import run
 
     if use_quality:
-        concept_names = get_entity_names_by_type(page, "concept")
         logger.info("Calling world quality service to generate concepts...")
         concept_results = await run.io_bound(
             page.services.world_quality.generate_concepts_with_quality,
             page.state.project,
-            concept_names,
+            lambda: get_entity_names_by_type(page, "concept"),
             count,
             should_cancel,
             update_progress,
@@ -407,13 +402,12 @@ async def _generate_events(
         ui.notify("Enable Quality Refinement to generate events", type="warning")
         return
 
-    # Build entity context using shared helper
     from src.services.world_service import build_event_entity_context
 
-    entity_context = build_event_entity_context(page.state.world_db)
+    world_db = page.state.world_db
 
     # Get existing event descriptions for dedup
-    existing_events = page.state.world_db.list_events()
+    existing_events = world_db.list_events()
     existing_descriptions = [e.description for e in existing_events]
 
     logger.info("Calling world quality service to generate events...")
@@ -421,7 +415,7 @@ async def _generate_events(
         page.services.world_quality.generate_events_with_quality,
         page.state.project,
         existing_descriptions,
-        entity_context,
+        lambda: build_event_entity_context(world_db),
         count,
         should_cancel,
         update_progress,
@@ -517,15 +511,16 @@ async def _generate_relationships(
     from nicegui import run
 
     # Get existing entities and relationships
-    entities = page.state.world_db.list_entities()
+    world_db = page.state.world_db
+    entities = world_db.list_entities()
     entity_names = [e.name for e in entities]
     logger.info(f"Found {len(entities)} existing entities: {entity_names}")
 
     # Get existing relationships as 3-tuples (source_name, target_name, relation_type)
     existing_rels: list[tuple[str, str, str]] = []
-    for rel in page.state.world_db.list_relationships():
-        source = page.services.world.get_entity(page.state.world_db, rel.source_id)
-        target = page.services.world.get_entity(page.state.world_db, rel.target_id)
+    for rel in world_db.list_relationships():
+        source = page.services.world.get_entity(world_db, rel.source_id)
+        target = page.services.world.get_entity(world_db, rel.target_id)
         if source and target:
             existing_rels.append((source.name, target.name, rel.relation_type))
     logger.info(f"Found {len(existing_rels)} existing relationships")
@@ -544,7 +539,7 @@ async def _generate_relationships(
         rel_results = await run.io_bound(
             page.services.world_quality.generate_relationships_with_quality,
             page.state.project,
-            entity_names,
+            lambda: [e.name for e in world_db.list_entities()],
             existing_rels,
             count,
             should_cancel,
@@ -666,11 +661,11 @@ async def generate_relationships_for_entities(
         page.state.quality_refinement_enabled and page.services.settings.world_quality_enabled
     )
 
-    all_entity_names = get_all_entity_names(page)
-    entity_map = {e.id: e.name for e in page.state.world_db.list_entities()}
+    world_db = page.state.world_db
+    entity_map = {e.id: e.name for e in world_db.list_entities()}
     existing_rels: list[tuple[str, str, str]] = [
         (entity_map.get(r.source_id, ""), entity_map.get(r.target_id, ""), r.relation_type)
-        for r in page.state.world_db.list_relationships()
+        for r in world_db.list_relationships()
         if entity_map.get(r.source_id) and entity_map.get(r.target_id)
     ]
     total_count = len(entity_names) * count_per_entity
@@ -703,7 +698,7 @@ async def generate_relationships_for_entities(
             results = await run.io_bound(
                 page.services.world_quality.generate_relationships_with_quality,
                 page.state.project,
-                all_entity_names,
+                lambda: [e.name for e in world_db.list_entities()],
                 existing_rels,
                 total_count,
                 should_cancel,

@@ -1,11 +1,16 @@
 """Formatting utilities for WorldQualityService.
 
 Contains helper functions for formatting properties, ETA calculations,
-and prompt generation for entity generation.
+batch summary logging, and prompt generation for entity generation.
 """
 
 import logging
-from typing import Any
+from collections import Counter
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.memory.world_quality import BaseQualityScores
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +18,7 @@ logger = logging.getLogger(__name__)
 def calculate_eta(
     completed_times: list[float],
     remaining_count: int,
+    initial_estimate_seconds: float | None = None,
 ) -> float | None:
     """
     Estimate remaining time for remaining entities using an exponential moving average of past completion times.
@@ -20,15 +26,28 @@ def calculate_eta(
     Parameters:
         completed_times (list[float]): Sequence of past completion times in seconds (ordered from earliest to latest).
         remaining_count (int): Number of entities still to generate.
+        initial_estimate_seconds (float | None): Fallback per-entity estimate when no
+            completion data is available yet.  Used as a safety net for early ETA display.
 
     Returns:
-        float | None: Estimated remaining time in seconds, or `None` if `completed_times` is empty or `remaining_count` is not greater than zero.
+        float | None: Estimated remaining time in seconds, or ``None`` if no estimate
+            can be computed.
     """
-    if not completed_times or remaining_count <= 0:
+    if remaining_count <= 0:
+        logger.debug("calculate_eta: skipping (remaining=%d)", remaining_count)
+        return None
+    if not completed_times:
+        if initial_estimate_seconds is not None:
+            result = initial_estimate_seconds * remaining_count
+            logger.debug(
+                "calculate_eta: using initial estimate %.2fs * %d = %.2fs",
+                initial_estimate_seconds,
+                remaining_count,
+                result,
+            )
+            return result
         logger.debug(
-            "calculate_eta: skipping (completed_times=%d, remaining=%d)",
-            len(completed_times),
-            remaining_count,
+            "calculate_eta: skipping (no completed_times, no initial_estimate)",
         )
         return None
     # EMA with alpha=0.3 to weight recent times more heavily
@@ -125,3 +144,156 @@ DO NOT USE names like:
 
 Create a COMPLETELY DIFFERENT {entity_type} name.
 </existing-{entity_type}s>"""
+
+
+# Common short words that are valid name endings (not truncation indicators)
+_VALID_SHORT_ENDINGS = frozenset(
+    {
+        "the",
+        "of",
+        "in",
+        "on",
+        "at",
+        "by",
+        "to",
+        "is",
+        "it",
+        "an",
+        "as",
+        "or",
+        "no",
+        "so",
+        "do",
+        "up",
+        "if",
+        "al",
+        "el",
+        "le",
+        "la",
+        "de",
+        "du",
+        "st",
+        "ii",
+        "iv",
+        "vi",
+    }
+)
+
+
+def check_name_completeness(name: str) -> bool:
+    """Check whether a name appears truncated and log a warning if so.
+
+    Detects names that end mid-word (last word < 3 chars and not a common word).
+
+    Args:
+        name: The entity name to check.
+
+    Returns:
+        True if the name appears complete, False if it looks truncated.
+    """
+    if not name or len(name) < 3:
+        return True  # Too short to judge
+
+    words = name.strip().split()
+    if not words:
+        return True
+
+    last_word = words[-1].lower().rstrip(".,;:!?")
+    if len(last_word) < 3 and last_word not in _VALID_SHORT_ENDINGS and len(words) > 1:
+        logger.warning(
+            "Entity name '%s' may be truncated (last word '%s' is < 3 chars)",
+            name,
+            last_word,
+        )
+        return False
+
+    return True
+
+
+def log_batch_summary(
+    results: Sequence[tuple[Any, BaseQualityScores]],
+    entity_type: str,
+    quality_threshold: float,
+    elapsed: float,
+    get_name: Callable[[Any], str] | None = None,
+) -> None:
+    """Log an aggregate summary at the end of a batch generation or review.
+
+    Args:
+        results: List of (entity, scores) tuples produced by the batch.
+        entity_type: Human-readable entity type (e.g., "character").
+        quality_threshold: The configured quality threshold for pass/fail.
+        elapsed: Total batch wall-clock time in seconds.
+        get_name: Callable to extract display name from an entity. When provided,
+            used for all entity types (chapters, relationships, etc.). Falls back
+            to ``entity.get("name")`` / ``getattr(entity, "name")`` when ``None``.
+    """
+    if not results:
+        logger.info(
+            "Batch %s summary: 0 entities produced (%.1fs)",
+            entity_type,
+            elapsed,
+        )
+        return
+
+    averages = [scores.average for _, scores in results]
+    passed = sum(1 for avg in averages if round(avg, 1) >= quality_threshold)
+    total = len(results)
+    min_score = min(averages)
+    max_score = max(averages)
+    avg_score = sum(averages) / total
+
+    failed_names: list[str] = []
+    for entity, scores in results:
+        if round(scores.average, 1) < quality_threshold:
+            if get_name is not None:
+                name = get_name(entity)
+            elif isinstance(entity, dict):
+                name = entity.get("name", "Unknown")
+            else:
+                name = getattr(entity, "name", "Unknown")
+            failed_names.append(name)
+
+    summary_parts = [
+        f"passed={passed}/{total}",
+        f"scores: min={min_score:.1f} max={max_score:.1f} avg={avg_score:.1f}",
+        f"threshold={quality_threshold:.1f}",
+        f"time={elapsed:.1f}s",
+    ]
+    if failed_names:
+        summary_parts.append(f"below threshold: {', '.join(failed_names)}")
+
+    if failed_names:
+        logger.warning(
+            "Batch %s summary: %s",
+            entity_type,
+            ", ".join(summary_parts),
+        )
+    else:
+        logger.info(
+            "Batch %s summary: %s",
+            entity_type,
+            ", ".join(summary_parts),
+        )
+
+
+def aggregate_errors(errors: list[str]) -> str:
+    """Deduplicate and aggregate identical error messages.
+
+    Instead of repeating ``"Failed to generate relationship after 3 attempts"``
+    nine times, produces ``"Failed to generate relationship after 3 attempts (x9)"``.
+
+    Args:
+        errors: List of raw error messages (may contain duplicates).
+
+    Returns:
+        A single joined string with counts appended for repeated messages.
+    """
+    counts = Counter(errors)
+    parts: list[str] = []
+    for msg, count in counts.items():
+        if count > 1:
+            parts.append(f"{msg} (x{count})")
+        else:
+            parts.append(msg)
+    return "; ".join(parts)

@@ -773,9 +773,9 @@ class WorldQualityService(EntityDelegatesMixin):
     def generate_factions_with_quality(
         self,
         story_state: StoryState,
-        existing_names: list[str],
+        name_provider: Callable[[], list[str]],
         count: int = 2,
-        existing_locations: list[str] | None = None,
+        location_provider: Callable[[], list[str]] | None = None,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[dict[str, Any], FactionQualityScores]]:
@@ -783,9 +783,9 @@ class WorldQualityService(EntityDelegatesMixin):
         return _generate_factions_with_quality(
             self,
             story_state,
-            existing_names,
+            name_provider,
             count,
-            existing_locations,
+            location_provider,
             cancel_check,
             progress_callback,
         )
@@ -793,34 +793,34 @@ class WorldQualityService(EntityDelegatesMixin):
     def generate_items_with_quality(
         self,
         story_state: StoryState,
-        existing_names: list[str],
+        name_provider: Callable[[], list[str]],
         count: int = 3,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[dict[str, Any], ItemQualityScores]]:
         """Generate multiple items with quality refinement."""
         return _generate_items_with_quality(
-            self, story_state, existing_names, count, cancel_check, progress_callback
+            self, story_state, name_provider, count, cancel_check, progress_callback
         )
 
     def generate_concepts_with_quality(
         self,
         story_state: StoryState,
-        existing_names: list[str],
+        name_provider: Callable[[], list[str]],
         count: int = 2,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[dict[str, Any], ConceptQualityScores]]:
         """Generate multiple concepts with quality refinement."""
         return _generate_concepts_with_quality(
-            self, story_state, existing_names, count, cancel_check, progress_callback
+            self, story_state, name_provider, count, cancel_check, progress_callback
         )
 
     def generate_events_with_quality(
         self,
         story_state: StoryState,
         existing_descriptions: list[str],
-        entity_context: str,
+        entity_context_provider: Callable[[], str],
         count: int = 5,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
@@ -830,7 +830,7 @@ class WorldQualityService(EntityDelegatesMixin):
             self,
             story_state,
             existing_descriptions,
-            entity_context,
+            entity_context_provider,
             count,
             cancel_check,
             progress_callback,
@@ -839,7 +839,7 @@ class WorldQualityService(EntityDelegatesMixin):
     def generate_characters_with_quality(
         self,
         story_state: StoryState,
-        existing_names: list[str],
+        name_provider: Callable[[], list[str]],
         count: int = 2,
         custom_instructions: str | None = None,
         cancel_check: Callable[[], bool] | None = None,
@@ -849,7 +849,7 @@ class WorldQualityService(EntityDelegatesMixin):
         return _generate_characters_with_quality(
             self,
             story_state,
-            existing_names,
+            name_provider,
             count,
             custom_instructions,
             cancel_check,
@@ -859,20 +859,20 @@ class WorldQualityService(EntityDelegatesMixin):
     def generate_locations_with_quality(
         self,
         story_state: StoryState,
-        existing_names: list[str],
+        name_provider: Callable[[], list[str]],
         count: int = 3,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[dict[str, Any], LocationQualityScores]]:
         """Generate multiple locations with quality refinement."""
         return _generate_locations_with_quality(
-            self, story_state, existing_names, count, cancel_check, progress_callback
+            self, story_state, name_provider, count, cancel_check, progress_callback
         )
 
     def generate_relationships_with_quality(
         self,
         story_state: StoryState,
-        entity_names: list[str],
+        entity_names_provider: Callable[[], list[str]],
         existing_rels: list[tuple[str, str, str]],
         count: int = 5,
         cancel_check: Callable[[], bool] | None = None,
@@ -882,7 +882,7 @@ class WorldQualityService(EntityDelegatesMixin):
 
         Args:
             story_state: Current story/world state used as context for generation.
-            entity_names: Names of entities between which relationships may be created.
+            entity_names_provider: Callable returning fresh entity names from DB.
             existing_rels: Existing (source, target, relation_type) 3-tuples to avoid duplicating.
             count: Number of relationships to generate.
             cancel_check: Optional callable that returns True to cancel early.
@@ -892,7 +892,13 @@ class WorldQualityService(EntityDelegatesMixin):
             List of (relationship_dict, quality_scores) tuples.
         """
         return _generate_relationships_with_quality(
-            self, story_state, entity_names, existing_rels, count, cancel_check, progress_callback
+            self,
+            story_state,
+            entity_names_provider,
+            existing_rels,
+            count,
+            cancel_check,
+            progress_callback,
         )
 
     # -- Batch review operations (Architect output quality review) --

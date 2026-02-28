@@ -172,6 +172,10 @@ class TemporalValidationService:
         if calendar and lifecycle:
             self._validate_dates_against_calendar(entity, lifecycle, calendar, result)
 
+        # Check lifespan plausibility for entities with lifecycle data
+        if lifecycle:
+            self.check_lifespan_plausibility(entity, lifecycle, result)
+
         logger.debug(
             f"Validation complete for '{entity.name}': "
             f"{len(result.errors)} errors, {len(result.warnings)} warnings"
@@ -587,6 +591,121 @@ class TemporalValidationService:
                     f"Change era name from '{timestamp.era_name}' to "
                     f"'{resolved_era.name}' for year {timestamp.year}"
                 ),
+            )
+            result.warnings.append(warning)
+            logger.warning("Temporal warning: %s", warning.message)
+
+    def auto_correct_era_names(self, world_db: WorldDatabase) -> int:
+        """Resolve and fix mismatched era names on entity timestamps.
+
+        Iterates all entities, extracts lifecycle timestamps with years, resolves
+        each year against the calendar's canonical era mapping, and updates the
+        entity's attributes when the stored era_name doesn't match.
+
+        Args:
+            world_db: WorldDatabase containing entities and calendar.
+
+        Returns:
+            Number of entities whose era names were corrected.
+        """
+        calendar = None
+        try:
+            world_settings = world_db.get_world_settings()
+            if world_settings and world_settings.calendar:
+                calendar = world_settings.calendar
+        except Exception as e:
+            logger.warning("auto_correct_era_names: could not load calendar: %s", e)
+            return 0
+
+        if calendar is None:
+            logger.debug("auto_correct_era_names: no calendar available, skipping")
+            return 0
+
+        all_entities = world_db.list_entities()
+        corrected_count = 0
+
+        for entity in all_entities:
+            if not entity.attributes:
+                continue
+            lifecycle = extract_lifecycle_from_attributes(entity.attributes)
+            if lifecycle is None:
+                continue
+
+            corrections: dict[str, str] = {}  # ts_label -> corrected era_name
+            for ts_label, ts in [
+                ("birth", lifecycle.birth),
+                ("death", lifecycle.death),
+                ("first_appearance", lifecycle.first_appearance),
+                ("last_appearance", lifecycle.last_appearance),
+            ]:
+                if ts is None or ts.year is None:
+                    continue
+                resolved_era = calendar.get_era_for_year(ts.year)
+                if resolved_era is None:
+                    continue
+                if ts.era_name and _normalize_era_name(ts.era_name) != _normalize_era_name(
+                    resolved_era.name
+                ):
+                    corrections[ts_label] = resolved_era.name
+                elif not ts.era_name:
+                    corrections[ts_label] = resolved_era.name
+
+            if not corrections:
+                continue
+
+            # Build updated attributes with corrected era names
+            attrs = dict(entity.attributes)
+            lifecycle_data = attrs.get("lifecycle")
+            if not isinstance(lifecycle_data, dict):
+                continue
+
+            updated_lifecycle = dict(lifecycle_data)
+            for ts_label, correct_era in corrections.items():
+                ts_data = updated_lifecycle.get(ts_label)
+                if isinstance(ts_data, dict):
+                    updated_lifecycle[ts_label] = {**ts_data, "era_name": correct_era}
+
+            attrs["lifecycle"] = updated_lifecycle
+            world_db.update_entity(entity_id=entity.id, attributes=attrs)
+            corrected_count += 1
+            logger.info(
+                "Auto-corrected era names for %s '%s': %s",
+                entity.type,
+                entity.name,
+                corrections,
+            )
+
+        logger.info("Era name auto-correction complete: %d entities corrected", corrected_count)
+        return corrected_count
+
+    def check_lifespan_plausibility(
+        self,
+        entity: Entity,
+        lifecycle: EntityLifecycle,
+        result: TemporalValidationResult,
+        max_lifespan: int = 200,
+    ) -> None:
+        """Warn when an entity's computed lifespan exceeds a plausible maximum.
+
+        Args:
+            entity: The entity being validated.
+            lifecycle: Extracted lifecycle data.
+            result: TemporalValidationResult to append warnings to.
+            max_lifespan: Maximum reasonable lifespan in years (default 200).
+        """
+        lifespan = lifecycle.lifespan
+        if lifespan is not None and lifespan > max_lifespan:
+            warning = TemporalValidationIssue(
+                entity_id=entity.id,
+                entity_name=entity.name,
+                entity_type=entity.type,
+                error_type=TemporalErrorType.LIFESPAN_OVERLAP,
+                severity=TemporalErrorSeverity.WARNING,
+                message=(
+                    f"{entity.type.capitalize()} '{entity.name}' has implausible "
+                    f"lifespan of {lifespan} years (max reasonable: {max_lifespan})"
+                ),
+                suggestion="Verify birth/death or founding/destruction years for plausibility",
             )
             result.warnings.append(warning)
             logger.warning("Temporal warning: %s", warning.message)

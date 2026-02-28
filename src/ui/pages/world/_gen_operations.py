@@ -239,12 +239,11 @@ async def _generate_characters(
     from nicegui import run
 
     if use_quality:
-        character_names = get_entity_names_by_type(page, "character")
         logger.info("Calling world quality service to generate characters...")
         results = await run.io_bound(
             page.services.world_quality.generate_characters_with_quality,
             page.state.project,
-            character_names,
+            lambda: get_entity_names_by_type(page, "character"),
             count,
             custom_instructions,
             should_cancel,
@@ -367,12 +366,11 @@ async def _generate_locations(
     from nicegui import run
 
     if use_quality:
-        location_names = get_entity_names_by_type(page, "location")
         logger.info("Calling world quality service to generate locations...")
         loc_results = await run.io_bound(
             page.services.world_quality.generate_locations_with_quality,
             page.state.project,
-            location_names,
+            lambda: get_entity_names_by_type(page, "location"),
             count,
             should_cancel,
             update_progress,

@@ -306,9 +306,10 @@ class TestResolveEventParticipants:
             ],
         }
 
-        result = resolve_event_participants(event, [entity], threshold=0.8)
+        resolved, dropped = resolve_event_participants(event, [entity], threshold=0.8)
 
-        assert result == [("e1", "instigator")]
+        assert resolved == [("e1", "instigator")]
+        assert dropped == []
 
     def test_string_participant_warns(self, caplog):
         """Test that string participants log a warning."""
@@ -319,28 +320,49 @@ class TestResolveEventParticipants:
         event = {"participants": ["Gandalf"]}
 
         with caplog.at_level(logging.WARNING, logger="src.services.world_service._event_helpers"):
-            result = resolve_event_participants(event, [entity], threshold=0.8)
+            resolved, dropped = resolve_event_participants(event, [entity], threshold=0.8)
 
         assert "Unexpected participant format" in caplog.text
-        assert result == [("e1", "affected")]
+        assert resolved == [("e1", "affected")]
+        assert dropped == []
 
-    def test_unresolved_participant_warns(self, caplog):
-        """Test participant that doesn't match any entity logs warning."""
+    def test_unresolved_participant_returns_dropped_names(self, caplog):
+        """Test participant that doesn't match returns its name in dropped list."""
         event = {
             "participants": [{"entity_name": "Nobody", "role": "bystander"}],
         }
 
         with caplog.at_level(logging.WARNING, logger="src.services.world_service._event_helpers"):
-            result = resolve_event_participants(event, [], threshold=0.8)
+            resolved, dropped = resolve_event_participants(event, [], threshold=0.8)
 
-        assert result == []
-        assert "Could not resolve event participant 'Nobody'" in caplog.text
+        assert resolved == []
+        assert dropped == ["Nobody"]
+        assert "Dropped 1 unresolved event participant(s)" in caplog.text
 
     def test_no_participants_key(self):
         """Test event with no participants key."""
-        result = resolve_event_participants({}, [], threshold=0.8)
+        resolved, dropped = resolve_event_participants({}, [], threshold=0.8)
 
-        assert result == []
+        assert resolved == []
+        assert dropped == []
+
+    def test_mixed_resolved_and_dropped(self):
+        """Test mix of resolved and unresolved participants returns both."""
+        entity = MagicMock()
+        entity.id = "e1"
+        entity.name = "Gandalf"
+
+        event = {
+            "participants": [
+                {"entity_name": "Gandalf", "role": "actor"},
+                {"entity_name": "Unknown Hero", "role": "bystander"},
+            ],
+        }
+
+        resolved, dropped = resolve_event_participants(event, [entity], threshold=0.8)
+
+        assert resolved == [("e1", "actor")]
+        assert dropped == ["Unknown Hero"]
 
 
 class TestEventModels:

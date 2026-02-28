@@ -180,14 +180,21 @@ class EmbeddingService:
             return ("", False)
 
         if len(text) > available_for_text:
+            # Sentence-boundary truncation: find the last sentence end within budget
+            # that preserves at least 50% of the available space.
+            min_boundary = available_for_text // 2
+            truncated = text[:available_for_text]
+            last_sentence_end = truncated.rfind(". ", min_boundary)
+            if last_sentence_end > 0:
+                truncated = truncated[: last_sentence_end + 1]  # Include the period
             logger.warning(
                 "Truncating %s description for embedding (desc %d -> %d chars)%s",
                 label.lower(),
                 len(text),
-                available_for_text,
+                len(truncated),
                 name_suffix,
             )
-            return (text[:available_for_text], False)
+            return (truncated, False)
 
         return (text, False)
 

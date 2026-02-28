@@ -284,7 +284,7 @@ Era: {event.get("era_name", "N/A")}
 
 Rate each dimension 0-10:
 - significance: How world-shaping is this event? Does it change the status quo?
-- temporal_plausibility: VERIFY against CALENDAR above — event year MUST fall within a defined era's [start_year, end_year] range. Score 8-10 ONLY if the event's year is inside a valid era AND the event type makes sense for that era. Score 5-7 if timing is plausible but era alignment is unclear. Score 2-4 if the event year falls outside all defined eras or contradicts the calendar. If the event year is "N/A" (not yet assigned), score 5.0 (neutral — date is pending, not wrong). If the CALENDAR block states "No calendar available", score 5.0 (insufficient context to verify).
+- temporal_plausibility: VERIFY against CALENDAR above — event year MUST fall within a defined era's [start_year, end_year] range. Score 8-10 ONLY if the event's year is inside a valid era AND the event type makes sense for that era. Score 6-7 if timing is plausible but era alignment has minor ambiguity. Score 4-5 if time exists but era alignment is unclear or missing. Score 2-3 if the event year falls outside all defined eras or contradicts the calendar. Score 1 for outright contradictions. If the event year is "N/A" (not yet assigned), score 5.0 (neutral — date is pending, not wrong). If the CALENDAR block states "No calendar available", score 5.0 (insufficient context to verify). Do NOT use binary 5/10 scoring — use the full range.
 - causal_coherence: Are causes and consequences logically connected?
 - narrative_potential: Does it create story opportunities and tension?
 - entity_integration: Do participant roles make sense for their entity types?

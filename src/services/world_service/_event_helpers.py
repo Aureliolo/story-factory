@@ -177,7 +177,7 @@ def resolve_event_participants(
     event: dict[str, Any],
     all_entities: list[Entity],
     threshold: float,
-) -> list[tuple[str, str]]:
+) -> tuple[list[tuple[str, str]], list[str]]:
     """Resolve event participant names to entity IDs.
 
     Each participant entry can be a dict with 'entity_name' and 'role',
@@ -189,9 +189,12 @@ def resolve_event_participants(
         threshold: Minimum similarity score for fuzzy name matching fallback (required).
 
     Returns:
-        List of (entity_id, role) tuples for successfully resolved participants.
+        Tuple of (resolved_participants, dropped_names) where resolved_participants
+        is a list of (entity_id, role) tuples and dropped_names is a list of
+        participant names that could not be matched.
     """
     participants: list[tuple[str, str]] = []
+    dropped_names: list[str] = []
     for p in event.get("participants", []):
         if isinstance(p, dict):
             entity_name = p.get("entity_name", "")
@@ -209,13 +212,15 @@ def resolve_event_participants(
             if matched:
                 participants.append((matched.id, role))
             else:
-                logger.warning(
-                    "Could not resolve event participant '%s' to any of %d entities "
-                    "-- participant will be dropped from event",
-                    entity_name,
-                    len(all_entities),
-                )
-    return participants
+                dropped_names.append(entity_name)
+    if dropped_names:
+        logger.warning(
+            "Dropped %d unresolved event participant(s): %s (out of %d entities)",
+            len(dropped_names),
+            dropped_names,
+            len(all_entities),
+        )
+    return participants, dropped_names
 
 
 def _generate_events(
@@ -242,8 +247,6 @@ def _generate_events(
     Returns:
         Number of events successfully added to the world database.
     """
-    entity_context = build_event_entity_context(world_db)
-
     # Get existing event descriptions for dedup
     existing_events = world_db.list_events()
     existing_descriptions = [e.description for e in existing_events]
@@ -267,8 +270,8 @@ def _generate_events(
     event_results = services.world_quality.generate_events_with_quality(
         state,
         existing_descriptions,
-        entity_context,
-        event_count,
+        entity_context_provider=lambda: build_event_entity_context(world_db),
+        count=event_count,
         cancel_check=cancel_check,
     )
 
@@ -287,7 +290,16 @@ def _generate_events(
                 continue
 
             timestamp_in_story = build_event_timestamp(event)
-            participants = resolve_event_participants(event, all_entities, threshold=threshold)
+            participants, dropped = resolve_event_participants(
+                event, all_entities, threshold=threshold
+            )
+            if dropped:
+                logger.warning(
+                    "Event '%s' lost %d participant(s): %s",
+                    description[:60],
+                    len(dropped),
+                    dropped,
+                )
 
             consequences = event.get("consequences", [])
 

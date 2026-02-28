@@ -485,6 +485,14 @@ def _build_world_entities(
                 )
             else:
                 logger.info("Temporal validation complete: no issues found")
+
+            # Auto-correct era names against calendar after validation
+            corrected = services.temporal_validation.auto_correct_era_names(world_db)
+            if corrected > 0:
+                logger.info(
+                    "Auto-corrected era names for %d entities after temporal validation",
+                    corrected,
+                )
         except GenerationCancelledError, DatabaseClosedError, MemoryError, RecursionError:
             raise
         except Exception as e:
@@ -495,7 +503,12 @@ def _build_world_entities(
     report_progress("Embedding world content for RAG...")
     try:
         embed_counts = services.embedding.embed_all_world_data(world_db, state)
-        logger.info("World embedding complete: %s", embed_counts)
+        total_embedded = sum(embed_counts.values()) if isinstance(embed_counts, dict) else 0
+        logger.info(
+            "World embedding complete (batch step): %s (total embedded: %d)",
+            embed_counts,
+            total_embedded,
+        )
     except GenerationCancelledError, DatabaseClosedError, MemoryError, RecursionError:
         raise
     except Exception as e:
@@ -587,12 +600,10 @@ def _generate_locations(
         loc_min, loc_max = loc_max, loc_min
     location_count = random.randint(loc_min, loc_max)
 
-    existing_names = [e.name for e in world_db.list_entities()]
-
     location_results = services.world_quality.generate_locations_with_quality(
         state,
-        existing_names,
-        location_count,
+        name_provider=lambda: [e.name for e in world_db.list_entities()],
+        count=location_count,
         cancel_check=cancel_check,
     )
 
@@ -632,10 +643,6 @@ def _generate_factions(
     Returns:
         Tuple of (factions_added, implicit_relationships_added).
     """
-    all_entities = world_db.list_entities()
-    existing_names = [e.name for e in all_entities]
-    existing_locations = [e.name for e in all_entities if e.type == "location"]
-
     # Use project-level settings if available, otherwise fall back to global
     fac_min = (
         state.target_factions_min
@@ -654,9 +661,11 @@ def _generate_factions(
 
     faction_results = services.world_quality.generate_factions_with_quality(
         state,
-        existing_names,
-        faction_count,
-        existing_locations,
+        name_provider=lambda: [e.name for e in world_db.list_entities()],
+        count=faction_count,
+        location_provider=lambda: [
+            e.name for e in world_db.list_entities() if e.type == "location"
+        ],
         cancel_check=cancel_check,
     )
     added_count = 0
@@ -682,8 +691,9 @@ def _generate_factions(
             # Create implicit relationship to base location if it exists
             base_loc = faction.get("base_location", "")
             if base_loc:
+                current_entities = world_db.list_entities()
                 location_entity = next(
-                    (e for e in all_entities if e.name == base_loc and e.type == "location"),
+                    (e for e in current_entities if e.name == base_loc and e.type == "location"),
                     None,
                 )
                 if location_entity:
@@ -718,8 +728,6 @@ def _generate_items(
     cancel_check: Callable[[], bool] | None = None,
 ) -> int:
     """Generate and add items to world database."""
-    existing_names = [e.name for e in world_db.list_entities()]
-
     # Use project-level settings if available, otherwise fall back to global
     item_min = (
         state.target_items_min
@@ -738,8 +746,8 @@ def _generate_items(
 
     item_results = services.world_quality.generate_items_with_quality(
         state,
-        existing_names,
-        item_count,
+        name_provider=lambda: [e.name for e in world_db.list_entities()],
+        count=item_count,
         cancel_check=cancel_check,
     )
     added_count = 0
@@ -773,8 +781,6 @@ def _generate_concepts(
     cancel_check: Callable[[], bool] | None = None,
 ) -> int:
     """Generate and add concepts to world database."""
-    existing_names = [e.name for e in world_db.list_entities()]
-
     # Use project-level settings if available, otherwise fall back to global
     concept_min = (
         state.target_concepts_min
@@ -795,8 +801,8 @@ def _generate_concepts(
 
     concept_results = services.world_quality.generate_concepts_with_quality(
         state,
-        existing_names,
-        concept_count,
+        name_provider=lambda: [e.name for e in world_db.list_entities()],
+        count=concept_count,
         cancel_check=cancel_check,
     )
     added_count = 0
@@ -842,11 +848,10 @@ def _generate_relationships(
     Returns:
         Number of relationships successfully added to the world database.
     """
-    all_entities = world_db.list_entities()
-    entity_names = [e.name for e in all_entities]
-
     # Map IDs to entity objects so the quality service gets name pairs for duplicate detection
     # 3-tuples: (source_name, target_name, relation_type) for diversity analysis
+    all_entities = world_db.list_entities()
+    entity_names = [e.name for e in all_entities]
     entity_by_id = {e.id: e for e in all_entities}
     existing_rels: list[tuple[str, str, str]] = []
     for r in world_db.list_relationships():
@@ -889,9 +894,9 @@ def _generate_relationships(
 
     relationship_results = services.world_quality.generate_relationships_with_quality(
         state,
-        entity_names,
-        existing_rels,
-        rel_count,
+        entity_names_provider=lambda: [e.name for e in world_db.list_entities()],
+        existing_rels=existing_rels,
+        count=rel_count,
         cancel_check=cancel_check,
         progress_callback=progress_callback,
     )
