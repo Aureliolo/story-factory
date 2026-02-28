@@ -1004,6 +1004,14 @@ class TestSemaphoreTimeout:
 class TestBaseAgentHttpcoreRetries:
     """Tests for httpcore exception retries in generate() and generate_structured()."""
 
+    def setup_method(self):
+        """Reset global circuit breaker before each test."""
+        reset_global_circuit_breaker()
+
+    def teardown_method(self):
+        """Reset global circuit breaker after each test."""
+        reset_global_circuit_breaker()
+
     @patch("src.agents.base.time.sleep")
     def test_generate_retries_on_httpcore_remote_protocol_error(self, mock_sleep):
         """Test generate retries on httpcore.RemoteProtocolError."""
