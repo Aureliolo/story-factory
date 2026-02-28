@@ -614,7 +614,7 @@ class TemporalValidationService:
             world_settings = world_db.get_world_settings()
             if world_settings and world_settings.calendar:
                 calendar = world_settings.calendar
-        except (sqlite3.Error, KeyError, ValueError) as e:
+        except (sqlite3.Error, KeyError, ValueError, RuntimeError) as e:
             logger.warning("auto_correct_era_names: could not load calendar: %s", e)
             return 0
 

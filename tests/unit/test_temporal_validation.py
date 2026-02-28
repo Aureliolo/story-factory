@@ -2019,6 +2019,44 @@ class TestAutoCorrectEraNames:
             assert validation_service.auto_correct_era_names(world_db) == 0
             world_db.update_entity.assert_not_called()
 
+    def test_skips_non_dict_timestamp_entry_in_lifecycle(self, validation_service):
+        """Timestamp entries that are not dicts are skipped, leaving mutated=False."""
+        from unittest.mock import patch
+
+        entity = Entity(
+            id="e1",
+            name="Hero",
+            type="character",
+            description="A hero",
+            attributes={
+                "lifecycle": {
+                    "birth": "not a dict",  # Corrupted timestamp entry
+                }
+            },
+        )
+
+        mock_era = MagicMock()
+        mock_era.name = "Golden Age"
+        mock_calendar = MagicMock(spec=WorldCalendar)
+        mock_calendar.get_era_for_year.return_value = mock_era
+
+        # Fake lifecycle with a birth timestamp that has a year → triggers correction
+        fake_lifecycle = EntityLifecycle(birth=StoryTimestamp(year=200, era_name="Wrong Era"))
+        with patch(
+            "src.services.temporal_validation_service.extract_lifecycle_from_attributes",
+            return_value=fake_lifecycle,
+        ):
+            world_db = MagicMock()
+            world_settings = MagicMock()
+            world_settings.calendar = mock_calendar
+            world_db.get_world_settings.return_value = world_settings
+            world_db.list_entities.return_value = [entity]
+
+            # Correction identified but timestamp entry is a string, not dict →
+            # mutated stays False → no update
+            assert validation_service.auto_correct_era_names(world_db) == 0
+            world_db.update_entity.assert_not_called()
+
 
 class TestCheckLifespanPlausibility:
     """Tests for check_lifespan_plausibility."""
