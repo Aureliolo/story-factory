@@ -2929,7 +2929,9 @@ class TestBatchOperations:
             (char2, scores2, 2),
         ]
 
-        results = service.generate_characters_with_quality(story_state, existing_names=[], count=2)
+        results = service.generate_characters_with_quality(
+            story_state, name_provider=lambda: [], count=2
+        )
 
         assert len(results) == 2
         assert results[0][0].name == "Character One"
@@ -2956,7 +2958,9 @@ class TestBatchOperations:
             WorldGenerationError("Failed"),
         ]
 
-        results = service.generate_characters_with_quality(story_state, existing_names=[], count=2)
+        results = service.generate_characters_with_quality(
+            story_state, name_provider=lambda: [], count=2
+        )
 
         assert len(results) == 1
         assert results[0][0].name == "Character One"
@@ -2967,7 +2971,7 @@ class TestBatchOperations:
         mock_gen.side_effect = WorldGenerationError("All failed")
 
         with pytest.raises(WorldGenerationError, match="Failed to generate any characters"):
-            service.generate_characters_with_quality(story_state, existing_names=[], count=2)
+            service.generate_characters_with_quality(story_state, name_provider=lambda: [], count=2)
 
     @patch.object(WorldQualityService, "generate_location_with_quality")
     @patch.object(WorldQualityService, "record_entity_quality")
@@ -2995,7 +2999,9 @@ class TestBatchOperations:
             (loc2, scores2, 2),
         ]
 
-        results = service.generate_locations_with_quality(story_state, existing_names=[], count=2)
+        results = service.generate_locations_with_quality(
+            story_state, name_provider=lambda: [], count=2
+        )
 
         assert len(results) == 2
         assert results[0][0]["name"] == "Location One"
@@ -3007,7 +3013,7 @@ class TestBatchOperations:
         mock_gen.side_effect = WorldGenerationError("All failed")
 
         with pytest.raises(WorldGenerationError, match="Failed to generate any locations"):
-            service.generate_locations_with_quality(story_state, existing_names=[], count=2)
+            service.generate_locations_with_quality(story_state, name_provider=lambda: [], count=2)
 
     @patch.object(WorldQualityService, "generate_faction_with_quality")
     @patch.object(WorldQualityService, "record_entity_quality")
@@ -3035,7 +3041,9 @@ class TestBatchOperations:
             (faction2, scores2, 2),
         ]
 
-        results = service.generate_factions_with_quality(story_state, existing_names=[], count=2)
+        results = service.generate_factions_with_quality(
+            story_state, name_provider=lambda: [], count=2
+        )
 
         assert len(results) == 2
         assert results[0][0]["name"] == "Faction One"
@@ -3047,7 +3055,7 @@ class TestBatchOperations:
         mock_gen.side_effect = WorldGenerationError("All failed")
 
         with pytest.raises(WorldGenerationError, match="Failed to generate any factions"):
-            service.generate_factions_with_quality(story_state, existing_names=[], count=2)
+            service.generate_factions_with_quality(story_state, name_provider=lambda: [], count=2)
 
     @patch.object(WorldQualityService, "generate_item_with_quality")
     @patch.object(WorldQualityService, "record_entity_quality")
@@ -3075,7 +3083,9 @@ class TestBatchOperations:
             (item2, scores2, 2),
         ]
 
-        results = service.generate_items_with_quality(story_state, existing_names=[], count=2)
+        results = service.generate_items_with_quality(
+            story_state, name_provider=lambda: [], count=2
+        )
 
         assert len(results) == 2
         assert results[0][0]["name"] == "Item One"
@@ -3087,7 +3097,7 @@ class TestBatchOperations:
         mock_gen.side_effect = WorldGenerationError("All failed")
 
         with pytest.raises(WorldGenerationError, match="Failed to generate any items"):
-            service.generate_items_with_quality(story_state, existing_names=[], count=2)
+            service.generate_items_with_quality(story_state, name_provider=lambda: [], count=2)
 
     @patch.object(WorldQualityService, "generate_concept_with_quality")
     @patch.object(WorldQualityService, "record_entity_quality")
@@ -3115,7 +3125,9 @@ class TestBatchOperations:
             (concept2, scores2, 2),
         ]
 
-        results = service.generate_concepts_with_quality(story_state, existing_names=[], count=2)
+        results = service.generate_concepts_with_quality(
+            story_state, name_provider=lambda: [], count=2
+        )
 
         assert len(results) == 2
         assert results[0][0]["name"] == "Concept One"
@@ -3127,7 +3139,7 @@ class TestBatchOperations:
         mock_gen.side_effect = WorldGenerationError("All failed")
 
         with pytest.raises(WorldGenerationError, match="Failed to generate any concepts"):
-            service.generate_concepts_with_quality(story_state, existing_names=[], count=2)
+            service.generate_concepts_with_quality(story_state, name_provider=lambda: [], count=2)
 
     @patch.object(WorldQualityService, "_make_model_preparers", return_value=(None, None))
     @patch.object(WorldQualityService, "generate_relationship_with_quality")
@@ -3151,7 +3163,7 @@ class TestBatchOperations:
         ]
 
         results = service.generate_relationships_with_quality(
-            story_state, entity_names=["A", "B", "C"], existing_rels=[], count=2
+            story_state, entity_names_provider=lambda: ["A", "B", "C"], existing_rels=[], count=2
         )
 
         assert len(results) == 2
@@ -3168,7 +3180,7 @@ class TestBatchOperations:
 
         with pytest.raises(WorldGenerationError, match="Failed to generate any relationships"):
             service.generate_relationships_with_quality(
-                story_state, entity_names=["A", "B"], existing_rels=[], count=2
+                story_state, entity_names_provider=lambda: ["A", "B"], existing_rels=[], count=2
             )
 
 
@@ -3569,7 +3581,9 @@ class TestEdgeCases:
             (char2, scores, 1),
         ]
 
-        service.generate_characters_with_quality(story_state, existing_names=["Existing"], count=2)
+        service.generate_characters_with_quality(
+            story_state, name_provider=lambda: ["Existing"], count=2
+        )
 
         # Second call should include both Existing and Alice
         # Args are passed positionally: (story_state, existing_names)
@@ -4737,7 +4751,9 @@ class TestBatchOperationsPartialFailure:
         ]
 
         # Should succeed with partial results
-        results = service.generate_factions_with_quality(story_state, existing_names=[], count=2)
+        results = service.generate_factions_with_quality(
+            story_state, name_provider=lambda: [], count=2
+        )
 
         assert len(results) == 1
         assert results[0][0]["name"] == "Faction One"
@@ -4763,7 +4779,9 @@ class TestBatchOperationsPartialFailure:
             WorldGenerationError("Third failed"),
         ]
 
-        results = service.generate_items_with_quality(story_state, existing_names=[], count=3)
+        results = service.generate_items_with_quality(
+            story_state, name_provider=lambda: [], count=3
+        )
 
         assert len(results) == 1
         assert results[0][0]["name"] == "Item One"
@@ -4788,7 +4806,9 @@ class TestBatchOperationsPartialFailure:
             WorldGenerationError("Second failed"),
         ]
 
-        results = service.generate_concepts_with_quality(story_state, existing_names=[], count=2)
+        results = service.generate_concepts_with_quality(
+            story_state, name_provider=lambda: [], count=2
+        )
 
         assert len(results) == 1
         assert results[0][0]["name"] == "Concept One"
@@ -4813,7 +4833,9 @@ class TestBatchOperationsPartialFailure:
             WorldGenerationError("Second failed"),
         ]
 
-        results = service.generate_locations_with_quality(story_state, existing_names=[], count=2)
+        results = service.generate_locations_with_quality(
+            story_state, name_provider=lambda: [], count=2
+        )
 
         assert len(results) == 1
         assert results[0][0]["name"] == "Location One"
@@ -4836,7 +4858,7 @@ class TestBatchOperationsPartialFailure:
         ]
 
         results = service.generate_relationships_with_quality(
-            story_state, entity_names=["A", "B", "C"], existing_rels=[], count=2
+            story_state, entity_names_provider=lambda: ["A", "B", "C"], existing_rels=[], count=2
         )
 
         assert len(results) == 1
@@ -4863,7 +4885,9 @@ class TestBatchOperationsPartialFailure:
             WorldGenerationError("Second failed"),
         ]
 
-        results = service.generate_characters_with_quality(story_state, existing_names=[], count=2)
+        results = service.generate_characters_with_quality(
+            story_state, name_provider=lambda: [], count=2
+        )
 
         assert len(results) == 1
         assert results[0][0].name == "Character One"

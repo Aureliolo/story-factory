@@ -686,10 +686,19 @@ def generate_relationships_with_quality(
     max_workers = min(svc.settings.llm_max_concurrent_requests, count)
     config = svc.get_config()
 
+    # Pairs registered by Phase 1 of the phased pipeline via register_created_fn.
+    # When on_success is called for these pairs in Phase 3/3b, we skip the
+    # duplicate error because the pair was already legitimately tracked.
+    _phase1_pairs: set[tuple[str, str, str]] = set()
+
     def _on_relationship_success(r: dict[str, Any]) -> None:
         """Atomic dedup: reject if a concurrent worker already produced this pair."""
-        accepted = safe_rels.append_if_new_pair((r["source"], r["target"], r["relation_type"]))
+        pair = (r["source"], r["target"], r["relation_type"])
+        accepted = safe_rels.append_if_new_pair(pair)
         if not accepted:
+            if pair in _phase1_pairs:
+                # Already registered by Phase 1 — not a real duplicate.
+                return
             raise DuplicateNameError(
                 f"Duplicate relationship from parallel worker: {r['source']} -> {r['target']}"
             )
@@ -794,6 +803,18 @@ def generate_relationships_with_quality(
             prepare_judge=prep_judge,
         )
 
+    def _register_phase1_pair(r: dict[str, Any]) -> None:
+        """Register a relationship created in Phase 1 for dedup tracking.
+
+        Adds the pair to both the thread-safe dedup list (``safe_rels``) and
+        the Phase 1 pair set (``_phase1_pairs``).  The latter lets
+        ``_on_relationship_success`` skip the duplicate error for pairs that
+        were legitimately registered during Phase 1 batch creation.
+        """
+        pair = (r["source"], r["target"], r.get("relation_type", "related_to"))
+        safe_rels.append(pair)
+        _phase1_pairs.add(pair)
+
     # Resolve model preparers and determine whether models differ.  The
     # phased pipeline callables are only passed when creator != judge, so
     # `_generate_batch_parallel` can use the phased path.  When models are
@@ -813,9 +834,7 @@ def generate_relationships_with_quality(
                     "refine_with_initial_fn": _refine_with_initial,
                     "prepare_creator_fn": prep_creator,
                     "prepare_judge_fn": prep_judge,
-                    "register_created_fn": lambda r: safe_rels.append(
-                        (r["source"], r["target"], r.get("relation_type", "related_to"))
-                    ),
+                    "register_created_fn": _register_phase1_pair,
                 }
                 logger.debug(
                     "Phased pipeline callables prepared for relationship batch (creator != judge)"

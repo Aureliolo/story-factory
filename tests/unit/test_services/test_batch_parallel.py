@@ -909,7 +909,7 @@ class TestGenerateRelationshipsWithQuality:
         results = generate_relationships_with_quality(
             svc=mock_svc,
             story_state=story_state,
-            entity_names=["Alice", "Bob", "Carol"],
+            entity_names_provider=lambda: ["Alice", "Bob", "Carol"],
             existing_rels=[],
             count=2,
         )
@@ -946,7 +946,7 @@ class TestGenerateRelationshipsWithQuality:
         results = generate_relationships_with_quality(
             svc=mock_svc,
             story_state=story_state,
-            entity_names=["E1", "E2", "E3", "F1", "F2", "F3"],
+            entity_names_provider=lambda: ["E1", "E2", "E3", "F1", "F2", "F3"],
             existing_rels=[],
             count=3,
         )
@@ -975,7 +975,7 @@ class TestGenerateRelationshipsWithQuality:
         results = generate_relationships_with_quality(
             svc=mock_svc,
             story_state=story_state,
-            entity_names=["A", "B"],
+            entity_names_provider=lambda: ["A", "B"],
             existing_rels=[],
             count=1,
         )
@@ -1028,7 +1028,7 @@ class TestGenerateRelationshipsWithQuality:
             results = generate_relationships_with_quality(
                 svc=mock_svc,
                 story_state=story_state,
-                entity_names=["Alice", "Bob", "Carol"],
+                entity_names_provider=lambda: ["Alice", "Bob", "Carol"],
                 existing_rels=[],
                 count=3,  # count > 2 so a replacement task is submitted after duplicate
             )
@@ -2342,7 +2342,7 @@ class TestRelationshipPhasedPipeline:
             results = generate_relationships_with_quality(
                 svc=svc,
                 story_state=story_state,
-                entity_names=["Alice", "Bob", "Carol"],
+                entity_names_provider=lambda: ["Alice", "Bob", "Carol"],
                 existing_rels=[],
                 count=2,  # count >= 2 → max_workers = min(2, 2) = 2 > 1
             )
@@ -2390,7 +2390,7 @@ class TestRelationshipPhasedPipeline:
             results = generate_relationships_with_quality(
                 svc=svc,
                 story_state=story_state,
-                entity_names=["Alice", "Bob", "Carol"],
+                entity_names_provider=lambda: ["Alice", "Bob", "Carol"],
                 existing_rels=[],
                 count=2,
             )
@@ -2413,7 +2413,7 @@ class TestRelationshipPhasedPipeline:
                 generate_relationships_with_quality(
                     svc=svc,
                     story_state=story_state,
-                    entity_names=["Alice", "Bob"],
+                    entity_names_provider=lambda: ["Alice", "Bob"],
                     existing_rels=[],
                     count=2,  # count >= 2 to enable phased path
                 )
@@ -2461,7 +2461,7 @@ class TestRelationshipPhasedPipeline:
         results = generate_relationships_with_quality(
             svc=svc,
             story_state=story_state,
-            entity_names=["Alice", "Bob", "Carol"],
+            entity_names_provider=lambda: ["Alice", "Bob", "Carol"],
             existing_rels=[],
             count=2,  # count >= 2 to enable phased path
         )
@@ -2494,7 +2494,7 @@ class TestRelationshipPhasedPipeline:
             results = generate_relationships_with_quality(
                 svc=svc,
                 story_state=story_state,
-                entity_names=["Alice", "Bob", "Carol"],
+                entity_names_provider=lambda: ["Alice", "Bob", "Carol"],
                 existing_rels=[],
                 count=2,  # count >= 2 so max_workers > 1 to hit the try/except block
             )
@@ -2557,7 +2557,7 @@ class TestRelationshipPhasedPipeline:
             results = generate_relationships_with_quality(
                 svc=svc,
                 story_state=story_state,
-                entity_names=["Alice", "Bob", "Carol", "Dave"],
+                entity_names_provider=lambda: ["Alice", "Bob", "Carol", "Dave"],
                 existing_rels=existing,
                 count=2,
             )
@@ -2664,7 +2664,7 @@ class TestRelationshipPhasedPipeline:
             results = generate_relationships_with_quality(
                 svc=svc,
                 story_state=story_state,
-                entity_names=["Alice", "Bob", "Carol"],
+                entity_names_provider=lambda: ["Alice", "Bob", "Carol"],
                 existing_rels=[],
                 count=2,
             )

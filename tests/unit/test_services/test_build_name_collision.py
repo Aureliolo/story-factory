@@ -83,7 +83,7 @@ class TestCrossEntityNameCollision:
         _generate_locations(mock_svc, story_state, mock_world_db, mock_services)
 
         call_args = mock_services.world_quality.generate_locations_with_quality.call_args
-        existing_names = call_args[0][1]  # Second positional arg
+        existing_names = call_args.kwargs["name_provider"]()
         assert "Hero" in existing_names
         assert "Dark Guild" in existing_names
 
@@ -99,7 +99,7 @@ class TestCrossEntityNameCollision:
         _generate_factions(mock_svc, story_state, mock_world_db, mock_services)
 
         call_args = mock_services.world_quality.generate_factions_with_quality.call_args
-        existing_names = call_args[0][1]  # Second positional arg
+        existing_names = call_args.kwargs["name_provider"]()
         assert "Hero" in existing_names
         assert "Castle" in existing_names
 
@@ -116,7 +116,7 @@ class TestCrossEntityNameCollision:
         _generate_items(mock_svc, story_state, mock_world_db, mock_services)
 
         call_args = mock_services.world_quality.generate_items_with_quality.call_args
-        existing_names = call_args[0][1]  # Second positional arg
+        existing_names = call_args.kwargs["name_provider"]()
         assert "Hero" in existing_names
         assert "Castle" in existing_names
         assert "Dark Guild" in existing_names
@@ -135,7 +135,7 @@ class TestCrossEntityNameCollision:
         _generate_concepts(mock_svc, story_state, mock_world_db, mock_services)
 
         call_args = mock_services.world_quality.generate_concepts_with_quality.call_args
-        existing_names = call_args[0][1]  # Second positional arg
+        existing_names = call_args.kwargs["name_provider"]()
         assert "Hero" in existing_names
         assert "Castle" in existing_names
         assert "Dark Guild" in existing_names

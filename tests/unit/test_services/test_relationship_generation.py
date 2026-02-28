@@ -251,7 +251,7 @@ class TestDynamicScaling:
             # Capture the count passed to generate_relationships_with_quality
             captured_count = {}
 
-            def capture_generate(state, names, rels, count, cancel_check=None, **kwargs):
+            def capture_generate(state, *, entity_names_provider, existing_rels, count, **kwargs):
                 """Capture the count argument for later assertion."""
                 captured_count["value"] = count
                 return []
@@ -288,7 +288,7 @@ class TestDynamicScaling:
             services = MagicMock()
             captured_count = {}
 
-            def capture_generate(state, names, rels, count, cancel_check=None, **kwargs):
+            def capture_generate(state, *, entity_names_provider, existing_rels, count, **kwargs):
                 """Capture the count argument for later assertion."""
                 captured_count["value"] = count
                 return []
@@ -331,7 +331,7 @@ class TestDynamicScaling:
             services = MagicMock()
             captured_count = {}
 
-            def capture_generate(state, names, rels, count, cancel_check=None, **kwargs):
+            def capture_generate(state, *, entity_names_provider, existing_rels, count, **kwargs):
                 """Capture the count argument for later assertion."""
                 captured_count["value"] = count
                 return []
@@ -376,7 +376,7 @@ class TestDynamicScaling:
             services = MagicMock()
             captured_count = {}
 
-            def capture_generate(state, names, rels, count, cancel_check=None, **kwargs):
+            def capture_generate(state, *, entity_names_provider, existing_rels, count, **kwargs):
                 """Capture the count argument for later assertion."""
                 captured_count["value"] = count
                 return []
@@ -467,7 +467,7 @@ class TestRelationTypeNormalizedBeforeStorage:
 
             services = MagicMock()
 
-            def fake_generate(state, names, rels, count, cancel_check=None, **kwargs):
+            def fake_generate(state, *, entity_names_provider, existing_rels, count, **kwargs):
                 """Return a relationship with a pre-normalized type (as the real service does)."""
                 scores = MagicMock()
                 scores.average = 8.0
@@ -517,7 +517,7 @@ class TestRelationTypeNormalizedInBuild:
 
             services = MagicMock()
 
-            def fake_generate(state, names, rels, count, cancel_check=None, **kwargs):
+            def fake_generate(state, *, entity_names_provider, existing_rels, count, **kwargs):
                 """Return a relationship with a pre-normalized type."""
                 scores = MagicMock()
                 scores.average = 8.0
@@ -562,7 +562,7 @@ class TestRelationTypeNormalizedInBuild:
 
             services = MagicMock()
 
-            def fake_generate(state, names, rels, count, cancel_check=None, **kwargs):
+            def fake_generate(state, *, entity_names_provider, existing_rels, count, **kwargs):
                 """Return a relationship without relation_type key."""
                 scores = MagicMock()
                 scores.average = 8.0
@@ -630,7 +630,7 @@ class TestRelationTypeNormalizedInBuild:
 
             # The orphaned relationship should have been skipped, not passed to quality service
             call_args = services.world_quality.generate_relationships_with_quality.call_args
-            existing_rels_passed = call_args[0][2]
+            existing_rels_passed = call_args.kwargs["existing_rels"]
             assert len(existing_rels_passed) == 0
         finally:
             world_db.close()
@@ -763,7 +763,7 @@ class TestExistingRelsIncludeTypes:
 
         initial_rels: list[tuple[str, str, str]] = [("X", "Y", "knows")]
         generate_relationships_with_quality(
-            svc, story_state, ["A", "B", "X", "Y"], initial_rels, count=2
+            svc, story_state, lambda: ["A", "B", "X", "Y"], initial_rels, count=2
         )
 
         # First call should see the initial rel

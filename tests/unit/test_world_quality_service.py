@@ -30,6 +30,7 @@ def mock_mode_service(tmp_path):
 @pytest.fixture
 def world_quality_service(tmp_settings, mock_mode_service):
     """Create a WorldQualityService with mocked dependencies."""
+    tmp_settings.llm_max_concurrent_requests = 1
     return WorldQualityService(tmp_settings, mock_mode_service)
 
 
@@ -267,7 +268,7 @@ class TestCancellationSupport:
         ):
             results = world_quality_service.generate_characters_with_quality(
                 sample_story_state,
-                existing_names=[],
+                name_provider=lambda: [],
                 count=5,
                 cancel_check=cancel_check,
             )
@@ -303,7 +304,7 @@ class TestCancellationSupport:
         ):
             results = world_quality_service.generate_characters_with_quality(
                 sample_story_state,
-                existing_names=[],
+                name_provider=lambda: [],
                 count=10,
                 cancel_check=cancel_check,
             )
@@ -342,7 +343,7 @@ class TestCancellationSupport:
         ):
             world_quality_service.generate_characters_with_quality(
                 sample_story_state,
-                existing_names=[],
+                name_provider=lambda: [],
                 count=3,
                 cancel_check=cancel_check,
             )
@@ -380,7 +381,7 @@ class TestProgressCallback:
         ):
             world_quality_service.generate_characters_with_quality(
                 sample_story_state,
-                existing_names=[],
+                name_provider=lambda: [],
                 count=3,
                 progress_callback=progress_callback,
             )
@@ -427,7 +428,7 @@ class TestProgressCallback:
         ):
             world_quality_service.generate_characters_with_quality(
                 sample_story_state,
-                existing_names=[],
+                name_provider=lambda: [],
                 count=3,
                 progress_callback=progress_callback,
             )
@@ -462,7 +463,7 @@ class TestProgressCallback:
         ):
             world_quality_service.generate_characters_with_quality(
                 sample_story_state,
-                existing_names=[],
+                name_provider=lambda: [],
                 count=4,
                 progress_callback=progress_callback,
             )
@@ -490,7 +491,7 @@ class TestProgressCallback:
         ):
             world_quality_service.generate_locations_with_quality(
                 sample_story_state,
-                existing_names=[],
+                name_provider=lambda: [],
                 count=2,
                 progress_callback=lambda p: location_updates.append(p),
             )
@@ -510,7 +511,7 @@ class TestProgressCallback:
         ):
             world_quality_service.generate_items_with_quality(
                 sample_story_state,
-                existing_names=[],
+                name_provider=lambda: [],
                 count=2,
                 progress_callback=lambda p: item_updates.append(p),
             )
@@ -546,7 +547,7 @@ class TestProgressCallback:
         ):
             results = world_quality_service.generate_factions_with_quality(
                 sample_story_state,
-                existing_names=[],
+                name_provider=lambda: [],
                 count=3,
                 cancel_check=cancel_check,
                 progress_callback=progress_callback,
@@ -580,7 +581,7 @@ class TestProgressCallback:
         ):
             results = world_quality_service.generate_items_with_quality(
                 sample_story_state,
-                existing_names=[],
+                name_provider=lambda: [],
                 count=3,
                 cancel_check=cancel_check,
             )
@@ -611,7 +612,7 @@ class TestProgressCallback:
         ):
             results = world_quality_service.generate_locations_with_quality(
                 sample_story_state,
-                existing_names=[],
+                name_provider=lambda: [],
                 count=3,
                 cancel_check=cancel_check,
             )
@@ -647,7 +648,7 @@ class TestProgressCallback:
         ):
             results = world_quality_service.generate_concepts_with_quality(
                 sample_story_state,
-                existing_names=[],
+                name_provider=lambda: [],
                 count=3,
                 cancel_check=cancel_check,
                 progress_callback=progress_callback,
@@ -698,7 +699,7 @@ class TestProgressCallback:
         ):
             results = world_quality_service.generate_relationships_with_quality(
                 sample_story_state,
-                entity_names=entity_names,
+                entity_names_provider=lambda: entity_names,
                 existing_rels=[],
                 count=3,
                 cancel_check=cancel_check,
