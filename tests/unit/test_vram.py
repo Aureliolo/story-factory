@@ -182,3 +182,18 @@ class TestUnloadClearsLastPreparedCache:
 
         with _vram._last_prepared_model_lock:
             assert _vram._last_prepared_model_key is None
+
+    def test_unload_does_not_clear_cache_for_kept_model(self) -> None:
+        """When the kept model matches the cached key, cache is preserved."""
+        svc = MagicMock()
+        svc._loaded_models = {"model-a:8b", "model-b:8b"}
+        svc._ollama_client = MagicMock()
+
+        # Simulate model-b was last prepared — it's also the kept model
+        with _vram._last_prepared_model_lock:
+            _vram._last_prepared_model_key = ("model-b:8b", "sequential")
+
+        _vram.unload_all_except(svc, "model-b:8b")
+
+        with _vram._last_prepared_model_lock:
+            assert _vram._last_prepared_model_key == ("model-b:8b", "sequential")

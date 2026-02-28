@@ -468,7 +468,7 @@ def generate_events_with_quality(
         story_state: Current story state.
         existing_descriptions: Descriptions of existing events to avoid duplicates.
         entity_context_provider: Callable returning fresh entity context string.
-            Cached by entity count to avoid rebuilding when no entities were added.
+            Cached by content hash to avoid rebuilding when content is unchanged.
         count: Number of events to generate.
         cancel_check: Optional callable that returns True to cancel generation.
         progress_callback: Optional callback to receive progress updates.
@@ -555,12 +555,15 @@ def generate_characters_with_quality(
     def _thread_safe_on_success(char: Character) -> None:
         """Append character name with lock for thread-safe dedup."""
         with batch_names_lock:
-            batch_names.append(char.name)
+            if char.name not in batch_names:
+                batch_names.append(char.name)
 
     def _get_names() -> list[str]:
-        """Get combined names from DB provider and batch-local names."""
+        """Get deduplicated names from DB provider and batch-local names."""
         with batch_names_lock:
-            return name_provider() + list(batch_names)
+            provider_names = name_provider()
+            seen = set(provider_names)
+            return provider_names + [n for n in batch_names if n not in seen]
 
     # Use parallel generation when count > 1 and concurrency is enabled
     max_workers = min(svc.settings.llm_max_concurrent_requests, count)

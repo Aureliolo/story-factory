@@ -26,7 +26,6 @@ async def _generate_factions(
     page,
     count,
     use_quality,
-    all_existing_names,
     should_cancel,
     update_progress,
     progress_label,
@@ -38,7 +37,6 @@ async def _generate_factions(
         page: WorldPage instance.
         count: Number to generate.
         use_quality: Whether quality refinement is enabled.
-        all_existing_names: Existing entity names to avoid duplicates.
         should_cancel: Cancel check callable.
         update_progress: Progress update callback.
         progress_label: Progress label widget.
@@ -161,7 +159,6 @@ async def _generate_items(
     page,
     count,
     use_quality,
-    all_existing_names,
     should_cancel,
     update_progress,
     progress_label,
@@ -173,7 +170,6 @@ async def _generate_items(
         page: WorldPage instance.
         count: Number to generate.
         use_quality: Whether quality refinement is enabled.
-        all_existing_names: Existing entity names to avoid duplicates.
         should_cancel: Cancel check callable.
         update_progress: Progress update callback.
         progress_label: Progress label widget.
@@ -269,7 +265,6 @@ async def _generate_concepts(
     page,
     count,
     use_quality,
-    all_existing_names,
     should_cancel,
     update_progress,
     progress_label,
@@ -281,7 +276,6 @@ async def _generate_concepts(
         page: WorldPage instance.
         count: Number to generate.
         use_quality: Whether quality refinement is enabled.
-        all_existing_names: Existing entity names to avoid duplicates.
         should_cancel: Cancel check callable.
         update_progress: Progress update callback.
         progress_label: Progress label widget.
@@ -376,7 +370,6 @@ async def _generate_events(
     page,
     count,
     use_quality,
-    all_existing_names,
     should_cancel,
     update_progress,
     progress_label,
@@ -388,7 +381,6 @@ async def _generate_events(
         page: WorldPage instance.
         count: Number to generate.
         use_quality: Whether quality refinement is enabled.
-        all_existing_names: Existing entity names to avoid duplicates.
         should_cancel: Cancel check callable.
         update_progress: Progress update callback.
         progress_label: Progress label widget.
@@ -499,7 +491,6 @@ async def _generate_relationships(
     page,
     count,
     use_quality,
-    all_existing_names,
     should_cancel,
     update_progress,
     notification,
@@ -510,7 +501,6 @@ async def _generate_relationships(
         page: WorldPage instance.
         count: Number to generate.
         use_quality: Whether quality refinement is enabled.
-        all_existing_names: Existing entity names to avoid duplicates.
         should_cancel: Cancel check callable.
         update_progress: Progress update callback.
         notification: Notification widget.
@@ -769,6 +759,8 @@ async def generate_relationships_for_entities(
                 page._refresh_entity_list()
                 if page._graph:
                     page._graph.refresh()
+                if page.state.project:
+                    page.services.project.save_project(page.state.project)
                 ui.notify(
                     f"Added {added_count} relationships",
                     type="positive",

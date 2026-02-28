@@ -69,9 +69,10 @@ async def generate_more(
         count = get_random_count(page, entity_type)
     logger.info(f"Will generate {count} {entity_type}")
 
-    # Get ALL existing entity names to avoid duplicates
+    # Log existing entity count for diagnostics (each generator uses its own
+    # type-filtered provider via get_entity_names_by_type for dedup).
     all_existing_names = get_all_entity_names(page)
-    logger.info(f"Found {len(all_existing_names)} existing entities to avoid duplicates")
+    logger.info(f"Found {len(all_existing_names)} existing entities across all types")
 
     # Create cancellation infrastructure for quality generation
     page._generation_cancel_event = threading.Event()
@@ -125,7 +126,6 @@ async def generate_more(
                 page,
                 count,
                 use_quality,
-                all_existing_names,
                 should_cancel,
                 update_progress,
                 progress_label,
@@ -136,7 +136,6 @@ async def generate_more(
                 page,
                 count,
                 use_quality,
-                all_existing_names,
                 should_cancel,
                 update_progress,
                 progress_label,
@@ -147,7 +146,6 @@ async def generate_more(
                 page,
                 count,
                 use_quality,
-                all_existing_names,
                 should_cancel,
                 update_progress,
                 progress_label,
@@ -158,7 +156,6 @@ async def generate_more(
                 page,
                 count,
                 use_quality,
-                all_existing_names,
                 should_cancel,
                 update_progress,
                 progress_label,
@@ -169,7 +166,6 @@ async def generate_more(
                 page,
                 count,
                 use_quality,
-                all_existing_names,
                 should_cancel,
                 update_progress,
                 notification,

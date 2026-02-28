@@ -147,6 +147,10 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
         prepare_creator_fn: Callback to load the creator model into VRAM.
             Required for phased pipeline (may be ``None`` when models are
             the same, but phased pipeline is not used in that case).
+        register_created_fn: Optional callback invoked after an entity is
+            created in Phase 1.  Used for dedup registration (e.g. adding
+            the entity to the build pipeline's tracking).  Errors are
+            non-fatal — the entity proceeds to judging regardless.
         prepare_judge_fn: Callback to load the judge model into VRAM.
             Required for phased pipeline.
 
@@ -527,6 +531,9 @@ def _generate_batch_phased[T, S: BaseQualityScores](
         cancel_check: Optional callable returning ``True`` to cancel.
         progress_callback: Optional progress update callback.
         quality_threshold: Quality threshold for pass/fail.
+        register_created_fn: Optional callback invoked after an entity is
+            created in Phase 1.  Used for dedup registration.  Errors are
+            non-fatal — the entity proceeds to judging regardless.
 
     Returns:
         List of ``(entity, scores)`` tuples.

@@ -252,7 +252,7 @@ def log_batch_summary(
                 name = entity.get("name", "Unknown")
             else:
                 name = getattr(entity, "name", "Unknown")
-            failed_names.append(name)
+            failed_names.append(str(name) if name is not None else "Unknown")
 
     summary_parts = [
         f"passed={passed}/{total}",

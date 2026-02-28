@@ -422,6 +422,21 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                 if entity_reverted and history.best_iteration > 0:
                     best_record = history.iterations[history.best_iteration - 1]
                     scores = score_cls(**best_record.scores)
+                    # Re-validate dimension floor on the swapped-in scores
+                    best_below_floor = (
+                        scores.minimum_score < dimension_floor if dimension_floor > 0.0 else False
+                    )
+                    if best_below_floor:
+                        logger.info(
+                            "%s '%s' best iteration %d scores violate dimension "
+                            "floor (min=%.1f < floor=%.1f), continuing refinement",
+                            entity_type.capitalize(),
+                            get_name(entity),
+                            history.best_iteration,
+                            scores.minimum_score,
+                            dimension_floor,
+                        )
+                        continue
                     logger.info(
                         "%s '%s' met quality threshold via best iteration %d "
                         "(current=%d, best_score=%.1f, current_score=%.1f)",

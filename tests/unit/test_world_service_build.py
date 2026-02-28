@@ -1114,7 +1114,7 @@ class TestGenerateEvents:
         assert "Invalid event count range: min=10 > max=3, swapping" in caplog.text
         # After swap, min=3 max=10, so event_count is in [3, 10]
         call_args = mock_services.world_quality.generate_events_with_quality.call_args
-        event_count = call_args.kwargs.get("count")
+        event_count = call_args.kwargs["count"]
         assert 3 <= event_count <= 10
 
     def test_event_add_db_error_nonfatal(
