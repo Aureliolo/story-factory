@@ -687,9 +687,29 @@ def _judge_relationship_quality(
     """
     brief = story_state.brief
     genre = brief.genre if brief else "fiction"
+    calendar_context = svc.get_calendar_context()
+
+    # Build story context block for richer differentiation between relationships
+    story_context_parts = [f"GENRE: {genre}"]
+    if brief:
+        if brief.premise:
+            story_context_parts.append(f"PREMISE: {brief.premise}")
+        setting_parts = [
+            p for p in (brief.setting_place, brief.setting_time) if isinstance(p, str) and p
+        ]
+        if setting_parts:
+            story_context_parts.append(f"SETTING: {', '.join(setting_parts)}")
+        if brief.tone:
+            story_context_parts.append(f"TONE: {brief.tone}")
+        if brief.themes:
+            story_context_parts.append(f"THEMES: {', '.join(brief.themes)}")
+    story_context = "\n".join(story_context_parts)
 
     prompt = f"""You are evaluating a relationship for a {genre} story.
 
+STORY CONTEXT:
+{story_context}
+{calendar_context}
 RELATIONSHIP TO EVALUATE:
 Source: {relationship.get("source", "Unknown")}
 Target: {relationship.get("target", "Unknown")}

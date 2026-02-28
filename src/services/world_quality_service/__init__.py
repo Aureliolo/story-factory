@@ -255,6 +255,7 @@ class WorldQualityService(EntityDelegatesMixin):
         self._calendar_context: str | None = None
         self._calendar_context_lock = threading.RLock()
         self._cached_calendar_string: str | None = None
+        self._calendar_cache_hit_logged: bool = False
         logger.debug("WorldQualityService initialized successfully")
 
     # ========== Calendar context for downstream entity generation ==========
@@ -276,6 +277,7 @@ class WorldQualityService(EntityDelegatesMixin):
             if calendar_dict is None:
                 self._calendar_context = None
                 self._cached_calendar_string = None
+                self._calendar_cache_hit_logged = False
                 logger.debug("Cleared calendar context")
                 return
 
@@ -321,6 +323,8 @@ class WorldQualityService(EntityDelegatesMixin):
                 self._cached_calendar_string = f"\nCALENDAR & TIMELINE:\n{context_text}\n"
             else:
                 self._cached_calendar_string = None
+            # Reset cache-hit log flag so the first read of new context logs once
+            self._calendar_cache_hit_logged = False
             if self._calendar_context is None:
                 logger.warning(
                     "Calendar dict provided but no context extracted — calendar may be malformed: %s",
@@ -328,7 +332,7 @@ class WorldQualityService(EntityDelegatesMixin):
                 )
             logger.debug(
                 "Set calendar context for downstream prompts: %s",
-                self._calendar_context[:80] if self._calendar_context else "None",
+                self._calendar_context[:200] if self._calendar_context else "None",
             )
 
     def get_calendar_context(self) -> str:
@@ -345,11 +349,15 @@ class WorldQualityService(EntityDelegatesMixin):
         """
         with self._calendar_context_lock:
             cached = self._cached_calendar_string
+            should_log_cache_hit = cached is not None and not self._calendar_cache_hit_logged
+            if should_log_cache_hit:
+                self._calendar_cache_hit_logged = True
         if cached is not None:
-            logger.debug(
-                "get_calendar_context: returning cached calendar context (%d chars)",
-                len(cached),
-            )
+            if should_log_cache_hit:
+                logger.debug(
+                    "get_calendar_context: returning cached calendar context (%d chars)",
+                    len(cached),
+                )
             return cached
         # Slow path: no calendar has been set yet
         logger.debug("get_calendar_context: returning sentinel calendar context")

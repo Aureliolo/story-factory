@@ -2,6 +2,7 @@
 
 import logging
 import random
+import re
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -9,11 +10,9 @@ from src.memory.story_state import PlotOutline, StoryState
 from src.memory.world_calendar import WorldCalendar
 from src.memory.world_database import WorldDatabase
 from src.memory.world_settings import WorldSettings
+from src.services.world_service._character_extraction import _extract_characters_to_world
 from src.services.world_service._event_helpers import _generate_events
-from src.services.world_service._lifecycle_helpers import (
-    build_character_lifecycle,
-    build_entity_lifecycle,
-)
+from src.services.world_service._lifecycle_helpers import build_entity_lifecycle
 from src.services.world_service._name_matching import _find_entity_by_name
 from src.services.world_service._orphan_recovery import _recover_orphans
 from src.services.world_service._warmup import _warm_models
@@ -32,6 +31,22 @@ logger = logging.getLogger(__name__)
 
 # Cap relationship count at this ratio of entity count to avoid excessive duplicates
 RELATIONSHIP_TO_ENTITY_RATIO_CAP = 1.5
+
+# Pattern matching LLM echoing numbered prompt criteria into descriptions
+# e.g. "{3: Strong story relevance - connections to themes/characters}"
+_PROMPT_ECHO_PATTERN = re.compile(r"\{\d+\s*[:\.]\s*[A-Z][^}]*\}$", re.MULTILINE)
+
+
+def _clean_description(description: str) -> str:
+    """Strip LLM prompt artifacts from entity descriptions.
+
+    Removes numbered criteria that the LLM sometimes echoes from the
+    generation prompt (e.g. '{3: Strong story relevance...}').
+    """
+    cleaned = _PROMPT_ECHO_PATTERN.sub("", description).strip()
+    if cleaned != description:
+        logger.debug("Stripped prompt echo artifacts from description")
+    return cleaned
 
 
 def build_world(
@@ -458,14 +473,18 @@ def _build_world_entities(
         try:
             result = services.temporal_validation.validate_world(world_db)
             for issue in result.errors:
-                logger.warning("Temporal error: %s", issue.message)
+                logger.info("Temporal validation error (build-time): %s", issue.message)
             for issue in result.warnings:
-                logger.debug("Temporal warning: %s", issue.message)
-            logger.info(
-                "Temporal validation complete: %d errors, %d warnings",
-                result.error_count,
-                result.warning_count,
-            )
+                logger.debug("Temporal validation warning (build-time): %s", issue.message)
+            if result.error_count or result.warning_count:
+                logger.info(
+                    "Temporal validation complete: %d errors, %d warnings "
+                    "(some may resolve after full build completes)",
+                    result.error_count,
+                    result.warning_count,
+                )
+            else:
+                logger.info("Temporal validation complete: no issues found")
         except GenerationCancelledError, DatabaseClosedError, MemoryError, RecursionError:
             raise
         except Exception as e:
@@ -544,83 +563,6 @@ def _clear_world_db(world_db: WorldDatabase) -> None:
         world_db.delete_entity(entity.id)
 
 
-def _extract_characters_to_world(state: StoryState, world_db: WorldDatabase) -> tuple[int, int]:
-    """Extract characters and their pre-defined relationships to world database.
-
-    Uses a two-pass approach: first adds all character entities, then creates
-    implicit relationships from Character.relationships (set by ArchitectAgent).
-
-    Returns:
-        Tuple of (characters_added, implicit_relationships_added).
-    """
-    added_count = 0
-    char_id_map: dict[str, str] = {}
-    newly_added: set[str] = set()
-
-    # Pass 1: add all characters, building a name→ID map
-    for char in state.characters:
-        existing = world_db.get_entity_by_name(char.name, entity_type="character")
-        if existing:
-            logger.debug(f"Character already exists: {char.name}")
-            char_id_map[char.name] = existing.id
-            continue
-
-        entity_id = world_db.add_entity(
-            entity_type="character",
-            name=char.name,
-            description=char.description,
-            attributes={
-                "role": char.role,
-                "personality_traits": char.trait_names,
-                "goals": char.goals,
-                "arc_notes": char.arc_notes,
-                **build_character_lifecycle(char),
-            },
-        )
-        char_id_map[char.name] = entity_id
-        newly_added.add(char.name)
-        added_count += 1
-
-    # Pass 2: create implicit relationships only for newly added characters
-    # (skip pre-existing characters to avoid duplicates on incremental builds)
-    implicit_rel_count = 0
-    for char in state.characters:
-        if char.name not in newly_added:
-            continue
-        source_id = char_id_map[char.name]  # guaranteed by pass 1
-
-        for related_name, relationship in char.relationships.items():
-            target_id = char_id_map.get(related_name)
-            if not target_id:
-                logger.debug(
-                    "Skipping relationship %s -[%s]-> %s: target not in character list",
-                    char.name,
-                    relationship,
-                    related_name,
-                )
-                continue
-
-            world_db.add_relationship(
-                source_id=source_id,
-                target_id=target_id,
-                relation_type=relationship,
-            )
-            implicit_rel_count += 1
-            logger.debug(
-                "Created implicit character relationship: %s -[%s]-> %s",
-                char.name,
-                relationship,
-                related_name,
-            )
-
-    if implicit_rel_count:
-        logger.info(
-            "Character extraction created %d implicit relationship(s)",
-            implicit_rel_count,
-        )
-    return added_count, implicit_rel_count
-
-
 def _generate_locations(
     svc: WorldService,
     state: StoryState,
@@ -664,7 +606,7 @@ def _generate_locations(
             world_db.add_entity(
                 entity_type="location",
                 name=name,
-                description=loc.get("description", ""),
+                description=_clean_description(loc.get("description", "")),
                 attributes={
                     "significance": loc.get("significance", ""),
                     "quality_scores": scores.to_dict(),
@@ -725,7 +667,7 @@ def _generate_factions(
             faction_entity_id = world_db.add_entity(
                 entity_type="faction",
                 name=faction["name"],
-                description=faction.get("description", ""),
+                description=_clean_description(faction.get("description", "")),
                 attributes={
                     "leader": faction.get("leader", ""),
                     "goals": faction.get("goals", []),
@@ -807,7 +749,7 @@ def _generate_items(
             world_db.add_entity(
                 entity_type="item",
                 name=item["name"],
-                description=item.get("description", ""),
+                description=_clean_description(item.get("description", "")),
                 attributes={
                     "significance": item.get("significance", ""),
                     "owner": item.get("owner", ""),
@@ -864,7 +806,7 @@ def _generate_concepts(
             world_db.add_entity(
                 entity_type="concept",
                 name=concept["name"],
-                description=concept.get("description", ""),
+                description=_clean_description(concept.get("description", "")),
                 attributes={
                     "type": concept.get("type", ""),
                     "importance": concept.get("importance", ""),
@@ -980,7 +922,7 @@ def _generate_relationships(
                     source_id=source_entity.id,
                     target_id=target_entity.id,
                     relation_type=relation_type,
-                    description=rel.get("description", ""),
+                    description=_clean_description(rel.get("description", "")),
                 )
                 added_count += 1
                 logger.debug(

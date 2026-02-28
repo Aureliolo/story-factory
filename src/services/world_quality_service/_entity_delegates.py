@@ -42,9 +42,11 @@ class EntityDelegatesMixin:
         return _character._refine_character(self, character, scores, story_state, temperature)
 
     # -- Private: Location helpers --
-    def _create_location(self, story_state, existing_names, temperature):
+    def _create_location(self, story_state, existing_names, temperature, rejected_names=None):
         """Create a location via LLM at the given temperature."""
-        return _location._create_location(self, story_state, existing_names, temperature)
+        return _location._create_location(
+            self, story_state, existing_names, temperature, rejected_names=rejected_names
+        )
 
     def _judge_location_quality(self, location, story_state, temperature):
         """Judge location quality and return scores."""
@@ -55,10 +57,17 @@ class EntityDelegatesMixin:
         return _location._refine_location(self, location, scores, story_state, temperature)
 
     # -- Private: Faction helpers --
-    def _create_faction(self, story_state, existing_names, temperature, existing_locations=None):
+    def _create_faction(
+        self, story_state, existing_names, temperature, existing_locations=None, rejected_names=None
+    ):
         """Create a faction via LLM at the given temperature."""
         return _faction._create_faction(
-            self, story_state, existing_names, temperature, existing_locations
+            self,
+            story_state,
+            existing_names,
+            temperature,
+            existing_locations,
+            rejected_names=rejected_names,
         )
 
     def _judge_faction_quality(self, faction, story_state, temperature):
@@ -70,9 +79,11 @@ class EntityDelegatesMixin:
         return _faction._refine_faction(self, faction, scores, story_state, temperature)
 
     # -- Private: Item helpers --
-    def _create_item(self, story_state, existing_names, temperature):
+    def _create_item(self, story_state, existing_names, temperature, rejected_names=None):
         """Create an item via LLM at the given temperature."""
-        return _item._create_item(self, story_state, existing_names, temperature)
+        return _item._create_item(
+            self, story_state, existing_names, temperature, rejected_names=rejected_names
+        )
 
     def _judge_item_quality(self, item, story_state, temperature):
         """Judge item quality and return scores."""
@@ -83,9 +94,11 @@ class EntityDelegatesMixin:
         return _item._refine_item(self, item, scores, story_state, temperature)
 
     # -- Private: Concept helpers --
-    def _create_concept(self, story_state, existing_names, temperature):
+    def _create_concept(self, story_state, existing_names, temperature, rejected_names=None):
         """Create a concept via LLM at the given temperature."""
-        return _concept._create_concept(self, story_state, existing_names, temperature)
+        return _concept._create_concept(
+            self, story_state, existing_names, temperature, rejected_names=rejected_names
+        )
 
     def _judge_concept_quality(self, concept, story_state, temperature):
         """Judge concept quality and return scores."""

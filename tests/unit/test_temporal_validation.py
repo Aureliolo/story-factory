@@ -1706,3 +1706,110 @@ class TestNormalizeEraName:
         once = _normalize_era_name("The First Age Era")
         twice = _normalize_era_name(once)
         assert once == twice
+
+
+class TestEraBoundaryCheck:
+    """Tests for era name mismatch detection in _check_era_name_mismatch."""
+
+    @pytest.fixture
+    def validation_service(self) -> TemporalValidationService:
+        """Create a temporal validation service for boundary tests."""
+        settings = MagicMock()
+        settings.validate_temporal_consistency = True
+        return TemporalValidationService(settings)
+
+    def test_era_name_mismatch_when_names_differ(self, validation_service):
+        """Era name mismatch warning emitted when entity era_name differs from calendar-resolved era."""
+        entity = Entity(id="ent-001", name="Hero", type="character")
+        timestamp = StoryTimestamp(year=50, era_name="Some Era")
+        result = TemporalValidationResult()
+
+        mock_calendar = MagicMock(spec=WorldCalendar)
+        mock_era = MagicMock()
+        mock_era.name = "Late Era"
+        mock_era.start_year = 100
+        mock_era.end_year = 200
+        mock_calendar.get_era_for_year.return_value = mock_era
+
+        validation_service._check_era_name_mismatch(
+            entity, timestamp, mock_calendar, "birth", result
+        )
+
+        # Should produce an era name mismatch warning ("Some Era" != "Late Era")
+        assert len(result.warnings) == 1
+        assert result.warnings[0].error_type == TemporalErrorType.INVALID_ERA
+        assert "Some Era" in result.warnings[0].message
+        assert "Late Era" in result.warnings[0].message
+
+    def test_boundary_warning_message_contains_era_info(self, validation_service):
+        """Boundary warning message includes era name and start/end years."""
+        entity = Entity(id="ent-002", name="Castle", type="location")
+        timestamp = StoryTimestamp(year=10, era_name="Wrong Era")
+        result = TemporalValidationResult()
+
+        mock_calendar = MagicMock(spec=WorldCalendar)
+        mock_era = MagicMock()
+        mock_era.name = "Modern Era"
+        mock_era.start_year = 500
+        mock_era.end_year = 800
+        mock_calendar.get_era_for_year.return_value = mock_era
+
+        validation_service._check_era_name_mismatch(
+            entity, timestamp, mock_calendar, "death", result
+        )
+
+        # Find the era name mismatch warning (order-independent)
+        mismatch_warning = next(
+            (w for w in result.warnings if "Modern Era" in w.message),
+            None,
+        )
+        assert mismatch_warning is not None, (
+            f"Expected warning mentioning 'Modern Era', got: {[w.message for w in result.warnings]}"
+        )
+
+    def test_no_boundary_warning_when_year_inside_era(self, validation_service):
+        """No boundary warning when year is within the era's bounds."""
+        entity = Entity(id="ent-003", name="Dragon", type="character")
+        timestamp = StoryTimestamp(year=150, era_name="Middle Era")
+        result = TemporalValidationResult()
+
+        mock_calendar = MagicMock(spec=WorldCalendar)
+        mock_era = MagicMock()
+        mock_era.name = "Different Era"  # name mismatch to get mismatch warning
+        mock_era.start_year = 100
+        mock_era.end_year = 200
+        mock_calendar.get_era_for_year.return_value = mock_era
+
+        validation_service._check_era_name_mismatch(
+            entity, timestamp, mock_calendar, "birth", result
+        )
+
+        # year=150 is within [100, 200] so no boundary warning
+        boundary_warnings = [w for w in result.warnings if "boundaries" in w.message]
+        assert len(boundary_warnings) == 0
+
+    def test_boundary_warning_uses_timestamp_year_when_end_year_is_none(self, validation_service):
+        """When era end_year is None, era_end is set to timestamp.year (lines 575-576).
+
+        In that case start_year <= year <= year is always True, so no boundary
+        warning fires — this confirms the era_end = timestamp.year branch.
+        """
+        entity = Entity(id="ent-004", name="Hero", type="character")
+        timestamp = StoryTimestamp(year=400, era_name="Ongoing Era")
+        result = TemporalValidationResult()
+
+        mock_calendar = MagicMock(spec=WorldCalendar)
+        mock_era = MagicMock()
+        mock_era.name = "Ongoing Era"  # Same name — no mismatch warning expected
+        mock_era.start_year = 100
+        mock_era.end_year = None  # Ongoing era
+        mock_calendar.get_era_for_year.return_value = mock_era
+
+        validation_service._check_era_name_mismatch(
+            entity, timestamp, mock_calendar, "birth", result
+        )
+
+        # With end_year=None, era_end = timestamp.year = 400.
+        # start_year(100) <= 400 <= 400 is True → no boundary warning.
+        boundary_warnings = [w for w in result.warnings if "boundaries" in w.message]
+        assert len(boundary_warnings) == 0

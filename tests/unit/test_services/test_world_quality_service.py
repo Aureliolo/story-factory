@@ -1613,7 +1613,7 @@ class TestGenerateLocationWithQuality:
         test_loc = {
             "name": "Thornwood Manor",
             "type": "location",
-            "description": "A crumbling Victorian mansion shrouded in mist",
+            "description": "A crumbling Victorian mansion shrouded in mist and shadow at the edge of town",
             "significance": "Central setting where the mystery unfolds",
         }
         mock_create.return_value = test_loc
@@ -1642,12 +1642,16 @@ class TestGenerateLocationWithQuality:
         self, mock_refine, mock_judge, mock_create, service, story_state
     ):
         """Test location generation that needs refinement."""
-        initial_loc = {"name": "Basic Place", "description": "Plain", "significance": "None"}
+        initial_loc = {
+            "name": "Basic Place",
+            "description": "A vast and featureless plain stretching endlessly toward the horizon",
+            "significance": "None",
+        }
         mock_create.return_value = initial_loc
 
         refined_loc = {
             "name": "Basic Place",
-            "description": "Richly detailed location",
+            "description": "A richly detailed location with hidden depths and atmospheric wonder",
             "significance": "Important",
         }
         mock_refine.return_value = refined_loc
@@ -1701,7 +1705,7 @@ class TestGenerateLocationWithQuality:
         """Test location generation handles errors during iteration."""
         test_loc = {
             "name": "Test Location",
-            "description": "A test location",
+            "description": "A test location used to exercise error handling during iteration",
             "significance": "Testing errors",
         }
         mock_create.return_value = test_loc
@@ -2342,7 +2346,7 @@ class TestGenerateFactionWithQuality:
         test_faction = {
             "name": "The Order",
             "type": "faction",
-            "description": "A powerful secret society",
+            "description": "A powerful and secretive society operating in the shadows of the realm",
             "leader": "Grand Master",
             "goals": ["control"],
             "values": ["power"],
@@ -2606,7 +2610,7 @@ class TestGenerateItemWithQuality:
         test_item = {
             "name": "Crystal Key",
             "type": "item",
-            "description": "A key made of pure crystal",
+            "description": "A key forged from pure enchanted crystal with a faintly glowing interior",
             "significance": "Opens the final door",
             "properties": ["unbreakable"],
         }
@@ -2863,7 +2867,7 @@ class TestGenerateConceptWithQuality:
         test_concept = {
             "name": "Truth vs Loyalty",
             "type": "concept",
-            "description": "The tension between honesty and allegiance",
+            "description": "The profound tension between absolute honesty and unwavering personal allegiance",
             "manifestations": "Characters must choose between truth and friends",
         }
         mock_create.return_value = test_concept
@@ -3125,9 +3129,12 @@ class TestBatchOperations:
         with pytest.raises(WorldGenerationError, match="Failed to generate any concepts"):
             service.generate_concepts_with_quality(story_state, existing_names=[], count=2)
 
+    @patch.object(WorldQualityService, "_make_model_preparers", return_value=(None, None))
     @patch.object(WorldQualityService, "generate_relationship_with_quality")
     @patch.object(WorldQualityService, "record_entity_quality")
-    def test_generate_relationships_with_quality(self, mock_record, mock_gen, service, story_state):
+    def test_generate_relationships_with_quality(
+        self, mock_record, mock_gen, _mock_preparers, service, story_state
+    ):
         """Test batch relationship generation."""
         rel1 = {"source": "A", "target": "B", "relation_type": "knows", "description": "First"}
         rel2 = {"source": "B", "target": "C", "relation_type": "loves", "description": "Second"}
@@ -3151,8 +3158,11 @@ class TestBatchOperations:
         assert results[0][0]["source"] == "A"
         assert results[1][0]["source"] == "B"
 
+    @patch.object(WorldQualityService, "_make_model_preparers", return_value=(None, None))
     @patch.object(WorldQualityService, "generate_relationship_with_quality")
-    def test_generate_relationships_all_fail_raises_error(self, mock_gen, service, story_state):
+    def test_generate_relationships_all_fail_raises_error(
+        self, mock_gen, _mock_preparers, service, story_state
+    ):
         """Test batch relationship generation raises error when all fail."""
         mock_gen.side_effect = WorldGenerationError("All failed")
 
@@ -3504,7 +3514,10 @@ class TestEdgeCases:
 
         With best-iteration tracking, returns iteration 1 when all scores are equal.
         """
-        test_loc = {"name": "Basic", "description": "Simple location"}
+        test_loc = {
+            "name": "Basic",
+            "description": "A simple and unremarkable location lacking in atmosphere and detail",
+        }
         mock_create.return_value = test_loc
         mock_refine.return_value = test_loc  # Mock refinement to prevent errors
 
@@ -4385,10 +4398,16 @@ class TestRefinementLoopEdgeCases:
         self, mock_refine, mock_judge, mock_create, service, story_state
     ):
         """Test faction generation goes through refinement."""
-        initial_faction = {"name": "Basic Guild", "description": "Simple"}
+        initial_faction = {
+            "name": "Basic Guild",
+            "description": "A simple trade guild with few members and little political influence",
+        }
         mock_create.return_value = initial_faction
 
-        refined_faction = {"name": "Basic Guild", "description": "Complex guild with history"}
+        refined_faction = {
+            "name": "Basic Guild",
+            "description": "A complex guild with deep historical roots and far-reaching political influence",
+        }
         mock_refine.return_value = refined_faction
 
         low_scores = FactionQualityScores(
@@ -4411,7 +4430,10 @@ class TestRefinementLoopEdgeCases:
             story_state, existing_names=[]
         )
 
-        assert faction["description"] == "Complex guild with history"
+        assert (
+            faction["description"]
+            == "A complex guild with deep historical roots and far-reaching political influence"
+        )
         assert scores.average >= 7.0
         assert iterations == 2
         mock_refine.assert_called_once()
@@ -4430,7 +4452,10 @@ class TestRefinementLoopEdgeCases:
         self, mock_judge, mock_create, service, story_state
     ):
         """Test faction generation handles errors during iteration."""
-        test_faction = {"name": "Test Guild", "description": "Test"}
+        test_faction = {
+            "name": "Test Guild",
+            "description": "A test guild used to verify error handling during quality iteration",
+        }
         mock_create.return_value = test_faction
         mock_judge.side_effect = WorldGenerationError("Judge failed")
 
@@ -4443,7 +4468,10 @@ class TestRefinementLoopEdgeCases:
         self, mock_judge, mock_create, service, story_state
     ):
         """Test faction generation returns below threshold after max iterations."""
-        test_faction = {"name": "Test Guild", "description": "Basic"}
+        test_faction = {
+            "name": "Test Guild",
+            "description": "A basic and underdeveloped guild with minimal presence in the region",
+        }
         mock_create.return_value = test_faction
 
         low_scores = FactionQualityScores(
@@ -4475,10 +4503,16 @@ class TestRefinementLoopEdgeCases:
         self, mock_refine, mock_judge, mock_create, service, story_state
     ):
         """Test item generation goes through refinement."""
-        initial_item = {"name": "Basic Sword", "description": "Simple"}
+        initial_item = {
+            "name": "Basic Sword",
+            "description": "A simple iron sword with no distinguishing features or special history",
+        }
         mock_create.return_value = initial_item
 
-        refined_item = {"name": "Basic Sword", "description": "Legendary blade with history"}
+        refined_item = {
+            "name": "Basic Sword",
+            "description": "A legendary blade with centuries of history forged in an ancient tradition",
+        }
         mock_refine.return_value = refined_item
 
         low_scores = ItemQualityScores(
@@ -4501,7 +4535,10 @@ class TestRefinementLoopEdgeCases:
             story_state, existing_names=[]
         )
 
-        assert item["description"] == "Legendary blade with history"
+        assert (
+            item["description"]
+            == "A legendary blade with centuries of history forged in an ancient tradition"
+        )
         assert scores.average >= 7.0
         assert iterations == 2
         mock_refine.assert_called_once()
@@ -4520,7 +4557,10 @@ class TestRefinementLoopEdgeCases:
         self, mock_judge, mock_create, service, story_state
     ):
         """Test item generation handles errors during iteration."""
-        test_item = {"name": "Test Item", "description": "Test"}
+        test_item = {
+            "name": "Test Item",
+            "description": "A test item used to verify error handling behavior during quality iteration",
+        }
         mock_create.return_value = test_item
         mock_judge.side_effect = WorldGenerationError("Judge failed")
 
@@ -4537,7 +4577,10 @@ class TestRefinementLoopEdgeCases:
 
         With best-iteration tracking, returns iteration 1 when all scores are equal.
         """
-        test_item = {"name": "Test Item", "description": "Basic"}
+        test_item = {
+            "name": "Test Item",
+            "description": "A basic and unremarkable item with little narrative significance or lore",
+        }
         mock_create.return_value = test_item
         mock_refine.return_value = test_item  # Mock refinement to prevent errors
 
@@ -4569,10 +4612,16 @@ class TestRefinementLoopEdgeCases:
         self, mock_refine, mock_judge, mock_create, service, story_state
     ):
         """Test concept generation goes through refinement."""
-        initial_concept = {"name": "Basic Theme", "description": "Simple"}
+        initial_concept = {
+            "name": "Basic Theme",
+            "description": "A simple and underdeveloped theme lacking philosophical depth and nuance",
+        }
         mock_create.return_value = initial_concept
 
-        refined_concept = {"name": "Basic Theme", "description": "Profound philosophical concept"}
+        refined_concept = {
+            "name": "Basic Theme",
+            "description": "A profound philosophical concept exploring the deepest human contradictions",
+        }
         mock_refine.return_value = refined_concept
 
         low_scores = ConceptQualityScores(
@@ -4595,7 +4644,10 @@ class TestRefinementLoopEdgeCases:
             story_state, existing_names=[]
         )
 
-        assert concept["description"] == "Profound philosophical concept"
+        assert (
+            concept["description"]
+            == "A profound philosophical concept exploring the deepest human contradictions"
+        )
         assert scores.average >= 7.0
         assert iterations == 2
         mock_refine.assert_called_once()
@@ -4614,7 +4666,10 @@ class TestRefinementLoopEdgeCases:
         self, mock_judge, mock_create, service, story_state
     ):
         """Test concept generation handles errors during iteration."""
-        test_concept = {"name": "Test Concept", "description": "Test"}
+        test_concept = {
+            "name": "Test Concept",
+            "description": "A test concept used to verify error handling behavior during quality iteration",
+        }
         mock_create.return_value = test_concept
         mock_judge.side_effect = WorldGenerationError("Judge failed")
 
@@ -4631,7 +4686,10 @@ class TestRefinementLoopEdgeCases:
 
         With best-iteration tracking, returns iteration 1 when all scores are equal.
         """
-        test_concept = {"name": "Test Concept", "description": "Basic"}
+        test_concept = {
+            "name": "Test Concept",
+            "description": "A basic and underdeveloped concept lacking in philosophical depth and resonance",
+        }
         mock_create.return_value = test_concept
         mock_refine.return_value = test_concept  # Mock refinement to prevent errors
 
@@ -4760,10 +4818,11 @@ class TestBatchOperationsPartialFailure:
         assert len(results) == 1
         assert results[0][0]["name"] == "Location One"
 
+    @patch.object(WorldQualityService, "_make_model_preparers", return_value=(None, None))
     @patch.object(WorldQualityService, "generate_relationship_with_quality")
     @patch.object(WorldQualityService, "record_entity_quality")
     def test_generate_relationships_partial_failure_logs_warning(
-        self, mock_record, mock_gen, service, story_state
+        self, mock_record, mock_gen, _mock_preparers, service, story_state
     ):
         """Test batch relationship generation logs warning on partial failure."""
         rel1 = {"source": "A", "target": "B", "relation_type": "knows", "description": "First"}
@@ -4860,7 +4919,7 @@ class TestFactionIterationRegression:
 
         test_faction = {
             "name": "Peak Faction",
-            "description": "A faction",
+            "description": "A powerful and well-organized faction controlling the northern territories of the realm",
             "leader": "Leader",
             "goals": ["goal"],
             "values": ["value"],
@@ -4920,7 +4979,7 @@ class TestFactionIterationRegression:
 
         test_faction = {
             "name": "Single Faction",
-            "description": "Only iteration",
+            "description": "A faction representing the sole iteration through the quality refinement loop",
             "leader": "Leader",
             "goals": ["goal"],
             "values": ["value"],

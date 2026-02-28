@@ -4,6 +4,8 @@ import logging
 from collections.abc import Iterator
 from unittest.mock import MagicMock
 
+import pytest
+
 from src.utils.streaming import consume_stream
 from tests.shared.mock_ollama import MockStreamChunk
 
@@ -141,3 +143,89 @@ class TestConsumeStream:
         assert "content" in result["message"]
         assert "prompt_eval_count" in result
         assert "eval_count" in result
+
+
+class TestConsumeStreamHttpcoreErrors:
+    """Tests for httpcore exception handling in consume_stream (lines 42-48)."""
+
+    def _make_failing_stream(self, exc: Exception):
+        """Return an iterator that raises exc on the first iteration."""
+
+        def _gen():
+            raise exc
+            yield  # type: ignore[unreachable]  # makes _gen a generator
+
+        return _gen()
+
+    def test_remote_protocol_error_raises_connection_error(self, caplog):
+        """httpcore.RemoteProtocolError mid-stream raises ConnectionError."""
+        import httpcore
+
+        exc = httpcore.RemoteProtocolError("connection broken")
+        stream = self._make_failing_stream(exc)
+
+        with caplog.at_level(logging.ERROR, logger="src.utils.streaming"):
+            with pytest.raises(ConnectionError, match="Ollama stream interrupted"):
+                consume_stream(stream)
+
+        assert any("stream interrupted" in m.lower() for m in caplog.messages)
+
+    def test_read_error_raises_connection_error(self, caplog):
+        """httpcore.ReadError mid-stream raises ConnectionError."""
+        import httpcore
+
+        exc = httpcore.ReadError("read timed out")
+        stream = self._make_failing_stream(exc)
+
+        with caplog.at_level(logging.ERROR, logger="src.utils.streaming"):
+            with pytest.raises(ConnectionError, match="Ollama stream interrupted"):
+                consume_stream(stream)
+
+        assert any("stream interrupted" in m.lower() for m in caplog.messages)
+
+    def test_network_error_raises_connection_error(self, caplog):
+        """httpcore.NetworkError mid-stream raises ConnectionError."""
+        import httpcore
+
+        exc = httpcore.NetworkError("network unreachable")
+        stream = self._make_failing_stream(exc)
+
+        with caplog.at_level(logging.ERROR, logger="src.utils.streaming"):
+            with pytest.raises(ConnectionError, match="Ollama stream interrupted"):
+                consume_stream(stream)
+
+        assert any("stream interrupted" in m.lower() for m in caplog.messages)
+
+    def test_connection_error_preserves_original_exception_as_cause(self):
+        """The raised ConnectionError chains the original httpcore exception."""
+        import httpcore
+
+        original_exc = httpcore.RemoteProtocolError("original error")
+        stream = self._make_failing_stream(original_exc)
+
+        with pytest.raises(ConnectionError) as exc_info:
+            consume_stream(stream)
+
+        assert exc_info.value.__cause__ is original_exc
+
+    def test_partial_content_lost_on_error(self, caplog):
+        """Content collected before the error is not returned (exception is raised)."""
+        import httpcore
+
+        def _partial_stream():
+            yield MockStreamChunk(content="partial ")
+            raise httpcore.ReadError("dropped mid-stream")
+
+        with caplog.at_level(logging.ERROR, logger="src.utils.streaming"):
+            with pytest.raises(ConnectionError):
+                consume_stream(_partial_stream())
+
+    def test_error_message_includes_original_exc(self):
+        """ConnectionError message includes the original exception text."""
+        import httpcore
+
+        exc = httpcore.NetworkError("host unreachable")
+        stream = self._make_failing_stream(exc)
+
+        with pytest.raises(ConnectionError, match="host unreachable"):
+            consume_stream(stream)

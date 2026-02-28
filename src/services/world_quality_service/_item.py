@@ -46,12 +46,15 @@ def generate_item_with_quality(
 
     prep_creator, prep_judge = svc._make_model_preparers("item")
 
+    rejected_names: list[str] = []
+
     return quality_refinement_loop(
         entity_type="item",
         create_fn=lambda retries: svc._create_item(
             story_state,
             existing_names,
             retry_temperature(config, retries),
+            rejected_names=rejected_names,
         ),
         judge_fn=lambda item: svc._judge_item_quality(
             item,
@@ -66,7 +69,7 @@ def generate_item_with_quality(
         ),
         get_name=lambda item: item.get("name", "Unknown"),
         serialize=lambda item: item.copy(),
-        is_empty=lambda item: not item.get("name"),
+        is_empty=lambda item: not item.get("name") or len(item.get("description", "")) < 50,
         score_cls=ItemQualityScores,
         config=config,
         svc=svc,
@@ -81,9 +84,17 @@ def _create_item(
     story_state: StoryState,
     existing_names: list[str],
     temperature: float,
+    rejected_names: list[str] | None = None,
 ) -> dict[str, Any]:
     """Create a new item using the creator model with structured generation."""
-    logger.debug("Creating item for story %s (existing: %d)", story_state.id, len(existing_names))
+    if rejected_names is None:
+        rejected_names = []
+    logger.debug(
+        "Creating item for story %s (existing: %d, rejected: %d)",
+        story_state.id,
+        len(existing_names),
+        len(rejected_names),
+    )
     brief = story_state.brief
     if not brief:
         return {}
@@ -108,7 +119,7 @@ STRICT RULES:
 - DO NOT use case variations (e.g., "Sword" vs "SWORD")
 - DO NOT use similar names (e.g., "The Blade" vs "Blade of Destiny")
 - Create something COMPLETELY DIFFERENT
-
+{f"REJECTED NAMES (do NOT reuse): {', '.join(dict.fromkeys(rejected_names))}" if rejected_names else ""}
 Create an item with:
 1. Significance - meaningful role in the plot or character development
 2. Uniqueness - distinctive appearance or properties
@@ -143,6 +154,7 @@ Write all text in {brief.language}."""
                     f"Item name '{item.name}' conflicts with '{conflicting_name}' "
                     f"(reason: {reason}), clearing to force retry"
                 )
+                rejected_names.append(item.name)
                 return {}  # Return empty to trigger retry
 
         # Convert to dict for compatibility with existing code

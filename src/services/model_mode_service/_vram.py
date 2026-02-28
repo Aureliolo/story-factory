@@ -6,12 +6,17 @@ slower (5-10x). For a 24 GB GPU the practical max model size is ~30 GB.
 """
 
 import logging
+import threading
 from typing import TYPE_CHECKING
 
 import ollama
 
 from src.memory.mode_models import VramStrategy
 from src.utils.validation import validate_not_empty
+
+# Track last prepared model to suppress repeated log messages
+_last_prepared_model_lock = threading.Lock()
+_last_prepared_model_id: str | None = None
 
 if TYPE_CHECKING:
     from src.services.model_mode_service import ModelModeService
@@ -56,7 +61,11 @@ def prepare_model(svc: ModelModeService, model_id: str) -> None:
         logger.error(error_msg)
         raise ValueError(error_msg) from e
 
-    logger.debug(f"Preparing model {model_id} with VRAM strategy: {strategy.value}")
+    global _last_prepared_model_id
+    with _last_prepared_model_lock:
+        if model_id != _last_prepared_model_id:
+            logger.debug("Preparing model %s with VRAM strategy: %s", model_id, strategy.value)
+            _last_prepared_model_id = model_id
 
     if strategy == VramStrategy.SEQUENTIAL:
         # Unload all other models

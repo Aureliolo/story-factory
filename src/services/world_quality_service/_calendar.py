@@ -22,6 +22,17 @@ from src.utils.exceptions import WorldGenerationError, summarize_llm_error
 
 logger = logging.getLogger(__name__)
 
+_LEADING_ARTICLES = ("the ", "a ", "an ")
+
+
+def _strip_articles(text: str) -> str:
+    """Strip leading articles ('the', 'a', 'an') for fuzzy era name matching."""
+    normalized = text.lower().strip()
+    for article in _LEADING_ARTICLES:
+        if normalized.startswith(article):
+            return normalized[len(article) :].strip()
+    return normalized
+
 
 def generate_calendar_with_quality(
     svc,
@@ -235,6 +246,19 @@ def _generated_data_to_world_calendar(result: GeneratedCalendarData) -> WorldCal
             if current_era_obj:
                 logger.debug(
                     "Matched current era '%s' via case-insensitive lookup to '%s'",
+                    result.era_name,
+                    current_era_obj.name,
+                )
+        # Try article-stripped match (handles "The Golden Age" vs "Golden Age")
+        if not current_era_obj:
+            stripped_era = _strip_articles(result.era_name)
+            current_era_obj = next(
+                (era for era in eras if _strip_articles(era.name) == stripped_era),
+                None,
+            )
+            if current_era_obj:
+                logger.debug(
+                    "Matched current era '%s' via article-stripped lookup to '%s'",
                     result.era_name,
                     current_era_obj.name,
                 )

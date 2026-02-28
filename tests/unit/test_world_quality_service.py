@@ -736,13 +736,19 @@ class TestFactionCreationTemperatureEscalation:
         # Track temperature arguments passed to _create_faction
         temps_used = []
 
-        def fake_create_faction(_story_state, _names, temperature, _locations=None):
+        def fake_create_faction(
+            _story_state, _names, temperature, _locations=None, rejected_names=None
+        ):
             """Return empty dict twice (name conflict), then valid faction."""
             temps_used.append(temperature)
             # Return empty dict (name conflict) for first 2 calls, valid on 3rd
             if len(temps_used) <= 2:
                 return {}
-            return {"name": "New Faction", "type": "faction", "description": "A new faction"}
+            return {
+                "name": "New Faction",
+                "type": "faction",
+                "description": "A new faction with complex political dynamics and deep lore within the world",
+            }
 
         # Mock all internal methods
         svc._create_faction = fake_create_faction
@@ -789,12 +795,18 @@ class TestFactionCreationTemperatureEscalation:
         temps_used = []
 
         # Return empty 6 times (enough for temp to exceed 1.5 uncapped), then valid
-        def fake_create_faction(_story_state, _names, temperature, _locations=None):
+        def fake_create_faction(
+            _story_state, _names, temperature, _locations=None, rejected_names=None
+        ):
             """Return empty dict 6 times to force temperature past uncapped 1.5."""
             temps_used.append(temperature)
             if len(temps_used) <= 6:
                 return {}
-            return {"name": "Capped Faction", "type": "faction", "description": "desc"}
+            return {
+                "name": "Capped Faction",
+                "type": "faction",
+                "description": "A capped faction with enough content to pass the minimum description length check",
+            }
 
         svc._create_faction = fake_create_faction
         svc._judge_faction_quality = MagicMock(

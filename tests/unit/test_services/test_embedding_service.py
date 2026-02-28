@@ -731,7 +731,7 @@ class TestEmbedRelationship:
 
         assert result is False
         mock_embed_text.assert_not_called()
-        assert any("skipping embedding to avoid truncating" in r.message for r in caplog.records)
+        assert any("overhead exceeds max chars" in r.message for r in caplog.records)
 
     def test_embed_relationship_skips_when_header_alone_exceeds_max_chars(
         self, service, mock_db, caplog
@@ -758,7 +758,7 @@ class TestEmbedRelationship:
 
         assert result is False
         mock_embed_text.assert_not_called()
-        assert any("skipping embedding to avoid truncating" in r.message for r in caplog.records)
+        assert any("overhead exceeds max chars" in r.message for r in caplog.records)
 
     def test_embed_relationship_uses_fallback_when_context_size_none(
         self, service, mock_db, caplog

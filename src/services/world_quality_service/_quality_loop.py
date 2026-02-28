@@ -357,6 +357,29 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                 {k: f"{v:.1f}" for k, v in scores.to_dict().items() if isinstance(v, float)},
             )
 
+            # Identical-score detection: if the judge returns exactly the same
+            # dimension scores as the previous iteration, the loop is stuck
+            # (grammar-constrained decoding at low temp produces deterministic output).
+            # Respects early_stopping_min_iterations before breaking.
+            if len(history.iterations) >= max(2, config.early_stopping_min_iterations):
+                prev_scores = history.iterations[-2].scores
+                curr_scores = history.iterations[-1].scores
+                # Compare only numeric dimension scores (exclude feedback string)
+                prev_dims = {k: v for k, v in prev_scores.items() if isinstance(v, (int, float))}
+                curr_dims = {k: v for k, v in curr_scores.items() if isinstance(v, (int, float))}
+                if prev_dims == curr_dims:
+                    logger.info(
+                        "%s '%s': judge returned identical scores on iterations %d and %d "
+                        "(anchored at %.1f) — breaking to avoid wasted refinement",
+                        entity_type.capitalize(),
+                        get_name(entity),
+                        current_iter - 1,
+                        current_iter,
+                        scores.average,
+                    )
+                    early_stopped = True
+                    break
+
             # Monotonicity guard: when a refinement degrades the entity, revert
             # to the best iteration's entity before the next refinement cycle.
             # This prevents wasting a refinement+judge cycle on a degraded entity
@@ -401,6 +424,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                 )
                 history.final_iteration = current_iter
                 history.final_score = scores.average
+                history.actual_scoring_rounds = scoring_rounds
                 svc._log_refinement_analytics(
                     history,
                     story_id,
@@ -575,10 +599,10 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                     entity_type=entity_type,
                     min_attempts=config.hail_mary_min_attempts,
                 )
-                if isinstance(win_rate, (int, float)) and win_rate < 0.20:
+                if isinstance(win_rate, (int, float)) and win_rate < 0.15:
                     skip_hail_mary = True
                     logger.info(
-                        "%s '%s': skipping hail-mary — win rate %.0f%% is below 20%% threshold",
+                        "%s '%s': skipping hail-mary — win rate %.0f%% is below 15%% threshold",
                         entity_type.capitalize(),
                         history.entity_name,
                         win_rate * 100,
@@ -722,6 +746,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
         if best_scores:
             history.final_iteration = history.best_iteration
             history.final_score = history.peak_score
+            history.actual_scoring_rounds = scoring_rounds
             svc._log_refinement_analytics(
                 history,
                 story_id,
@@ -759,6 +784,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
         )
         history.final_iteration = scoring_rounds
         history.final_score = scores.average
+        history.actual_scoring_rounds = scoring_rounds
         svc._log_refinement_analytics(
             history,
             story_id,

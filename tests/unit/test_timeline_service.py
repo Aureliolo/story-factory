@@ -601,6 +601,113 @@ class TestExtractLifecycleFromAttributes:
         assert lifecycle is not None
         assert lifecycle.destruction_year is None
 
+
+class TestExtractLifecycleWithCalendar:
+    """Tests for extract_lifecycle_from_attributes era-backfill logic (lines 681-691)."""
+
+    def _make_calendar(self, eras=None):
+        """Build a minimal WorldCalendar for backfill tests."""
+        from src.memory.world_calendar import CalendarMonth, HistoricalEra, WorldCalendar
+
+        default_eras = [
+            HistoricalEra(name="First Age", start_year=1, end_year=200),
+            HistoricalEra(name="Second Age", start_year=201, end_year=None),
+        ]
+        return WorldCalendar(
+            current_era_name="Second Age",
+            era_abbreviation="SA",
+            era_start_year=201,
+            months=[CalendarMonth(name="Month1", days=30)],
+            days_per_week=7,
+            day_names=["Day1"],
+            current_story_year=400,
+            eras=eras if eras is not None else default_eras,
+        )
+
+    def test_backfills_birth_era_when_missing(self):
+        """Era name is backfilled on birth when year is set but era_name is empty."""
+        calendar = self._make_calendar()
+        attributes = {"lifecycle": {"birth": {"year": 50}}}
+        lifecycle = extract_lifecycle_from_attributes(attributes, calendar=calendar)
+        assert lifecycle is not None
+        assert lifecycle.birth is not None
+        assert lifecycle.birth.era_name == "First Age"
+
+    def test_backfills_death_era_when_missing(self):
+        """Era name is backfilled on death when year is set but era_name is empty."""
+        calendar = self._make_calendar()
+        attributes = {"lifecycle": {"death": {"year": 300}}}
+        lifecycle = extract_lifecycle_from_attributes(attributes, calendar=calendar)
+        assert lifecycle is not None
+        assert lifecycle.death is not None
+        assert lifecycle.death.era_name == "Second Age"
+
+    def test_backfills_first_appearance_era_when_missing(self):
+        """Era name is backfilled on first_appearance."""
+        calendar = self._make_calendar()
+        attributes = {"lifecycle": {"first_appearance": {"year": 100}}}
+        lifecycle = extract_lifecycle_from_attributes(attributes, calendar=calendar)
+        assert lifecycle is not None
+        assert lifecycle.first_appearance is not None
+        assert lifecycle.first_appearance.era_name == "First Age"
+
+    def test_backfills_last_appearance_era_when_missing(self):
+        """Era name is backfilled on last_appearance."""
+        calendar = self._make_calendar()
+        attributes = {"lifecycle": {"last_appearance": {"year": 250}}}
+        lifecycle = extract_lifecycle_from_attributes(attributes, calendar=calendar)
+        assert lifecycle is not None
+        assert lifecycle.last_appearance is not None
+        assert lifecycle.last_appearance.era_name == "Second Age"
+
+    def test_does_not_overwrite_existing_era_name(self):
+        """Existing era_name is not overwritten by backfill."""
+        calendar = self._make_calendar()
+        attributes = {"lifecycle": {"birth": {"year": 50, "era_name": "Custom Era"}}}
+        lifecycle = extract_lifecycle_from_attributes(attributes, calendar=calendar)
+        assert lifecycle is not None
+        assert lifecycle.birth is not None
+        assert lifecycle.birth.era_name == "Custom Era"
+
+    def test_no_backfill_when_year_is_none(self):
+        """No backfill when timestamp has no year (era_name stays empty/None after parse)."""
+        calendar = self._make_calendar()
+        # Provide a dict with no year so StoryTimestamp has year=None and era_name=""
+        attributes = {"lifecycle": {"birth": {"era_name": ""}}}
+        lifecycle = extract_lifecycle_from_attributes(attributes, calendar=calendar)
+        assert lifecycle is not None
+        assert lifecycle.birth is not None
+        assert lifecycle.birth.year is None
+        # birth.year is None → no backfill; era_name remains "" (no calendar lookup)
+        assert not lifecycle.birth.era_name
+
+    def test_no_backfill_when_era_not_found_for_year(self):
+        """No backfill when calendar has no era covering the year."""
+        # Calendar with only one era from year 500 onwards — year 50 has no era
+        from src.memory.world_calendar import HistoricalEra
+
+        calendar = self._make_calendar(
+            eras=[HistoricalEra(name="Late Age", start_year=500, end_year=None)]
+        )
+        attributes = {"lifecycle": {"birth": {"year": 50}}}
+        lifecycle = extract_lifecycle_from_attributes(attributes, calendar=calendar)
+        assert lifecycle is not None
+        assert lifecycle.birth is not None
+        assert lifecycle.birth.year == 50
+        # No era found — era_name stays empty/None
+        assert not lifecycle.birth.era_name
+
+    def test_backfill_logs_debug(self, caplog):
+        """Backfill logs a debug message with ts_label and era name."""
+        import logging
+
+        calendar = self._make_calendar()
+        attributes = {"lifecycle": {"birth": {"year": 50}}}
+        with caplog.at_level(logging.DEBUG, logger="src.memory.timeline_types"):
+            extract_lifecycle_from_attributes(attributes, calendar=calendar)
+        assert any("Backfilled" in m for m in caplog.messages)
+        assert any("birth" in m for m in caplog.messages)
+
     def test_extract_unexpected_type_founding_year(self):
         """Test that unexpected type for founding_year logs warning."""
         attributes = {"lifecycle": {"founding_year": [1000]}}
