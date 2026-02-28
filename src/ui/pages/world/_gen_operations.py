@@ -69,9 +69,10 @@ async def generate_more(
         count = get_random_count(page, entity_type)
     logger.info(f"Will generate {count} {entity_type}")
 
-    # Get ALL existing entity names to avoid duplicates
+    # Log existing entity count for diagnostics (each generator uses its own
+    # type-filtered provider via get_entity_names_by_type for dedup).
     all_existing_names = get_all_entity_names(page)
-    logger.info(f"Found {len(all_existing_names)} existing entities to avoid duplicates")
+    logger.info(f"Found {len(all_existing_names)} existing entities across all types")
 
     # Create cancellation infrastructure for quality generation
     page._generation_cancel_event = threading.Event()
@@ -104,7 +105,6 @@ async def generate_more(
                 page,
                 count,
                 use_quality,
-                all_existing_names,
                 should_cancel,
                 update_progress,
                 progress_label,
@@ -116,7 +116,6 @@ async def generate_more(
                 page,
                 count,
                 use_quality,
-                all_existing_names,
                 should_cancel,
                 update_progress,
                 progress_label,
@@ -127,7 +126,6 @@ async def generate_more(
                 page,
                 count,
                 use_quality,
-                all_existing_names,
                 should_cancel,
                 update_progress,
                 progress_label,
@@ -138,7 +136,6 @@ async def generate_more(
                 page,
                 count,
                 use_quality,
-                all_existing_names,
                 should_cancel,
                 update_progress,
                 progress_label,
@@ -149,7 +146,6 @@ async def generate_more(
                 page,
                 count,
                 use_quality,
-                all_existing_names,
                 should_cancel,
                 update_progress,
                 progress_label,
@@ -160,7 +156,6 @@ async def generate_more(
                 page,
                 count,
                 use_quality,
-                all_existing_names,
                 should_cancel,
                 update_progress,
                 progress_label,
@@ -171,7 +166,6 @@ async def generate_more(
                 page,
                 count,
                 use_quality,
-                all_existing_names,
                 should_cancel,
                 update_progress,
                 notification,
@@ -216,7 +210,6 @@ async def _generate_characters(
     page,
     count,
     use_quality,
-    all_existing_names,
     should_cancel,
     update_progress,
     progress_label,
@@ -229,7 +222,6 @@ async def _generate_characters(
         page: WorldPage instance.
         count: Number to generate.
         use_quality: Whether quality refinement is enabled.
-        all_existing_names: Existing entity names to avoid duplicates.
         should_cancel: Cancel check callable.
         update_progress: Progress update callback.
         progress_label: Progress label widget.
@@ -239,12 +231,11 @@ async def _generate_characters(
     from nicegui import run
 
     if use_quality:
-        character_names = get_entity_names_by_type(page, "character")
         logger.info("Calling world quality service to generate characters...")
         results = await run.io_bound(
             page.services.world_quality.generate_characters_with_quality,
             page.state.project,
-            character_names,
+            lambda: get_entity_names_by_type(page, "character"),
             count,
             custom_instructions,
             should_cancel,
@@ -346,7 +337,6 @@ async def _generate_locations(
     page,
     count,
     use_quality,
-    all_existing_names,
     should_cancel,
     update_progress,
     progress_label,
@@ -358,7 +348,6 @@ async def _generate_locations(
         page: WorldPage instance.
         count: Number to generate.
         use_quality: Whether quality refinement is enabled.
-        all_existing_names: Existing entity names to avoid duplicates.
         should_cancel: Cancel check callable.
         update_progress: Progress update callback.
         progress_label: Progress label widget.
@@ -367,12 +356,11 @@ async def _generate_locations(
     from nicegui import run
 
     if use_quality:
-        location_names = get_entity_names_by_type(page, "location")
         logger.info("Calling world quality service to generate locations...")
         loc_results = await run.io_bound(
             page.services.world_quality.generate_locations_with_quality,
             page.state.project,
-            location_names,
+            lambda: get_entity_names_by_type(page, "location"),
             count,
             should_cancel,
             update_progress,

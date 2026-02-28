@@ -8,6 +8,7 @@ change and batch re-embedding when the model changes.
 
 import hashlib
 import logging
+import re
 import threading
 from collections.abc import Callable
 
@@ -180,14 +181,25 @@ class EmbeddingService:
             return ("", False)
 
         if len(text) > available_for_text:
+            # Sentence-boundary truncation: find the last sentence terminator within
+            # budget that preserves at least 50% of the available space.
+            min_boundary = available_for_text // 2
+            truncated = text[:available_for_text]
+            # Search for common sentence terminators: . ? ! followed by space or end
+            sentence_end_pos = -1
+            for m in re.finditer(r"[.!?](?:\s|$)", truncated):
+                if m.start() >= min_boundary:
+                    sentence_end_pos = m.start()
+            if sentence_end_pos > 0:
+                truncated = truncated[: sentence_end_pos + 1]  # Include the terminator
             logger.warning(
                 "Truncating %s description for embedding (desc %d -> %d chars)%s",
                 label.lower(),
                 len(text),
-                available_for_text,
+                len(truncated),
                 name_suffix,
             )
-            return (text[:available_for_text], False)
+            return (truncated, False)
 
         return (text, False)
 

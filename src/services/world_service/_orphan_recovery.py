@@ -48,6 +48,9 @@ def _recover_orphans(
     all_entities = world_db.list_entities()
     entity_by_id = {e.id: e for e in all_entities}
 
+    # Pre-build normalized name cache to avoid O(N^2) re-normalization
+    normalized_name_cache: dict[str, str] = {e.name: _normalize_name(e.name) for e in all_entities}
+
     # Build existing relationships list
     existing_rels: list[tuple[str, str, str]] = []
     for r in world_db.list_relationships():
@@ -63,8 +66,10 @@ def _recover_orphans(
             continue
         existing_rels.append((source_entity_obj.name, target_entity_obj.name, r.relation_type))
 
-    # Track orphan names still needing connections (mutable set for fast lookup)
-    orphan_names = {_normalize_name(o.name) for o in orphans}
+    # Track orphan names still needing connections (mutable set for fast lookup).
+    # Orphans are a subset of all_entities, so normalized_name_cache is guaranteed
+    # to contain every orphan's name from the comprehension at line 52.
+    orphan_names: set[str] = {normalized_name_cache[o.name] for o in orphans}
 
     added_count = 0
 
@@ -74,7 +79,8 @@ def _recover_orphans(
             break
 
         # Skip if this orphan was already connected by a previous orphan's relationship
-        if _normalize_name(orphan.name) not in orphan_names:
+        orphan_norm = normalized_name_cache.get(orphan.name, _normalize_name(orphan.name))
+        if orphan_norm not in orphan_names:
             logger.debug(
                 "Orphan '%s' already connected by a previous relationship, skipping",
                 orphan.name,
@@ -122,9 +128,13 @@ def _recover_orphans(
                 # relationship endpoint, use the orphan object directly (bypassing
                 # fuzzy lookup) to avoid cross-type name collisions where multiple
                 # entities share the same name
-                source_name_norm = _normalize_name(rel["source"])
-                target_name_norm = _normalize_name(rel["target"])
-                orphan_name_norm = _normalize_name(orphan.name)
+                source_name_norm = normalized_name_cache.get(
+                    rel["source"], _normalize_name(rel["source"])
+                )
+                target_name_norm = normalized_name_cache.get(
+                    rel["target"], _normalize_name(rel["target"])
+                )
+                orphan_name_norm = orphan_norm
 
                 source_entity: Entity | None
                 target_entity: Entity | None
@@ -176,8 +186,18 @@ def _recover_orphans(
                 if source_entity and target_entity:
                     # Safety check: verify at least one endpoint is an orphan
                     # (should always pass due to required_entity constraint in quality loop)
-                    source_is_orphan = _normalize_name(source_entity.name) in orphan_names
-                    target_is_orphan = _normalize_name(target_entity.name) in orphan_names
+                    source_is_orphan = (
+                        normalized_name_cache.get(
+                            source_entity.name, _normalize_name(source_entity.name)
+                        )
+                        in orphan_names
+                    )
+                    target_is_orphan = (
+                        normalized_name_cache.get(
+                            target_entity.name, _normalize_name(target_entity.name)
+                        )
+                        in orphan_names
+                    )
                     if not source_is_orphan and not target_is_orphan:
                         logger.warning(
                             "Orphan recovery: skipping relationship %s -> %s"
@@ -212,9 +232,17 @@ def _recover_orphans(
 
                     # Remove connected orphan(s) from tracking set
                     if source_is_orphan:
-                        orphan_names.discard(_normalize_name(source_entity.name))
+                        orphan_names.discard(
+                            normalized_name_cache.get(
+                                source_entity.name, _normalize_name(source_entity.name)
+                            )
+                        )
                     if target_is_orphan:
-                        orphan_names.discard(_normalize_name(target_entity.name))
+                        orphan_names.discard(
+                            normalized_name_cache.get(
+                                target_entity.name, _normalize_name(target_entity.name)
+                            )
+                        )
                     break  # Success — move to the next orphan
                 else:
                     logger.warning(

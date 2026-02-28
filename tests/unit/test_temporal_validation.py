@@ -1813,3 +1813,304 @@ class TestEraBoundaryCheck:
         # start_year(100) <= 400 <= 400 is True → no boundary warning.
         boundary_warnings = [w for w in result.warnings if "boundaries" in w.message]
         assert len(boundary_warnings) == 0
+
+
+class TestAutoCorrectEraNames:
+    """Tests for auto_correct_era_names."""
+
+    def test_corrects_mismatched_era_name(self, validation_service):
+        """Entities with wrong era names get corrected against calendar."""
+        entity = Entity(
+            id="e1",
+            name="Hero",
+            type="character",
+            description="A hero",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 200, "era_name": "Wrong Era"},
+                }
+            },
+        )
+
+        mock_era = MagicMock()
+        mock_era.name = "Golden Age"
+        mock_calendar = MagicMock(spec=WorldCalendar)
+        mock_calendar.get_era_for_year.return_value = mock_era
+
+        world_db = MagicMock()
+        world_settings = MagicMock()
+        world_settings.calendar = mock_calendar
+        world_db.get_world_settings.return_value = world_settings
+        world_db.list_entities.return_value = [entity]
+
+        corrected = validation_service.auto_correct_era_names(world_db)
+
+        assert corrected == 1
+        world_db.update_entity.assert_called_once()
+        call_kwargs = world_db.update_entity.call_args[1]
+        assert call_kwargs["entity_id"] == "e1"
+        updated_birth = call_kwargs["attributes"]["lifecycle"]["birth"]
+        assert updated_birth["era_name"] == "Golden Age"
+
+    def test_no_correction_when_era_matches(self, validation_service):
+        """Entities with correct era names are not updated."""
+        entity = Entity(
+            id="e1",
+            name="Hero",
+            type="character",
+            description="A hero",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 200, "era_name": "Golden Age"},
+                }
+            },
+        )
+
+        mock_era = MagicMock()
+        mock_era.name = "Golden Age"
+        mock_calendar = MagicMock(spec=WorldCalendar)
+        mock_calendar.get_era_for_year.return_value = mock_era
+
+        world_db = MagicMock()
+        world_settings = MagicMock()
+        world_settings.calendar = mock_calendar
+        world_db.get_world_settings.return_value = world_settings
+        world_db.list_entities.return_value = [entity]
+
+        corrected = validation_service.auto_correct_era_names(world_db)
+
+        assert corrected == 0
+        world_db.update_entity.assert_not_called()
+
+    def test_no_calendar_returns_zero(self, validation_service):
+        """Returns 0 when no calendar is available."""
+        world_db = MagicMock()
+        world_settings = MagicMock()
+        world_settings.calendar = None
+        world_db.get_world_settings.return_value = world_settings
+
+        assert validation_service.auto_correct_era_names(world_db) == 0
+
+    def test_backfills_missing_era_name(self, validation_service):
+        """Entities with year but no era_name get backfilled."""
+        entity = Entity(
+            id="e1",
+            name="Hero",
+            type="character",
+            description="A hero",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 200},
+                }
+            },
+        )
+
+        mock_era = MagicMock()
+        mock_era.name = "Golden Age"
+        mock_calendar = MagicMock(spec=WorldCalendar)
+        mock_calendar.get_era_for_year.return_value = mock_era
+
+        world_db = MagicMock()
+        world_settings = MagicMock()
+        world_settings.calendar = mock_calendar
+        world_db.get_world_settings.return_value = world_settings
+        world_db.list_entities.return_value = [entity]
+
+        corrected = validation_service.auto_correct_era_names(world_db)
+
+        assert corrected == 1
+
+    def test_calendar_load_exception_returns_zero(self, validation_service):
+        """Exception loading calendar returns 0 without raising."""
+        world_db = MagicMock()
+        world_db.get_world_settings.side_effect = RuntimeError("DB error")
+
+        assert validation_service.auto_correct_era_names(world_db) == 0
+
+    def test_skips_entity_without_attributes(self, validation_service):
+        """Entities with falsy attributes are skipped."""
+        entity = Entity(id="e1", name="Hero", type="character", description="A hero", attributes={})
+
+        mock_calendar = MagicMock(spec=WorldCalendar)
+        world_db = MagicMock()
+        world_settings = MagicMock()
+        world_settings.calendar = mock_calendar
+        world_db.get_world_settings.return_value = world_settings
+        world_db.list_entities.return_value = [entity]
+
+        assert validation_service.auto_correct_era_names(world_db) == 0
+        world_db.update_entity.assert_not_called()
+
+    def test_skips_entity_without_lifecycle(self, validation_service):
+        """Entities with attributes but no parseable lifecycle are skipped."""
+        entity = Entity(
+            id="e1",
+            name="Hero",
+            type="character",
+            description="A hero",
+            attributes={"traits": ["brave"]},
+        )
+
+        mock_calendar = MagicMock(spec=WorldCalendar)
+        world_db = MagicMock()
+        world_settings = MagicMock()
+        world_settings.calendar = mock_calendar
+        world_db.get_world_settings.return_value = world_settings
+        world_db.list_entities.return_value = [entity]
+
+        assert validation_service.auto_correct_era_names(world_db) == 0
+        world_db.update_entity.assert_not_called()
+
+    def test_skips_timestamp_with_unresolvable_era(self, validation_service):
+        """Timestamps whose year doesn't map to any era are skipped."""
+        entity = Entity(
+            id="e1",
+            name="Hero",
+            type="character",
+            description="A hero",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 5000, "era_name": "Unknown"},
+                }
+            },
+        )
+
+        mock_calendar = MagicMock(spec=WorldCalendar)
+        mock_calendar.get_era_for_year.return_value = None
+        world_db = MagicMock()
+        world_settings = MagicMock()
+        world_settings.calendar = mock_calendar
+        world_db.get_world_settings.return_value = world_settings
+        world_db.list_entities.return_value = [entity]
+
+        assert validation_service.auto_correct_era_names(world_db) == 0
+        world_db.update_entity.assert_not_called()
+
+    def test_skips_entity_with_non_dict_lifecycle_data(self, validation_service):
+        """Entities whose lifecycle attribute is not a dict are skipped at update time."""
+        from unittest.mock import patch
+
+        entity = Entity(
+            id="e1",
+            name="Hero",
+            type="character",
+            description="A hero",
+            attributes={"lifecycle": "not a dict"},
+        )
+
+        mock_era = MagicMock()
+        mock_era.name = "Golden Age"
+        mock_calendar = MagicMock(spec=WorldCalendar)
+        mock_calendar.get_era_for_year.return_value = mock_era
+
+        # Patch extract_lifecycle_from_attributes to return a valid lifecycle
+        # even though the raw data is a string (normally it'd return None).
+        fake_lifecycle = EntityLifecycle(birth=StoryTimestamp(year=200, era_name="Wrong Era"))
+        with patch(
+            "src.services.temporal_validation_service.extract_lifecycle_from_attributes",
+            return_value=fake_lifecycle,
+        ):
+            world_db = MagicMock()
+            world_settings = MagicMock()
+            world_settings.calendar = mock_calendar
+            world_db.get_world_settings.return_value = world_settings
+            world_db.list_entities.return_value = [entity]
+
+            assert validation_service.auto_correct_era_names(world_db) == 0
+            world_db.update_entity.assert_not_called()
+
+    def test_skips_non_dict_timestamp_entry_in_lifecycle(self, validation_service):
+        """Timestamp entries that are not dicts are skipped, leaving mutated=False."""
+        from unittest.mock import patch
+
+        entity = Entity(
+            id="e1",
+            name="Hero",
+            type="character",
+            description="A hero",
+            attributes={
+                "lifecycle": {
+                    "birth": "not a dict",  # Corrupted timestamp entry
+                }
+            },
+        )
+
+        mock_era = MagicMock()
+        mock_era.name = "Golden Age"
+        mock_calendar = MagicMock(spec=WorldCalendar)
+        mock_calendar.get_era_for_year.return_value = mock_era
+
+        # Fake lifecycle with a birth timestamp that has a year → triggers correction
+        fake_lifecycle = EntityLifecycle(birth=StoryTimestamp(year=200, era_name="Wrong Era"))
+        with patch(
+            "src.services.temporal_validation_service.extract_lifecycle_from_attributes",
+            return_value=fake_lifecycle,
+        ):
+            world_db = MagicMock()
+            world_settings = MagicMock()
+            world_settings.calendar = mock_calendar
+            world_db.get_world_settings.return_value = world_settings
+            world_db.list_entities.return_value = [entity]
+
+            # Correction identified but timestamp entry is a string, not dict →
+            # mutated stays False → no update
+            assert validation_service.auto_correct_era_names(world_db) == 0
+            world_db.update_entity.assert_not_called()
+
+
+class TestCheckLifespanPlausibility:
+    """Tests for check_lifespan_plausibility."""
+
+    def test_warns_on_implausible_lifespan(self, validation_service):
+        """Lifespan exceeding max triggers a warning."""
+        entity = Entity(id="e1", name="Ancient", type="character", description="Old")
+        lifecycle = EntityLifecycle(
+            birth=StoryTimestamp(year=100),
+            death=StoryTimestamp(year=500),
+        )
+        result = TemporalValidationResult()
+
+        validation_service.check_lifespan_plausibility(entity, lifecycle, result, max_lifespan=200)
+
+        assert len(result.warnings) == 1
+        assert "implausible" in result.warnings[0].message
+        assert "400 years" in result.warnings[0].message
+
+    def test_no_warning_for_normal_lifespan(self, validation_service):
+        """Normal lifespan does not trigger a warning."""
+        entity = Entity(id="e1", name="Mortal", type="character", description="Normal")
+        lifecycle = EntityLifecycle(
+            birth=StoryTimestamp(year=100),
+            death=StoryTimestamp(year=180),
+        )
+        result = TemporalValidationResult()
+
+        validation_service.check_lifespan_plausibility(entity, lifecycle, result)
+
+        assert len(result.warnings) == 0
+
+    def test_no_warning_when_lifespan_unavailable(self, validation_service):
+        """No warning when lifespan cannot be calculated."""
+        entity = Entity(id="e1", name="Unknown", type="character", description="?")
+        lifecycle = EntityLifecycle(
+            birth=StoryTimestamp(year=100),
+        )
+        result = TemporalValidationResult()
+
+        validation_service.check_lifespan_plausibility(entity, lifecycle, result)
+
+        assert len(result.warnings) == 0
+
+    def test_warns_for_faction_implausible_lifespan(self, validation_service):
+        """Faction with implausible founding-to-destruction span triggers warning."""
+        entity = Entity(id="f1", name="Old Order", type="faction", description="Ancient")
+        lifecycle = EntityLifecycle(
+            founding_year=100,
+            destruction_year=500,
+        )
+        result = TemporalValidationResult()
+
+        validation_service.check_lifespan_plausibility(entity, lifecycle, result, max_lifespan=200)
+
+        assert len(result.warnings) == 1
+        assert "400 years" in result.warnings[0].message

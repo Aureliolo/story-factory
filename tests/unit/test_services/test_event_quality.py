@@ -706,7 +706,7 @@ class TestGenerateEventsWithQualityBatch:
         results = service.generate_events_with_quality(
             story_state,
             existing_descriptions=["Existing event"],
-            entity_context="Test context",
+            entity_context_provider=lambda: "Test context",
             count=2,
         )
 

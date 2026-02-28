@@ -93,6 +93,7 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
     refine_with_initial_fn: Callable[[T], tuple[T, S, int]] | None = None,
     prepare_creator_fn: Callable[[], None] | None = None,
     prepare_judge_fn: Callable[[], None] | None = None,
+    register_created_fn: Callable[[T], None] | None = None,
 ) -> list[tuple[T, S]]:
     """Parallel batch generation using a rolling-window thread pool.
 
@@ -146,6 +147,10 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
         prepare_creator_fn: Callback to load the creator model into VRAM.
             Required for phased pipeline (may be ``None`` when models are
             the same, but phased pipeline is not used in that case).
+        register_created_fn: Optional callback invoked after an entity is
+            created in Phase 1.  Used for dedup registration (e.g. adding
+            the entity to the build pipeline's tracking).  Errors are
+            non-fatal — the entity proceeds to judging regardless.
         prepare_judge_fn: Callback to load the judge model into VRAM.
             Required for phased pipeline.
 
@@ -229,6 +234,7 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
             cancel_check=cancel_check,
             progress_callback=progress_callback,
             quality_threshold=quality_threshold,
+            register_created_fn=register_created_fn,
         )
 
     # Degenerate case: single worker → delegate to sequential
@@ -489,6 +495,7 @@ def _generate_batch_phased[T, S: BaseQualityScores](
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     quality_threshold: float | None = None,
+    register_created_fn: Callable[[T], None] | None = None,
 ) -> list[tuple[T, S]]:
     """Two-phase batch pipeline: batch creates, then batch judges.
 
@@ -524,6 +531,9 @@ def _generate_batch_phased[T, S: BaseQualityScores](
         cancel_check: Optional callable returning ``True`` to cancel.
         progress_callback: Optional progress update callback.
         quality_threshold: Quality threshold for pass/fail.
+        register_created_fn: Optional callback invoked after an entity is
+            created in Phase 1.  Used for dedup registration.  Errors are
+            non-fatal — the entity proceeds to judging regardless.
 
     Returns:
         List of ``(entity, scores)`` tuples.
@@ -587,6 +597,20 @@ def _generate_batch_phased[T, S: BaseQualityScores](
         try:
             entity = create_only_fn(i)
             if entity is not None and not is_empty_fn(entity):
+                entity_elapsed = time.time() - entity_start
+                completed_times.append(entity_elapsed)
+                if register_created_fn:
+                    try:
+                        register_created_fn(entity)
+                    except Exception as reg_err:
+                        logger.warning(
+                            "Phase 1: register_created_fn failed for %s %d/%d '%s': %s",
+                            entity_type,
+                            i + 1,
+                            count,
+                            get_name(entity),
+                            reg_err,
+                        )
                 created_entities.append((i, entity))
                 logger.debug(
                     "Phase 1: created %s %d/%d '%s' in %.2fs",
@@ -594,7 +618,7 @@ def _generate_batch_phased[T, S: BaseQualityScores](
                     i + 1,
                     count,
                     get_name(entity),
-                    time.time() - entity_start,
+                    entity_elapsed,
                 )
             else:
                 create_errors += 1

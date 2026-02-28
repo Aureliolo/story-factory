@@ -14,9 +14,9 @@ import ollama
 from src.memory.mode_models import VramStrategy
 from src.utils.validation import validate_not_empty
 
-# Track last prepared model to suppress repeated log messages
+# Track last prepared model+strategy to suppress repeated log messages
 _last_prepared_model_lock = threading.Lock()
-_last_prepared_model_id: str | None = None
+_last_prepared_model_key: tuple[str, str] | None = None  # (model_id, strategy)
 
 if TYPE_CHECKING:
     from src.services.model_mode_service import ModelModeService
@@ -61,11 +61,14 @@ def prepare_model(svc: ModelModeService, model_id: str) -> None:
         logger.error(error_msg)
         raise ValueError(error_msg) from e
 
-    global _last_prepared_model_id
+    global _last_prepared_model_key
+    cache_key = (model_id, strategy.value)
     with _last_prepared_model_lock:
-        if model_id != _last_prepared_model_id:
-            logger.debug("Preparing model %s with VRAM strategy: %s", model_id, strategy.value)
-            _last_prepared_model_id = model_id
+        if cache_key == _last_prepared_model_key:
+            logger.debug("Model %s already prepared, skipping VRAM preparation", model_id)
+            return
+        logger.debug("Preparing model %s with VRAM strategy: %s", model_id, strategy.value)
+        _last_prepared_model_key = cache_key
 
     if strategy == VramStrategy.SEQUENTIAL:
         # Unload all other models
@@ -91,6 +94,36 @@ def prepare_model(svc: ModelModeService, model_id: str) -> None:
 
     # Model will be loaded on first use by Ollama
     svc._loaded_models.add(model_id)
+
+    # M6: warn if model residency is below minimum threshold.
+    # Reuse `installed` and `available` from the ADAPTIVE branch when possible;
+    # otherwise fetch fresh values for the SEQUENTIAL path.
+    try:
+        if strategy != VramStrategy.ADAPTIVE:
+            # SEQUENTIAL path: need fresh values since they weren't fetched above
+            installed = get_installed_models_with_sizes()
+            from src.settings import get_available_vram
+
+            available = get_available_vram()
+        # `installed` and `available` are now set from either ADAPTIVE or fresh fetch
+        if model_id in installed:
+            model_size_gb = installed[model_id]
+            if model_size_gb > 0:
+                residency = min(available / model_size_gb, 1.0)
+                if residency < MIN_GPU_RESIDENCY:
+                    logger.warning(
+                        "Model %s GPU residency %.0f%% is below minimum %.0f%% "
+                        "(model=%.1fGB, available_vram=%.1fGB)",
+                        model_id,
+                        residency * 100,
+                        MIN_GPU_RESIDENCY * 100,
+                        model_size_gb,
+                        available,
+                    )
+    except (ConnectionError, TimeoutError, ollama.ResponseError, RuntimeError) as e:
+        logger.debug("Could not check GPU residency for %s: %s", model_id, e)
+    except Exception as e:
+        logger.warning("Unexpected error checking GPU residency for %s: %s", model_id, e)
 
 
 def unload_all_except(svc: ModelModeService, keep_model: str) -> None:
@@ -126,3 +159,13 @@ def unload_all_except(svc: ModelModeService, keep_model: str) -> None:
 
     # Only remove successfully unloaded models from tracking
     svc._loaded_models = (svc._loaded_models - successfully_unloaded) | {keep_model}
+
+    # Clear last-prepared cache when models are evicted so the next
+    # prepare_model() call for the kept model actually runs setup.
+    global _last_prepared_model_key
+    with _last_prepared_model_lock:
+        if _last_prepared_model_key and _last_prepared_model_key[0] in successfully_unloaded:
+            logger.debug(
+                "Cleared last-prepared model cache (evicted %s)", _last_prepared_model_key[0]
+            )
+            _last_prepared_model_key = None

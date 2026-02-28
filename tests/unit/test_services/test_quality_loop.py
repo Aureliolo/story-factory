@@ -17,6 +17,7 @@ import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import BaseModel
 
 from src.memory.world_quality import (
     CalendarQualityScores,
@@ -3761,3 +3762,252 @@ class TestPrepareModelCallbacks:
 
         # prepare_creator should be called before create in auto-pass path
         assert call_order == ["prepare_creator", "create"]
+
+
+class TestH1ThresholdMetViaBestIteration:
+    """Test H1 fix: threshold met but entity was reverted to best iteration."""
+
+    def test_returns_best_iteration_scores_when_reverted(self, mock_svc, config):
+        """When score regresses but still meets threshold, return best iteration's scores."""
+        config.max_iterations = 3
+        config.early_stopping_patience = 5
+        # dimension_minimum defaults to 6.0
+
+        entities = [{"name": "v1"}, {"name": "v2"}]
+        # Iteration 1: avg=9.0 (temporal excluded) but temporal_plausibility=3.0
+        #   → below_floor (3.0 < 6.0) → threshold check FAILS despite high avg
+        #   → best_iteration=1, peak_score=9.0
+        # Iteration 2: avg=8.5, min=8.5 → all dims above floor
+        #   → monotonicity: 8.5 < 9.0 peak → revert entity to iter 1
+        #   → threshold: 8.5 >= 8.0 AND best_iteration(1) != current_iter(2) → H1 path
+        iter1_scores = CharacterQualityScores(
+            depth=9.0,
+            goals=9.0,
+            flaws=9.0,
+            uniqueness=9.0,
+            arc_potential=9.0,
+            temporal_plausibility=3.0,  # below dimension_minimum 6.0
+            feedback="High avg but floor violation",
+        )
+        iter2_scores = _make_scores(8.5)
+        scores_sequence = [iter1_scores, iter2_scores]
+        call_idx = 0
+
+        def create_fn(retries):
+            """Return the first entity variant."""
+            return entities[0]
+
+        def judge_fn(entity):
+            """Return scores from the pre-defined sequence."""
+            nonlocal call_idx
+            s = scores_sequence[call_idx]
+            call_idx += 1
+            return s
+
+        def refine_fn(entity, scores, iteration):
+            """Return the second entity variant."""
+            return entities[1]
+
+        result_entity, result_scores, iterations = quality_refinement_loop(
+            entity_type="character",
+            create_fn=create_fn,
+            judge_fn=judge_fn,
+            refine_fn=refine_fn,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Should return entity from best iteration (v1) with its scores (9.0)
+        assert result_entity == {"name": "v1"}
+        assert result_scores.average == 9.0
+        assert iterations == 2
+
+
+class TestHailMaryEmptyEntity:
+    """Test hail-mary when create_fn returns empty on the hail-mary attempt."""
+
+    def test_hail_mary_empty_entity_keeps_original(self, mock_svc, config, caplog):
+        """Hail-mary returns empty entity — keeps original best."""
+        config.max_iterations = 2
+        config.early_stopping_patience = 5
+
+        mock_svc.analytics_db = MagicMock()
+        mock_svc.analytics_db.get_hail_mary_win_rate.return_value = None
+
+        entity = {"name": "Hero"}
+        low_scores = _make_scores(6.0)
+
+        create_call = 0
+
+        def create_fn(retries):
+            """Return entity on first call, None on hail-mary."""
+            nonlocal create_call
+            create_call += 1
+            if create_call == 1:
+                return entity
+            return None  # Hail-mary returns empty
+
+        with caplog.at_level(
+            logging.INFO, logger="src.services.world_quality_service._quality_loop"
+        ):
+            result_entity, _result_scores, _iterations = quality_refinement_loop(
+                entity_type="character",
+                create_fn=create_fn,
+                judge_fn=lambda e: low_scores,
+                refine_fn=lambda e, s, i: {"name": "Hero v2"},
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
+
+        assert result_entity is not None
+        assert any("hail-mary returned empty entity" in msg for msg in caplog.messages)
+
+    def test_hail_mary_create_raises_error_keeps_original(self, mock_svc, config, caplog):
+        """Hail-mary create_fn raises WorldGenerationError — keeps original best."""
+        config.max_iterations = 2
+        config.early_stopping_patience = 5
+
+        mock_svc.analytics_db = MagicMock()
+        mock_svc.analytics_db.get_hail_mary_win_rate.return_value = None
+
+        entity = {"name": "Hero"}
+        low_scores = _make_scores(6.0)
+
+        create_call = 0
+
+        def create_fn(retries):
+            """Return entity on first call, raise on hail-mary."""
+            nonlocal create_call
+            create_call += 1
+            if create_call == 1:
+                return entity
+            raise WorldGenerationError("LLM unavailable")
+
+        with caplog.at_level(
+            logging.WARNING, logger="src.services.world_quality_service._quality_loop"
+        ):
+            result_entity, _result_scores, _iterations = quality_refinement_loop(
+                entity_type="character",
+                create_fn=create_fn,
+                judge_fn=lambda e: low_scores,
+                refine_fn=lambda e, s, i: {"name": "Hero v2"},
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
+
+        assert result_entity is not None
+        assert any("hail-mary failed" in msg for msg in caplog.messages)
+
+
+class TestReconstructEntityPydanticModel:
+    """Test _reconstruct_entity with Pydantic model entities."""
+
+    def test_monotonicity_revert_with_pydantic_model(self, mock_svc, config):
+        """Monotonicity guard correctly reconstructs Pydantic model entities."""
+        config.max_iterations = 3
+        config.early_stopping_patience = 5
+
+        class SimpleEntity(BaseModel):
+            name: str
+
+        v1 = SimpleEntity(name="v1")
+        v2 = SimpleEntity(name="v2")
+
+        # Iter 1: 7.0 (below threshold)
+        # Iter 2: 9.0 (above threshold, above floor) → returns
+        scores_list = [_make_scores(7.0), _make_scores(9.0)]
+        call_idx = 0
+
+        def judge_fn(entity):
+            """Return scores in sequence."""
+            nonlocal call_idx
+            s = scores_list[call_idx]
+            call_idx += 1
+            return s
+
+        result_entity, result_scores, iterations = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: v1,
+            judge_fn=judge_fn,
+            refine_fn=lambda e, s, i: v2,
+            get_name=lambda e: e.name,
+            serialize=lambda e: e.model_dump(),
+            is_empty=lambda e: not e.name,
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        assert result_entity.name == "v2"
+        assert result_scores.average == 9.0
+        assert iterations == 2
+
+    def test_pydantic_model_revert_via_monotonicity(self, mock_svc, config):
+        """Monotonicity guard reconstructs Pydantic entity from stored dict data."""
+        config.max_iterations = 3
+        config.early_stopping_patience = 5
+
+        class SimpleEntity(BaseModel):
+            name: str
+
+        v1 = SimpleEntity(name="v1")
+        v2 = SimpleEntity(name="v2")
+
+        # Iter 1: 8.5 (above threshold, but temporal=3.0 → below floor)
+        # Iter 2: 8.0 (above threshold, all dims ok, regressed → revert to v1)
+        #   → entity_reverted=True → H1 path → best scores violate floor → continue
+        # Re-enter: refine produces v2 again → unchanged output → break
+        # Post-loop: return best (v1)
+        iter1_scores = CharacterQualityScores(
+            depth=8.5,
+            goals=8.5,
+            flaws=8.5,
+            uniqueness=8.5,
+            arc_potential=8.5,
+            temporal_plausibility=3.0,
+            feedback="Floor violation",
+        )
+        iter2_scores = _make_scores(8.0)
+        scores_sequence = [iter1_scores, iter2_scores]
+        call_idx = 0
+
+        def judge_fn(entity):
+            """Return scores from sequence."""
+            nonlocal call_idx
+            s = scores_sequence[call_idx]
+            call_idx += 1
+            return s
+
+        result_entity, _result_scores, _iterations = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: v1,
+            judge_fn=judge_fn,
+            refine_fn=lambda e, s, i: v2,
+            get_name=lambda e: e.name,
+            serialize=lambda e: e.model_dump(),
+            is_empty=lambda e: not e.name,
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Result should be v1 (best iteration) reconstructed from stored data
+        assert isinstance(result_entity, SimpleEntity)
+        assert result_entity.name == "v1"

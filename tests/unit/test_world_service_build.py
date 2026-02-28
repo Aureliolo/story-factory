@@ -572,7 +572,7 @@ class TestGenerateLocations:
 
         # Verify all entity names are passed (cross-type collision detection)
         call_args = mock_services.world_quality.generate_locations_with_quality.call_args
-        existing_names = call_args[0][1]  # Second positional arg
+        existing_names = call_args.kwargs["name_provider"]()
         assert "Castle" in existing_names
         assert "Hero" in existing_names
         assert "Guild" in existing_names
@@ -1005,11 +1005,8 @@ class TestGenerateEvents:
         world_service._generate_events(sample_story_state, mock_world_db, mock_services)
 
         call_args = mock_services.world_quality.generate_events_with_quality.call_args
-        entity_context = (
-            call_args.args[2]
-            if len(call_args.args) > 2
-            else call_args.kwargs.get("entity_context", "")
-        )
+        entity_context_provider = call_args.kwargs["entity_context_provider"]
+        entity_context = entity_context_provider()
         assert "birth_year=1200" in entity_context
         assert "death_year=1260" in entity_context
 
@@ -1099,7 +1096,7 @@ class TestGenerateEvents:
             count = world_service._generate_events(sample_story_state, mock_world_db, mock_services)
 
         assert count == 1
-        assert "Could not resolve event participant" in caplog.text
+        assert "Dropped 1 unresolved event participant(s)" in caplog.text
         assert "NonExistentEntity" in caplog.text
 
     def test_event_min_max_swap(
@@ -1117,9 +1114,7 @@ class TestGenerateEvents:
         assert "Invalid event count range: min=10 > max=3, swapping" in caplog.text
         # After swap, min=3 max=10, so event_count is in [3, 10]
         call_args = mock_services.world_quality.generate_events_with_quality.call_args
-        event_count = (
-            call_args.args[3] if len(call_args.args) > 3 else call_args.kwargs.get("event_count")
-        )
+        event_count = call_args.kwargs["count"]
         assert 3 <= event_count <= 10
 
     def test_event_add_db_error_nonfatal(
@@ -1969,7 +1964,7 @@ class TestCrossTypeNameFiltering:
         world_service._generate_factions(sample_story_state, mock_world_db, mock_services)
 
         call_args = mock_services.world_quality.generate_factions_with_quality.call_args
-        names_arg = call_args[0][1]  # Second positional arg = existing_names
+        names_arg = call_args.kwargs["name_provider"]()
         # Should contain ALL entity names for cross-type collision detection
         assert "Knights" in names_arg
         assert "Dark Forest" in names_arg
@@ -1988,7 +1983,7 @@ class TestCrossTypeNameFiltering:
         world_service._generate_items(sample_story_state, mock_world_db, mock_services)
 
         call_args = mock_services.world_quality.generate_items_with_quality.call_args
-        names_arg = call_args[0][1]  # Second positional arg
+        names_arg = call_args.kwargs["name_provider"]()
         assert "Magic Sword" in names_arg
         assert "Castle" in names_arg
         assert "Honor" in names_arg
@@ -2006,7 +2001,7 @@ class TestCrossTypeNameFiltering:
         world_service._generate_concepts(sample_story_state, mock_world_db, mock_services)
 
         call_args = mock_services.world_quality.generate_concepts_with_quality.call_args
-        names_arg = call_args[0][1]  # Second positional arg
+        names_arg = call_args.kwargs["name_provider"]()
         assert "The Echo" in names_arg
         assert "Wizard" in names_arg
         assert "Mages Guild" in names_arg

@@ -292,7 +292,7 @@ Rate each dimension 0-10:
 - influence: World impact, power level
 - conflict_potential: Story conflict opportunities
 - distinctiveness: Memorable, unique qualities
-- temporal_plausibility: VERIFY against CALENDAR above — founding year and active period MUST fall within defined era ranges. Score 8-10 ONLY if founding year and era references are consistent with the calendar AND are self-consistent. Score 5-7 if temporal data is present but era alignment is unclear. Score 2-4 if founding year or era references conflict with defined eras. If founding year is "N/A" (not yet assigned), score 5.0 (neutral — date is pending, not wrong). If the CALENDAR block states "No calendar available", score 5.0 (insufficient context to verify).
+- temporal_plausibility: VERIFY against CALENDAR above — founding year and active period MUST fall within defined era ranges. Score 8-10 ONLY if founding year and era references are consistent with the calendar AND are self-consistent. Score 6-7 if temporal data is present and plausible but with minor ambiguity. Score 4-5 if dates exist but era alignment is unclear or missing. Score 2-3 if founding year or era references conflict with defined eras. Score 1 for outright contradictions. If founding year is "N/A" (not yet assigned), score 5.0 (neutral — date is pending, not wrong). If the CALENDAR block states "No calendar available", score 5.0 (insufficient context to verify). Do NOT use binary 5/10 scoring — use the full range.
 
 Provide specific, actionable feedback for improvement in the feedback field.
 

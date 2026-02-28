@@ -235,6 +235,36 @@ class TestEmbedEntityTruncation:
         # No truncation warnings
         assert not any("Truncating" in r.message for r in caplog.records)
 
+    def test_embed_entity_truncation_uses_sentence_boundary(self, service, mock_db):
+        """Truncation prefers sentence boundaries when available in the second half."""
+        # Build text with clear sentence boundaries that exceeds budget.
+        sentences = "First sentence. Second sentence. Third sentence. Fourth sentence. "
+        text = sentences * 20  # ~1300 chars, plenty to exceed a small budget
+        entity = Entity(
+            id="ent-sent",
+            type="character",
+            name="A",
+            description=text,
+        )
+        mock_client = MagicMock()
+        mock_embed_text = MagicMock(return_value=FAKE_EMBEDDING)
+        # header = "A: " (3 chars), prefix = "" → overhead = 3
+        # context_limit = 60, margin = 10 → max_chars = (60 - 10) * 2 = 100
+        # available_for_desc = 100 - 3 = 97
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch("src.services.embedding_service.get_model_context_size", return_value=60),
+            patch("src.services.embedding_service.get_embedding_prefix", return_value=""),
+            patch.object(service, "embed_text", mock_embed_text),
+        ):
+            service.embed_entity(mock_db, entity)
+
+        embedded_text = mock_embed_text.call_args[0][0]
+        # Description part should end at a sentence boundary (period)
+        desc_part = embedded_text[len("A: ") :]
+        assert desc_part.endswith(".")
+        assert len(desc_part) <= 97
+
     def test_embed_entity_truncation_preserves_exact_budget(self, service, mock_db):
         """Truncated description length matches the available character budget exactly."""
         entity = Entity(

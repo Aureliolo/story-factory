@@ -108,6 +108,50 @@ class TestBuildCharacterLifecycle:
         result = build_character_lifecycle(char)
         assert result == {"lifecycle": {"death": {"year": 500, "era_name": "Dark Age"}}}
 
+    def test_negative_death_year_treated_as_alive(self):
+        """Character with negative death_year has death omitted (LLM sentinel)."""
+        char = Character(
+            name="Test",
+            role="protagonist",
+            description="A test character",
+            death_year=-999,
+        )
+        result = build_character_lifecycle(char)
+        # Negative death_year is rejected as an LLM sentinel — no lifecycle data remains
+        assert result == {}
+
+    def test_negative_death_year_with_era_keeps_era(self):
+        """Character with negative death_year but valid era keeps era in death dict.
+
+        The Character model validator rejects sentinel death_year values (< 0)
+        at construction, setting death_year to None.  The era survives because
+        the lifecycle helper only guards on death_year being negative — which
+        it never is by the time it reaches the helper.
+        """
+        char = Character(
+            name="Test",
+            role="protagonist",
+            description="A test character",
+            death_year=-1,
+            death_era="Final Age",
+        )
+        result = build_character_lifecycle(char)
+        # death_year=-1 is rejected by the Character validator → None at model level,
+        # so the lifecycle helper sees death_year=None + death_era="Final Age" → era preserved
+        assert result == {"lifecycle": {"death": {"era_name": "Final Age"}}}
+
+    def test_negative_death_year_with_birth_data(self):
+        """Character with negative death_year still has valid birth data."""
+        char = Character(
+            name="Test",
+            role="protagonist",
+            description="A test character",
+            birth_year=100,
+            death_year=-50,
+        )
+        result = build_character_lifecycle(char)
+        assert result == {"lifecycle": {"birth": {"year": 100}}}
+
     def test_birth_year_and_era(self):
         """Character with birth_year and birth_era produces both in birth dict."""
         char = Character(

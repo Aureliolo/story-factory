@@ -2,6 +2,7 @@
 
 from src.services.world_quality_service._formatting import (
     calculate_eta,
+    check_name_completeness,
     format_existing_names_warning,
     format_properties,
 )
@@ -11,7 +12,7 @@ class TestCalculateEta:
     """Tests for the ETA calculation function."""
 
     def test_returns_none_for_empty_times(self):
-        """Test that None is returned when no completed times are provided."""
+        """Test that None is returned when no completed times and no initial estimate."""
         assert calculate_eta([], 5) is None
 
     def test_returns_none_for_zero_remaining(self):
@@ -137,3 +138,58 @@ class TestFormatExistingNamesWarning:
         result = format_existing_names_warning(["Alice"], "character")
         assert result.startswith("<existing-characters>")
         assert result.endswith("</existing-characters>")
+
+
+class TestCalculateEtaInitialEstimate:
+    """Tests for calculate_eta with initial_estimate_seconds parameter."""
+
+    def test_initial_estimate_used_when_no_completed_times(self):
+        """Initial estimate provides fallback when completed_times is empty."""
+        result = calculate_eta([], 5, initial_estimate_seconds=10.0)
+        assert result == 50.0
+
+    def test_initial_estimate_ignored_when_completed_times_present(self):
+        """Initial estimate is ignored when actual data is available."""
+        result = calculate_eta([10.0], 5, initial_estimate_seconds=100.0)
+        assert result == 50.0
+
+    def test_initial_estimate_none_falls_back_to_none(self):
+        """None initial_estimate still returns None when no data."""
+        assert calculate_eta([], 5, initial_estimate_seconds=None) is None
+
+    def test_initial_estimate_with_zero_remaining(self):
+        """Zero remaining returns None even with initial estimate."""
+        assert calculate_eta([], 0, initial_estimate_seconds=10.0) is None
+
+
+class TestCheckNameCompleteness:
+    """Tests for check_name_completeness."""
+
+    def test_complete_name_returns_true(self):
+        """Normal complete names are detected as complete."""
+        assert check_name_completeness("Gandalf the Grey") is True
+
+    def test_truncated_name_returns_false(self):
+        """Name ending in a short non-word is flagged as truncated."""
+        assert check_name_completeness("The Kingdom of Ar") is False
+
+    def test_valid_short_ending_returns_true(self):
+        """Names ending in common short words are not flagged."""
+        assert check_name_completeness("City of the") is True
+
+    def test_empty_name_returns_true(self):
+        """Empty or very short names are too short to judge."""
+        assert check_name_completeness("") is True
+        assert check_name_completeness("Hi") is True
+
+    def test_single_word_short_returns_true(self):
+        """Single-word names are not flagged even if short."""
+        assert check_name_completeness("Al") is True
+
+    def test_name_with_trailing_punctuation(self):
+        """Trailing punctuation is stripped before checking."""
+        assert check_name_completeness("The Great Wall.") is True
+
+    def test_whitespace_only_returns_true(self):
+        """Whitespace-only name stripped to empty words returns True."""
+        assert check_name_completeness("   ") is True
