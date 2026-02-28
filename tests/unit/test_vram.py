@@ -11,6 +11,7 @@ class TestPrepareModelShortCircuit:
     """Tests for the prepare_model short-circuit when same model is already prepared."""
 
     def _make_service(self) -> MagicMock:
+        """Create a mock service with VRAM settings for testing."""
         mock_settings = MagicMock(spec=Settings)
         mock_settings.ollama_url = "http://localhost:11434"
         mock_settings.vram_strategy = VramStrategy.SEQUENTIAL.value
@@ -69,10 +70,40 @@ class TestPrepareModelShortCircuit:
         assert "model-b:8b" in svc._loaded_models
 
 
+class TestPrepareModelResidencyCheck:
+    """Tests for GPU residency check in prepare_model."""
+
+    def setup_method(self) -> None:
+        """Reset the module-level cache before each test."""
+        with _vram._last_prepared_model_lock:
+            _vram._last_prepared_model_id = None
+
+    @patch("src.settings.get_available_vram", side_effect=RuntimeError("GPU info unavailable"))
+    @patch("src.settings.get_installed_models_with_sizes", return_value={"test-model:8b": 4.0})
+    @patch("src.settings.get_model_info")
+    def test_residency_check_exception_logged(
+        self,
+        _mock_info: MagicMock,
+        _mock_installed: MagicMock,
+        _mock_vram: MagicMock,
+    ) -> None:
+        """Exception in residency check is caught and logged at debug level."""
+        svc = MagicMock()
+        svc.settings = MagicMock(spec=Settings)
+        svc.settings.vram_strategy = VramStrategy.SEQUENTIAL.value
+        svc._loaded_models = set()
+        svc._ollama_client = MagicMock()
+
+        # Should not raise — the exception is caught inside prepare_model
+        _vram.prepare_model(svc, "test-model:8b")
+        assert "test-model:8b" in svc._loaded_models
+
+
 class TestUnloadClearsLastPreparedCache:
     """Tests that unloading models clears the last-prepared cache."""
 
     def setup_method(self) -> None:
+        """Reset the module-level cache before each test."""
         with _vram._last_prepared_model_lock:
             _vram._last_prepared_model_id = None
 

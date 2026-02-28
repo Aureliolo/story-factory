@@ -3761,3 +3761,67 @@ class TestPrepareModelCallbacks:
 
         # prepare_creator should be called before create in auto-pass path
         assert call_order == ["prepare_creator", "create"]
+
+
+class TestH1ThresholdMetViaBestIteration:
+    """Test H1 fix: threshold met but entity was reverted to best iteration."""
+
+    def test_returns_best_iteration_scores_when_reverted(self, mock_svc, config):
+        """When score regresses but still meets threshold, return best iteration's scores."""
+        config.max_iterations = 3
+        config.early_stopping_patience = 5
+        # dimension_minimum defaults to 6.0
+
+        entities = [{"name": "v1"}, {"name": "v2"}]
+        # Iteration 1: avg=9.0 (temporal excluded) but temporal_plausibility=3.0
+        #   → below_floor (3.0 < 6.0) → threshold check FAILS despite high avg
+        #   → best_iteration=1, peak_score=9.0
+        # Iteration 2: avg=8.5, min=8.5 → all dims above floor
+        #   → monotonicity: 8.5 < 9.0 peak → revert entity to iter 1
+        #   → threshold: 8.5 >= 8.0 AND best_iteration(1) != current_iter(2) → H1 path
+        iter1_scores = CharacterQualityScores(
+            depth=9.0,
+            goals=9.0,
+            flaws=9.0,
+            uniqueness=9.0,
+            arc_potential=9.0,
+            temporal_plausibility=3.0,  # below dimension_minimum 6.0
+            feedback="High avg but floor violation",
+        )
+        iter2_scores = _make_scores(8.5)
+        scores_sequence = [iter1_scores, iter2_scores]
+        call_idx = 0
+
+        def create_fn(retries):
+            """Return the first entity variant."""
+            return entities[0]
+
+        def judge_fn(entity):
+            """Return scores from the pre-defined sequence."""
+            nonlocal call_idx
+            s = scores_sequence[call_idx]
+            call_idx += 1
+            return s
+
+        def refine_fn(entity, scores, iteration):
+            """Return the second entity variant."""
+            return entities[1]
+
+        result_entity, result_scores, iterations = quality_refinement_loop(
+            entity_type="character",
+            create_fn=create_fn,
+            judge_fn=judge_fn,
+            refine_fn=refine_fn,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Should return entity from best iteration (v1) with its scores (9.0)
+        assert result_entity == {"name": "v1"}
+        assert result_scores.average == 9.0
+        assert iterations == 2

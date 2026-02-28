@@ -189,3 +189,7 @@ class TestCheckNameCompleteness:
     def test_name_with_trailing_punctuation(self):
         """Trailing punctuation is stripped before checking."""
         assert check_name_completeness("The Great Wall.") is True
+
+    def test_whitespace_only_returns_true(self):
+        """Whitespace-only name stripped to empty words returns True."""
+        assert check_name_completeness("   ") is True

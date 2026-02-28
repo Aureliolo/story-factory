@@ -935,7 +935,13 @@ class TestVramStrategyIntegration:
         """SEQUENTIAL strategy should unload other models."""
         from unittest.mock import patch
 
+        from src.services.model_mode_service import _vram
+
         service.settings.vram_strategy = "sequential"
+
+        # Reset the module-level short-circuit cache so prepare_model runs full preparation
+        with _vram._last_prepared_model_lock:
+            _vram._last_prepared_model_id = None
 
         with patch("src.services.model_mode_service._vram.unload_all_except") as mock_unload:
             service.prepare_model("huihui_ai/dolphin3-abliterated:8b")
