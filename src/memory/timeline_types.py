@@ -574,7 +574,10 @@ def _format_timestamp_dict(data: dict[str, Any]) -> str:
     return ", ".join(parts)
 
 
-def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifecycle | None:
+def extract_lifecycle_from_attributes(
+    attributes: dict[str, Any],
+    calendar: WorldCalendar | None = None,
+) -> EntityLifecycle | None:
     """
     Build an EntityLifecycle from an attributes dictionary's "lifecycle" entry.
 
@@ -587,6 +590,9 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
     Parameters:
         attributes (dict[str, Any]): Entity attributes; may include a "lifecycle"
             mapping describing timestamp data.
+        calendar (WorldCalendar | None): Optional calendar for era_name backfill.
+            When provided, timestamps with a year but no era_name get their
+            era_name resolved from the calendar.
 
     Returns:
         EntityLifecycle constructed from the "lifecycle" data, or `None` if the
@@ -669,6 +675,25 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
     destruction = lifecycle_data.get("destruction_year")
     if destruction is not None:
         result.destruction_year = parse_year(destruction, "destruction_year")
+
+    # Backfill era_name from calendar when year is known but era_name is missing
+    if calendar is not None:
+        for ts_label, ts in [
+            ("birth", result.birth),
+            ("death", result.death),
+            ("first_appearance", result.first_appearance),
+            ("last_appearance", result.last_appearance),
+        ]:
+            if ts is not None and ts.year is not None and not ts.era_name:
+                era = calendar.get_era_for_year(ts.year)
+                if era is not None:
+                    ts.era_name = era.name
+                    logger.debug(
+                        "Backfilled %s era_name='%s' from calendar for year %d",
+                        ts_label,
+                        era.name,
+                        ts.year,
+                    )
 
     logger.debug(
         "Extracted lifecycle: birth=%s, death=%s, founding=%s, destruction=%s",

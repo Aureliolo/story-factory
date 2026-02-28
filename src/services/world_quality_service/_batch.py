@@ -671,6 +671,10 @@ def generate_relationships_with_quality(
     and the atomic ``append_if_new_pair()`` dedup catches any duplicates that
     concurrent workers may produce from identical snapshots.
 
+    When the creator and judge models differ, a **phased pipeline** is used:
+    batch all creates under one model load, then batch all judges under
+    another model load, reducing GPU swaps from ~2N to ~4.
+
     Args:
         svc: WorldQualityService instance.
         story_state: Current story state.
@@ -686,13 +690,18 @@ def generate_relationships_with_quality(
     Raises:
         WorldGenerationError: If no relationships could be generated.
     """
+    from src.memory.conflict_types import normalize_relation_type
     from src.services.world_quality_service._batch_parallel import (
         _generate_batch_parallel,
         _ThreadSafeRelsList,
     )
+    from src.services.world_quality_service._relationship import (
+        _is_duplicate_relationship,
+    )
 
     safe_rels = _ThreadSafeRelsList(existing_rels)
     max_workers = min(svc.settings.llm_max_concurrent_requests, count)
+    config = svc.get_config()
 
     def _on_relationship_success(r: dict[str, Any]) -> None:
         """Atomic dedup: reject if a concurrent worker already produced this pair."""
@@ -700,6 +709,131 @@ def generate_relationships_with_quality(
         if not accepted:
             raise DuplicateNameError(
                 f"Duplicate relationship from parallel worker: {r['source']} -> {r['target']}"
+            )
+
+    # ── Phased pipeline callables ───────────────────────────────────────
+    # These are used only when creator != judge to enable the two-phase
+    # batch pipeline (batch creates → batch judges → refine failures).
+
+    def _create_only(_i: int) -> dict[str, Any] | None:
+        """Create a single relationship without judging.
+
+        Wraps ``svc._create_relationship`` with the current snapshot of
+        existing relationships for deduplication.
+        """
+        try:
+            rel: dict[str, Any] = svc._create_relationship(
+                story_state,
+                entity_names,
+                safe_rels.snapshot(),
+                config.creator_temperature,
+            )
+            return rel if rel else None
+        except (WorldGenerationError, ValueError) as e:
+            logger.warning("Phased create failed: %s", e)
+            return None
+
+    def _is_empty_rel(rel: dict[str, Any]) -> bool:
+        """Check if a relationship is empty or a duplicate.
+
+        Simplified version of the ``_is_empty`` closure in
+        ``generate_relationship_with_quality`` — no ``required_entity``
+        support since the batch path does not use it.
+        """
+        if not rel.get("source") or not rel.get("target"):
+            return True
+        source = rel.get("source", "")
+        target = rel.get("target", "")
+        raw_type = rel.get("relation_type") or "related_to"
+        normalize_relation_type(raw_type)
+        if _is_duplicate_relationship(source, target, safe_rels.snapshot()):
+            logger.warning(
+                "Phased pipeline: duplicate relationship %s -> %s, rejecting",
+                source,
+                target,
+            )
+            return True
+        return False
+
+    def _judge_only(rel: dict[str, Any]) -> RelationshipQualityScores:
+        """Judge a single relationship without creating or refining."""
+        result: RelationshipQualityScores = svc._judge_relationship_quality(
+            rel,
+            story_state,
+            config.judge_temperature,
+        )
+        return result
+
+    def _refine_with_initial(
+        initial_rel: dict[str, Any],
+    ) -> tuple[dict[str, Any], RelationshipQualityScores, int]:
+        """Run the full quality refinement loop with an initial entity.
+
+        Falls back to the per-entity ``quality_refinement_loop`` which
+        handles early-stopping, hail-mary, analytics, and model preparation.
+        """
+        from src.services.world_quality_service._quality_loop import quality_refinement_loop
+
+        prep_creator, prep_judge = svc._make_model_preparers("relationship")
+        return quality_refinement_loop(
+            entity_type="relationship",
+            create_fn=lambda retries: svc._create_relationship(
+                story_state,
+                entity_names,
+                safe_rels.snapshot(),
+                config.creator_temperature,
+            ),
+            judge_fn=lambda rel: svc._judge_relationship_quality(
+                rel,
+                story_state,
+                config.judge_temperature,
+            ),
+            refine_fn=lambda rel, scores, iteration: svc._refine_relationship(
+                rel,
+                scores,
+                story_state,
+                config.get_refinement_temperature(iteration),
+            ),
+            get_name=lambda rel: f"{rel.get('source', '?')} -> {rel.get('target', '?')}",
+            serialize=lambda rel: rel.copy(),
+            is_empty=_is_empty_rel,
+            score_cls=RelationshipQualityScores,
+            config=config,
+            svc=svc,
+            story_id=story_state.id,
+            initial_entity=initial_rel,
+            prepare_creator=prep_creator,
+            prepare_judge=prep_judge,
+        )
+
+    # Resolve model preparers and determine whether models differ.  The
+    # phased pipeline callables are only passed when creator != judge, so
+    # `_generate_batch_parallel` can use the phased path.  When models are
+    # the same, phased batching has no benefit (no GPU swap to eliminate).
+    _phased_kwargs: dict[str, Any] = {}
+    if max_workers > 1:
+        try:
+            prep_creator, prep_judge = svc._make_model_preparers("relationship")
+            # _make_model_preparers returns (None, None) when models are the
+            # same.  Only enable phased callables when at least one preparer
+            # is non-None (i.e. models actually differ).
+            if prep_creator is not None or prep_judge is not None:
+                _phased_kwargs = {
+                    "create_only_fn": _create_only,
+                    "judge_only_fn": _judge_only,
+                    "is_empty_fn": _is_empty_rel,
+                    "refine_with_initial_fn": _refine_with_initial,
+                    "prepare_creator_fn": prep_creator,
+                    "prepare_judge_fn": prep_judge,
+                }
+                logger.debug(
+                    "Phased pipeline callables prepared for relationship batch (creator != judge)"
+                )
+        except Exception as e:
+            logger.warning(
+                "Failed to resolve model preparers for phased pipeline: %s. "
+                "Falling back to sequential path.",
+                e,
             )
 
     return _generate_batch_parallel(
@@ -714,6 +848,7 @@ def generate_relationships_with_quality(
         cancel_check=cancel_check,
         progress_callback=progress_callback,
         max_workers=max_workers,
+        **_phased_kwargs,
     )
 
 

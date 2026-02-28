@@ -9,6 +9,8 @@ import logging
 from collections.abc import Iterator
 from typing import Any
 
+import httpcore
+
 logger = logging.getLogger(__name__)
 
 
@@ -30,12 +32,20 @@ def consume_stream(stream: Iterator[Any]) -> dict[str, Any]:
     prompt_eval_count: int | None = None
     eval_count: int | None = None
 
-    for chunk in stream:
-        if chunk.message and chunk.message.content:
-            content_parts.append(chunk.message.content)
-        if chunk.done:
-            prompt_eval_count = getattr(chunk, "prompt_eval_count", None)
-            eval_count = getattr(chunk, "eval_count", None)
+    try:
+        for chunk in stream:
+            if chunk.message and chunk.message.content:
+                content_parts.append(chunk.message.content)
+            if chunk.done:
+                prompt_eval_count = getattr(chunk, "prompt_eval_count", None)
+                eval_count = getattr(chunk, "eval_count", None)
+    except (
+        httpcore.RemoteProtocolError,
+        httpcore.ReadError,
+        httpcore.NetworkError,
+    ) as e:
+        logger.error("Ollama stream interrupted mid-response: %s", e)
+        raise ConnectionError(f"Ollama stream interrupted: {e}") from e
 
     content = "".join(content_parts)
     logger.debug("Stream consumed: %d content chunks, %d chars", len(content_parts), len(content))

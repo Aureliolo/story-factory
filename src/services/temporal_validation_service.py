@@ -571,6 +571,28 @@ class TemporalValidationService:
         if resolved_era is None:
             return
 
+        # Check year-within-era boundaries
+        era_end = resolved_era.end_year if resolved_era.end_year is not None else timestamp.year
+        if not (resolved_era.start_year <= timestamp.year <= era_end):
+            boundary_warning = TemporalValidationIssue(
+                entity_id=entity.id,
+                entity_name=entity.name,
+                entity_type=entity.type,
+                error_type=TemporalErrorType.INVALID_ERA,
+                severity=TemporalErrorSeverity.WARNING,
+                message=(
+                    f"Year {timestamp.year} on {date_label} date falls outside "
+                    f"era '{resolved_era.name}' boundaries "
+                    f"({resolved_era.start_year}-{era_end})"
+                ),
+                suggestion=(
+                    f"Adjust year to fall within era '{resolved_era.name}' "
+                    f"({resolved_era.start_year}-{era_end}), or change era assignment"
+                ),
+            )
+            result.warnings.append(boundary_warning)
+            logger.warning("Temporal warning: %s", boundary_warning.message)
+
         if _normalize_era_name(timestamp.era_name) != _normalize_era_name(resolved_era.name):
             warning = TemporalValidationIssue(
                 entity_id=entity.id,

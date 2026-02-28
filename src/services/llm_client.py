@@ -10,6 +10,7 @@ import logging
 import threading
 import time
 
+import httpcore
 import httpx
 import ollama
 from pydantic import BaseModel, ValidationError
@@ -274,7 +275,15 @@ def generate_structured[T: BaseModel](
             if attempt < max_retries - 1:
                 continue  # Retry with same prompt
 
-        except (ConnectionError, TimeoutError, httpx.TimeoutException, httpx.TransportError) as e:
+        except (
+            ConnectionError,
+            TimeoutError,
+            httpx.TimeoutException,
+            httpx.TransportError,
+            httpcore.RemoteProtocolError,
+            httpcore.ReadError,
+            httpcore.NetworkError,
+        ) as e:
             last_error = e
             logger.warning(
                 "Transient error in structured output (attempt %d/%d): %s",

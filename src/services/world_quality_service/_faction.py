@@ -77,6 +77,8 @@ def generate_faction_with_quality(
 
     prep_creator, prep_judge = svc._make_model_preparers("faction")
 
+    rejected_names: list[str] = []
+
     return quality_refinement_loop(
         entity_type="faction",
         create_fn=lambda retries: svc._create_faction(
@@ -84,6 +86,7 @@ def generate_faction_with_quality(
             existing_names,
             retry_temperature(config, retries),
             existing_locations,
+            rejected_names=rejected_names,
         ),
         judge_fn=lambda fac: svc._judge_faction_quality(
             fac,
@@ -98,7 +101,7 @@ def generate_faction_with_quality(
         ),
         get_name=lambda fac: fac.get("name", "Unknown"),
         serialize=lambda fac: fac.copy(),
-        is_empty=lambda fac: not fac.get("name"),
+        is_empty=lambda fac: not fac.get("name") or len(fac.get("description", "")) < 50,
         score_cls=FactionQualityScores,
         config=config,
         svc=svc,
@@ -114,6 +117,7 @@ def _create_faction(
     existing_names: list[str],
     temperature: float,
     existing_locations: list[str] | None = None,
+    rejected_names: list[str] | None = None,
 ) -> dict[str, Any]:
     """Generate a unique faction definition for the given story using the configured creator model.
 
@@ -123,6 +127,8 @@ def _create_faction(
         existing_names: Existing faction names to avoid.
         temperature: Sampling temperature for the creator model.
         existing_locations: Optional list of world locations.
+        rejected_names: Names rejected as duplicates, fed back into the prompt to avoid
+            regeneration.
 
     Returns:
         A faction dictionary. Returns empty dict when retry needed.
@@ -130,8 +136,13 @@ def _create_faction(
     Raises:
         WorldGenerationError: If faction generation fails due to unrecoverable errors.
     """
+    if rejected_names is None:
+        rejected_names = []
     logger.debug(
-        "Creating faction for story %s (existing: %d)", story_state.id, len(existing_names)
+        "Creating faction for story %s (existing: %d, rejected: %d)",
+        story_state.id,
+        len(existing_names),
+        len(rejected_names),
     )
     brief = story_state.brief
     if not brief:
@@ -172,7 +183,7 @@ STRICT RULES:
 - Names that contain existing faction names are NOT acceptable
 - Prefix variations (e.g., "The Order" vs "Order") are NOT acceptable
 - Create something COMPLETELY DIFFERENT from the above
-{location_context}
+{f"REJECTED NAMES (do NOT reuse): {', '.join(rejected_names)}" if rejected_names else ""}{location_context}
 === DIVERSITY GUIDANCE (follow these for this faction) ===
 NAMING: {naming_hint}
 STRUCTURE: {structure_hint}
@@ -223,6 +234,7 @@ Output ONLY valid JSON (all text in {brief.language}):
                     f"Faction name '{faction.name}' conflicts with '{conflicting_name}' "
                     f"(reason: {reason}), clearing to force retry"
                 )
+                rejected_names.append(faction.name)
                 return {}  # Return empty to trigger retry
 
         # Convert to dict for compatibility with existing code

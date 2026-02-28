@@ -14,7 +14,7 @@ from src.services.world_quality_service._batch_parallel import (
     _generate_batch_parallel,
     _ThreadSafeRelsList,
 )
-from src.utils.exceptions import WorldGenerationError
+from src.utils.exceptions import DuplicateNameError, WorldGenerationError
 
 
 def _make_char_scores(avg: float, feedback: str = "Test") -> CharacterQualityScores:
@@ -1131,3 +1131,545 @@ class TestMaxWorkersReductionForDifferentModels:
 
         assert len(results) == 2
         assert any("Failed to resolve models" in msg for msg in caplog.messages)
+
+
+# ---------------------------------------------------------------------------
+# _generate_batch_phased tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def phased_svc():
+    """Create a mock WorldQualityService configured for phased pipeline testing.
+
+    Sets creator != judge to trigger the phased path, and provides properly
+    configured model preparers.
+    """
+    svc = MagicMock()
+    svc._calculate_eta = MagicMock(return_value=0.0)
+    config = MagicMock()
+    config.quality_threshold = 7.5
+    config.get_threshold = MagicMock(return_value=7.5)
+    svc.get_config = MagicMock(return_value=config)
+    svc.settings = MagicMock()
+    svc.settings.llm_max_concurrent_requests = 2
+    # Different models to trigger phased pipeline
+    svc._get_creator_model.return_value = "creator-model:24b"
+    svc._get_judge_model.return_value = "judge-model:30b"
+    return svc
+
+
+class TestGenerateBatchPhased:
+    """Tests for the two-phase batch pipeline (_generate_batch_phased)."""
+
+    def test_phased_all_pass_threshold(self, phased_svc, caplog):
+        """When all entities pass the judge threshold, no refinement occurs."""
+        entities = [{"name": f"E{i}"} for i in range(3)]
+        scores = _make_char_scores(8.0)
+        create_idx = 0
+
+        def create_fn(_i):
+            """Create entities sequentially."""
+            nonlocal create_idx
+            entity = entities[create_idx]
+            create_idx += 1
+            return entity
+
+        judge_calls: list[dict] = []
+
+        def judge_fn(entity):
+            """Judge and record call."""
+            judge_calls.append(entity)
+            return scores
+
+        prep_creator_calls: list[bool] = []
+        prep_judge_calls: list[bool] = []
+
+        with caplog.at_level(logging.INFO):
+            results = _generate_batch_parallel(
+                svc=phased_svc,
+                count=3,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, scores, 1),
+                get_name=lambda e: e["name"],
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=judge_fn,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=lambda e: (e, scores, 1),
+                prepare_creator_fn=lambda: prep_creator_calls.append(True),
+                prepare_judge_fn=lambda: prep_judge_calls.append(True),
+            )
+
+        assert len(results) == 3
+        # All 3 should be judged
+        assert len(judge_calls) == 3
+        # Creator model loaded once, judge model loaded once
+        assert len(prep_creator_calls) == 1
+        assert len(prep_judge_calls) == 1
+        # Phased pipeline log should appear
+        assert any("phased" in msg.lower() for msg in caplog.messages)
+        # No refinement should occur
+        assert not any("Phase 3b" in msg for msg in caplog.messages)
+
+    def test_phased_some_fail_triggers_refinement(self, phased_svc, caplog):
+        """Entities failing the threshold are refined via quality_refinement_loop."""
+        passing_scores = _make_char_scores(8.0)
+        failing_scores = _make_char_scores(5.0)  # Below 7.5 threshold
+
+        create_idx = 0
+
+        def create_fn(_i):
+            """Create 3 entities."""
+            nonlocal create_idx
+            entity = {"name": f"E{create_idx}"}
+            create_idx += 1
+            return entity
+
+        def judge_fn(entity):
+            """First entity passes, rest fail."""
+            if entity["name"] == "E0":
+                return passing_scores
+            return failing_scores
+
+        refine_calls: list[dict] = []
+
+        def refine_fn(entity):
+            """Track refinement calls."""
+            refine_calls.append(entity)
+            # Return a refined version that passes
+            return (entity, passing_scores, 2)
+
+        with caplog.at_level(logging.INFO):
+            results = _generate_batch_parallel(
+                svc=phased_svc,
+                count=3,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, passing_scores, 1),
+                get_name=lambda e: e["name"],
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=judge_fn,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=refine_fn,
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
+        assert len(results) == 3
+        # E1 and E2 should have been refined
+        assert len(refine_calls) == 2
+        assert any("Phase 3b" in msg for msg in caplog.messages)
+
+    def test_phased_create_failure_handled(self, phased_svc, caplog):
+        """Entities that fail creation are skipped gracefully."""
+        scores = _make_char_scores(8.0)
+        create_idx = 0
+
+        def create_fn(_i):
+            """Second create fails."""
+            nonlocal create_idx
+            create_idx += 1
+            if create_idx == 2:
+                return None
+            return {"name": f"E{create_idx}"}
+
+        with caplog.at_level(logging.WARNING):
+            results = _generate_batch_parallel(
+                svc=phased_svc,
+                count=3,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, scores, 1),
+                get_name=lambda e: e["name"],
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=lambda e: scores,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=lambda e: (e, scores, 1),
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
+        # Only 2 entities created (one failed), both should pass judge
+        assert len(results) == 2
+        assert any("creation returned empty" in msg for msg in caplog.messages)
+
+    def test_phased_judge_failure_triggers_refinement(self, phased_svc, caplog):
+        """Entities whose judge call fails are queued for refinement."""
+        scores = _make_char_scores(8.0)
+        create_idx = 0
+
+        def create_fn(_i):
+            """Create entities."""
+            nonlocal create_idx
+            entity = {"name": f"E{create_idx}"}
+            create_idx += 1
+            return entity
+
+        def judge_fn(entity):
+            """First entity's judge fails."""
+            if entity["name"] == "E0":
+                raise WorldGenerationError("Judge model error")
+            return scores
+
+        refine_calls: list[dict] = []
+
+        def refine_fn(entity):
+            """Refinement for judge-failed entity."""
+            refine_calls.append(entity)
+            return (entity, scores, 1)
+
+        with caplog.at_level(logging.ERROR):
+            results = _generate_batch_parallel(
+                svc=phased_svc,
+                count=2,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, scores, 1),
+                get_name=lambda e: e["name"],
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=judge_fn,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=refine_fn,
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
+        assert len(results) == 2
+        # E0 should have been refined because judge failed
+        assert len(refine_calls) == 1
+        assert refine_calls[0]["name"] == "E0"
+
+    def test_phased_all_creates_fail_raises(self, phased_svc):
+        """When all creates fail, WorldGenerationError is raised."""
+
+        def create_fn(_i):
+            """Always return None (creation failure)."""
+            return None
+
+        scores = _make_char_scores(8.0)
+
+        with pytest.raises(WorldGenerationError, match="failed to create any"):
+            _generate_batch_parallel(
+                svc=phased_svc,
+                count=3,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, scores, 1),
+                get_name=lambda e: e["name"],
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=lambda e: scores,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=lambda e: (e, scores, 1),
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
+    def test_phased_cancel_during_creation(self, phased_svc, caplog):
+        """cancel_check during Phase 1 stops creation early."""
+        scores = _make_char_scores(8.0)
+        cancel_after = 1
+        create_count = 0
+
+        def create_fn(_i):
+            """Create entities."""
+            nonlocal create_count
+            create_count += 1
+            return {"name": f"E{create_count}"}
+
+        cancel_count = 0
+
+        def cancel_check():
+            """Cancel after first entity is created."""
+            nonlocal cancel_count
+            cancel_count += 1
+            return cancel_count > cancel_after
+
+        with caplog.at_level(logging.INFO):
+            results = _generate_batch_parallel(
+                svc=phased_svc,
+                count=5,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, scores, 1),
+                get_name=lambda e: e["name"],
+                cancel_check=cancel_check,
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=lambda e: scores,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=lambda e: (e, scores, 1),
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
+        # Should have at most 1 entity (cancelled after first)
+        assert len(results) <= 1
+
+    def test_phased_on_success_rejection(self, phased_svc, caplog):
+        """on_success rejection during Phase 3 excludes the entity from results."""
+        scores = _make_char_scores(8.0)
+        create_idx = 0
+
+        def create_fn(_i):
+            """Create entities."""
+            nonlocal create_idx
+            entity = {"name": f"E{create_idx}"}
+            create_idx += 1
+            return entity
+
+        def reject_e1(entity):
+            """Reject E1."""
+            if entity["name"] == "E1":
+                raise DuplicateNameError("E1 is a duplicate")
+
+        with caplog.at_level(logging.WARNING):
+            results = _generate_batch_parallel(
+                svc=phased_svc,
+                count=3,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, scores, 1),
+                get_name=lambda e: e["name"],
+                on_success=reject_e1,
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=lambda e: scores,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=lambda e: (e, scores, 1),
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
+        # E1 should be excluded
+        result_names = [e["name"] for e, _ in results]
+        assert "E1" not in result_names
+        assert len(results) == 2
+        assert any("duplicate" in msg.lower() for msg in caplog.messages)
+
+    def test_phased_progress_callbacks(self, phased_svc):
+        """Progress callback is invoked during phased pipeline execution."""
+        scores = _make_char_scores(8.0)
+        create_idx = 0
+        callback = MagicMock()
+
+        def create_fn(_i):
+            """Create entities."""
+            nonlocal create_idx
+            entity = {"name": f"E{create_idx}"}
+            create_idx += 1
+            return entity
+
+        results = _generate_batch_parallel(
+            svc=phased_svc,
+            count=2,
+            entity_type="test",
+            generate_fn=lambda _i: ({"name": "fallback"}, scores, 1),
+            get_name=lambda e: e["name"],
+            progress_callback=callback,
+            quality_threshold=7.5,
+            max_workers=2,
+            create_only_fn=create_fn,
+            judge_only_fn=lambda e: scores,
+            is_empty_fn=lambda e: not e.get("name"),
+            refine_with_initial_fn=lambda e: (e, scores, 1),
+            prepare_creator_fn=lambda: None,
+            prepare_judge_fn=lambda: None,
+        )
+
+        assert len(results) == 2
+        # Should have at least generating + complete callbacks
+        assert callback.call_count >= 2
+
+    def test_phased_empty_entity_rejected_by_is_empty(self, phased_svc, caplog):
+        """Entities that pass is_empty check are rejected during Phase 1."""
+        scores = _make_char_scores(8.0)
+        create_idx = 0
+
+        def create_fn(_i):
+            """Second entity has missing name (is_empty returns True)."""
+            nonlocal create_idx
+            create_idx += 1
+            if create_idx == 2:
+                return {"name": ""}  # Empty name
+            return {"name": f"E{create_idx}"}
+
+        with caplog.at_level(logging.WARNING):
+            results = _generate_batch_parallel(
+                svc=phased_svc,
+                count=3,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, scores, 1),
+                get_name=lambda e: e.get("name", "Unknown"),
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=lambda e: scores,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=lambda e: (e, scores, 1),
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
+        # Only 2 entities created successfully (one was empty)
+        assert len(results) == 2
+        assert any("creation returned empty" in msg for msg in caplog.messages)
+
+    def test_phased_create_exception_handled(self, phased_svc, caplog):
+        """WorldGenerationError during creation is caught and entity is skipped."""
+        scores = _make_char_scores(8.0)
+        create_idx = 0
+
+        def create_fn(_i):
+            """Second create raises WorldGenerationError."""
+            nonlocal create_idx
+            create_idx += 1
+            if create_idx == 2:
+                raise WorldGenerationError("LLM timeout during creation")
+            return {"name": f"E{create_idx}"}
+
+        with caplog.at_level(logging.ERROR):
+            results = _generate_batch_parallel(
+                svc=phased_svc,
+                count=3,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, scores, 1),
+                get_name=lambda e: e["name"],
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=lambda e: scores,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=lambda e: (e, scores, 1),
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
+        assert len(results) == 2
+        assert any("Phase 1: failed to create" in msg for msg in caplog.messages)
+
+    def test_phased_refinement_failure_handled(self, phased_svc, caplog):
+        """WorldGenerationError during refinement is caught gracefully."""
+        passing_scores = _make_char_scores(8.0)
+        failing_scores = _make_char_scores(5.0)
+        create_idx = 0
+
+        def create_fn(_i):
+            """Create entities."""
+            nonlocal create_idx
+            entity = {"name": f"E{create_idx}"}
+            create_idx += 1
+            return entity
+
+        def judge_fn(entity):
+            """First entity fails threshold."""
+            if entity["name"] == "E0":
+                return failing_scores
+            return passing_scores
+
+        def refine_fn(entity):
+            """Refinement also fails."""
+            raise WorldGenerationError("Refinement failed")
+
+        with caplog.at_level(logging.ERROR):
+            results = _generate_batch_parallel(
+                svc=phased_svc,
+                count=2,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, passing_scores, 1),
+                get_name=lambda e: e["name"],
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=judge_fn,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=refine_fn,
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
+        # Only E1 passed; E0 failed both judge and refinement
+        assert len(results) == 1
+        assert results[0][0]["name"] == "E1"
+        assert any("Phase 3b: failed to refine" in msg for msg in caplog.messages)
+
+    def test_phased_batch_summary_logged(self, phased_svc, caplog):
+        """Phased pipeline logs batch summary at the end."""
+        scores = _make_char_scores(8.0)
+        create_idx = 0
+
+        def create_fn(_i):
+            """Create entities."""
+            nonlocal create_idx
+            entity = {"name": f"W{create_idx}"}
+            create_idx += 1
+            return entity
+
+        with caplog.at_level(logging.INFO):
+            _generate_batch_parallel(
+                svc=phased_svc,
+                count=2,
+                entity_type="widget",
+                generate_fn=lambda _i: ({"name": "fallback"}, scores, 1),
+                get_name=lambda e: e["name"],
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=lambda e: scores,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=lambda e: (e, scores, 1),
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
+        assert any("Batch widget summary" in msg for msg in caplog.messages)
+        assert any("Phased widget pipeline complete" in msg for msg in caplog.messages)
+
+    def test_phased_fallback_to_sequential_without_callables(self, phased_svc, caplog):
+        """When phased callables are not provided but models differ, falls to sequential."""
+        entity = {"name": "Hero"}
+        scores = _make_char_scores(8.0)
+
+        with caplog.at_level(logging.INFO):
+            results = _generate_batch_parallel(
+                svc=phased_svc,
+                count=3,
+                entity_type="character",
+                generate_fn=lambda _i: (entity, scores, 1),
+                get_name=lambda e: e["name"],
+                max_workers=4,
+                # No phased callables provided
+            )
+
+        assert len(results) == 3
+        # Should fall back to sequential, not phased
+        assert any("phased callables not provided" in msg for msg in caplog.messages)
+        assert not any(
+            "phased" in msg.lower() and "pipeline" in msg.lower() and "starting" in msg.lower()
+            for msg in caplog.messages
+        )
+
+    def test_phased_zero_count_returns_empty(self, phased_svc):
+        """count=0 returns empty list without entering phased pipeline."""
+        scores = _make_char_scores(8.0)
+        results = _generate_batch_parallel(
+            svc=phased_svc,
+            count=0,
+            entity_type="test",
+            generate_fn=lambda _i: ({"name": "fallback"}, scores, 1),
+            get_name=lambda e: e["name"],
+            quality_threshold=7.5,
+            max_workers=2,
+            create_only_fn=lambda _i: {"name": "E"},
+            judge_only_fn=lambda e: scores,
+            is_empty_fn=lambda e: not e.get("name"),
+            refine_with_initial_fn=lambda e: (e, scores, 1),
+            prepare_creator_fn=lambda: None,
+            prepare_judge_fn=lambda: None,
+        )
+        assert results == []

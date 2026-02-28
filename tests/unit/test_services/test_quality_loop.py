@@ -1840,7 +1840,9 @@ class TestScorePlateauEarlyStop:
                 story_id="test-story",
             )
 
-        assert any("score plateaued at" in msg for msg in caplog.messages)
+        assert any(
+            "score plateaued at" in msg or "identical scores" in msg for msg in caplog.messages
+        )
 
     def test_score_difference_above_tolerance_continues(self, mock_svc, config):
         """Scores differing by more than 0.1 do not trigger plateau."""

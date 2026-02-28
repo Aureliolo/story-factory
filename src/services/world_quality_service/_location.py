@@ -46,12 +46,15 @@ def generate_location_with_quality(
 
     prep_creator, prep_judge = svc._make_model_preparers("location")
 
+    rejected_names: list[str] = []
+
     return quality_refinement_loop(
         entity_type="location",
         create_fn=lambda retries: svc._create_location(
             story_state,
             existing_names,
             retry_temperature(config, retries),
+            rejected_names=rejected_names,
         ),
         judge_fn=lambda loc: svc._judge_location_quality(
             loc,
@@ -66,7 +69,7 @@ def generate_location_with_quality(
         ),
         get_name=lambda loc: loc.get("name", "Unknown"),
         serialize=lambda loc: loc.copy(),
-        is_empty=lambda loc: not loc.get("name"),
+        is_empty=lambda loc: not loc.get("name") or len(loc.get("description", "")) < 50,
         score_cls=LocationQualityScores,
         config=config,
         svc=svc,
@@ -81,10 +84,16 @@ def _create_location(
     story_state: StoryState,
     existing_names: list[str],
     temperature: float,
+    rejected_names: list[str] | None = None,
 ) -> dict[str, Any]:
     """Create a new location using the creator model with structured generation."""
+    if rejected_names is None:
+        rejected_names = []
     logger.debug(
-        "Creating location for story %s (existing: %d)", story_state.id, len(existing_names)
+        "Creating location for story %s (existing: %d, rejected: %d)",
+        story_state.id,
+        len(existing_names),
+        len(rejected_names),
     )
     brief = story_state.brief
     if not brief:
@@ -109,7 +118,7 @@ STRICT RULES:
 - DO NOT use case variations (e.g., "Forest" vs "FOREST")
 - DO NOT use similar names (e.g., "Dark Woods" vs "The Dark Wood")
 - Create something COMPLETELY DIFFERENT
-
+{f"REJECTED NAMES (do NOT reuse): {', '.join(rejected_names)}" if rejected_names else ""}
 Create a location with:
 1. Rich atmosphere - sensory details, mood
 2. Narrative significance - symbolic or plot meaning
@@ -144,6 +153,7 @@ Write all text in {brief.language}."""
                     f"Location name '{location.name}' conflicts with '{conflicting_name}' "
                     f"(reason: {reason}), clearing to force retry"
                 )
+                rejected_names.append(location.name)
                 return {}  # Return empty to trigger retry
 
         # Convert to dict for compatibility with existing code

@@ -505,6 +505,7 @@ class TestCalendarContext:
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = None
         svc._cached_calendar_string = None
+        svc._calendar_cache_hit_logged = False
         svc._calendar_context_lock = threading.RLock()
         # Call the real method
         WorldQualityService.set_calendar_context(svc, sample_calendar_dict)
@@ -518,6 +519,7 @@ class TestCalendarContext:
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = None
         svc._cached_calendar_string = None
+        svc._calendar_cache_hit_logged = False
         svc._calendar_context_lock = threading.RLock()
         WorldQualityService.set_calendar_context(svc, sample_calendar_dict)
         ctx = svc._calendar_context
@@ -529,6 +531,7 @@ class TestCalendarContext:
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = None
         svc._cached_calendar_string = None
+        svc._calendar_cache_hit_logged = False
         svc._calendar_context_lock = threading.RLock()
         WorldQualityService.set_calendar_context(svc, sample_calendar_dict)
         ctx = svc._calendar_context
@@ -551,6 +554,7 @@ class TestCalendarContext:
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = None
         svc._cached_calendar_string = None
+        svc._calendar_cache_hit_logged = False
         svc._calendar_context_lock = threading.RLock()
         result = WorldQualityService.get_calendar_context(svc)
         assert "No calendar available" in result
@@ -561,6 +565,7 @@ class TestCalendarContext:
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = None
         svc._cached_calendar_string = None
+        svc._calendar_cache_hit_logged = False
         svc._calendar_context_lock = threading.RLock()
         WorldQualityService.set_calendar_context(svc, sample_calendar_dict)
         result = WorldQualityService.get_calendar_context(svc)
@@ -572,6 +577,7 @@ class TestCalendarContext:
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = None
         svc._cached_calendar_string = None
+        svc._calendar_cache_hit_logged = False
         svc._calendar_context_lock = threading.RLock()
         # Empty dict with no usable fields
         WorldQualityService.set_calendar_context(svc, {})
@@ -582,6 +588,7 @@ class TestCalendarContext:
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = None
         svc._cached_calendar_string = None
+        svc._calendar_cache_hit_logged = False
         svc._calendar_context_lock = threading.RLock()
         WorldQualityService.set_calendar_context(svc, sample_calendar_dict)
         ctx = svc._calendar_context

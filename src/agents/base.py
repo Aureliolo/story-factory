@@ -6,6 +6,7 @@ import time
 from contextlib import contextmanager
 from typing import TypeVar
 
+import httpcore
 import httpx
 import ollama
 from pydantic import BaseModel, ValidationError
@@ -320,6 +321,9 @@ class BaseAgent:
                         TimeoutError,
                         httpx.TimeoutException,
                         httpx.TransportError,
+                        httpcore.RemoteProtocolError,
+                        httpcore.ReadError,
+                        httpcore.NetworkError,
                     ) as e:
                         last_error = e
                         circuit_breaker.record_failure(e)
@@ -561,6 +565,9 @@ class BaseAgent:
                         TimeoutError,
                         httpx.TimeoutException,
                         httpx.TransportError,
+                        httpcore.RemoteProtocolError,
+                        httpcore.ReadError,
+                        httpcore.NetworkError,
                     ) as e:
                         last_error = e
                         circuit_breaker.record_failure(e)

@@ -86,6 +86,13 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
     progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     quality_threshold: float | None = None,
     max_workers: int = 2,
+    *,
+    create_only_fn: Callable[[int], T | None] | None = None,
+    judge_only_fn: Callable[[T], S] | None = None,
+    is_empty_fn: Callable[[T], bool] | None = None,
+    refine_with_initial_fn: Callable[[T], tuple[T, S, int]] | None = None,
+    prepare_creator_fn: Callable[[], None] | None = None,
+    prepare_judge_fn: Callable[[], None] | None = None,
 ) -> list[tuple[T, S]]:
     """Parallel batch generation using a rolling-window thread pool.
 
@@ -99,6 +106,16 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
     really means "recently completed failures without an intervening success".
     This is more conservative (terminates earlier) than the sequential version,
     which is the safer direction for a parallel system.
+
+    **Two-phase pipeline:** When ``creator != judge`` and all phased callables
+    are provided (``create_only_fn``, ``judge_only_fn``, ``is_empty_fn``,
+    ``refine_with_initial_fn``, ``prepare_creator_fn``, ``prepare_judge_fn``),
+    a phased pipeline is used instead of the sequential fallback.  Phase 1
+    loads the creator model once and batches all creates; Phase 2 loads the
+    judge model once and batches all judges.  Entities that pass the quality
+    threshold are emitted directly; failures fall back to per-entity
+    ``quality_refinement_loop`` with ``initial_entity``.  This reduces GPU
+    model swaps from ~2N to ~4 (two bulk swaps plus refinement swaps).
 
     Args:
         svc: WorldQualityService instance (used for ``_calculate_eta``).
@@ -116,6 +133,21 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
             Called from the main thread.
         quality_threshold: Quality threshold for pass/fail in batch summary.
         max_workers: Maximum concurrent generation tasks.
+        create_only_fn: Creates a single entity without judging.  Returns
+            the entity or ``None`` on failure.  Required for phased pipeline.
+        judge_only_fn: Judges a single entity.  Returns quality scores.
+            Required for phased pipeline.
+        is_empty_fn: Returns ``True`` if the entity is invalid/empty.
+            Required for phased pipeline.
+        refine_with_initial_fn: Runs the full quality refinement loop with
+            ``initial_entity`` for entities that fail the judge threshold.
+            Returns ``(entity, scores, iterations)``.  Required for phased
+            pipeline.
+        prepare_creator_fn: Callback to load the creator model into VRAM.
+            Required for phased pipeline (may be ``None`` when models are
+            the same, but phased pipeline is not used in that case).
+        prepare_judge_fn: Callback to load the judge model into VRAM.
+            Required for phased pipeline.
 
     Returns:
         List of ``(entity, scores)`` tuples.
@@ -134,19 +166,39 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
     if count == 0:
         return []
 
-    # When creator and judge models differ, reduce to single worker to prevent
-    # two threads causing GPU model thrashing (both models competing for VRAM).
+    # When creator and judge models differ, check whether the phased pipeline
+    # can be used.  The phased approach batches all creates under one model load
+    # and all judges under another, reducing GPU swaps from ~2N to ~4.
+    _use_phased = False
     if max_workers > 1:
         try:
             creator = svc._get_creator_model(entity_type)
             judge = svc._get_judge_model(entity_type)
             if creator != judge:
-                logger.info(
-                    "Reducing max_workers to 1: creator (%s) != judge (%s), avoiding GPU thrashing",
-                    creator,
-                    judge,
+                _has_phased_callables = all(
+                    (
+                        create_only_fn is not None,
+                        judge_only_fn is not None,
+                        is_empty_fn is not None,
+                        refine_with_initial_fn is not None,
+                    )
                 )
-                max_workers = 1
+                if _has_phased_callables:
+                    _use_phased = True
+                    logger.info(
+                        "Using phased pipeline: creator (%s) != judge (%s), "
+                        "batching creates then judges to reduce GPU swaps",
+                        creator,
+                        judge,
+                    )
+                else:
+                    logger.info(
+                        "Reducing max_workers to 1: creator (%s) != judge (%s), "
+                        "avoiding GPU thrashing (phased callables not provided)",
+                        creator,
+                        judge,
+                    )
+                    max_workers = 1
         except Exception as e:
             logger.warning(
                 "Failed to resolve models for max_workers decision on %s: %s. "
@@ -155,6 +207,29 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
                 e,
                 max_workers,
             )
+
+    if _use_phased:
+        # All phased callables are guaranteed non-None by the check above.
+        assert create_only_fn is not None  # nosec — invariant
+        assert judge_only_fn is not None  # nosec — invariant
+        assert is_empty_fn is not None  # nosec — invariant
+        assert refine_with_initial_fn is not None  # nosec — invariant
+        return _generate_batch_phased(
+            svc=svc,
+            count=count,
+            entity_type=entity_type,
+            create_only_fn=create_only_fn,
+            judge_only_fn=judge_only_fn,
+            is_empty_fn=is_empty_fn,
+            refine_with_initial_fn=refine_with_initial_fn,
+            prepare_creator_fn=prepare_creator_fn,
+            prepare_judge_fn=prepare_judge_fn,
+            get_name=get_name,
+            on_success=on_success,
+            cancel_check=cancel_check,
+            progress_callback=progress_callback,
+            quality_threshold=quality_threshold,
+        )
 
     # Degenerate case: single worker → delegate to sequential
     if max_workers <= 1:
@@ -395,6 +470,408 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
     _log_batch_summary(
         results, entity_type, quality_threshold, time.time() - batch_start_time, get_name=get_name
     )
+
+    return results
+
+
+def _generate_batch_phased[T, S: BaseQualityScores](
+    svc: WorldQualityService,
+    count: int,
+    entity_type: str,
+    create_only_fn: Callable[[int], T | None],
+    judge_only_fn: Callable[[T], S],
+    is_empty_fn: Callable[[T], bool],
+    refine_with_initial_fn: Callable[[T], tuple[T, S, int]],
+    prepare_creator_fn: Callable[[], None] | None,
+    prepare_judge_fn: Callable[[], None] | None,
+    get_name: Callable[[T], str],
+    on_success: Callable[[T], None] | None = None,
+    cancel_check: Callable[[], bool] | None = None,
+    progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
+    quality_threshold: float | None = None,
+) -> list[tuple[T, S]]:
+    """Two-phase batch pipeline: batch creates, then batch judges.
+
+    Reduces GPU model swaps from ~2N (per-entity create+judge interleaving)
+    to ~4 (one bulk create swap, one bulk judge swap, plus refinement swaps
+    for entities that fail the threshold).
+
+    Phase 1 — Batch creates: Load creator model once, run all N create calls
+    sequentially.  Collect valid entities.
+
+    Phase 2 — Batch judges: Load judge model once, run all N judge calls
+    sequentially.  Collect scores.
+
+    Phase 3 — Handle results: Entities that pass the quality threshold are
+    emitted directly.  Entities that fail are refined via the existing
+    per-entity ``quality_refinement_loop`` (with ``initial_entity``), which
+    handles all early-stopping, hail-mary, and analytics logic.
+
+    Args:
+        svc: WorldQualityService instance.
+        count: Number of entities to generate.
+        entity_type: Human-readable type name for logging/progress.
+        create_only_fn: Creates a single entity without judging.  Returns
+            the entity or ``None`` on failure.
+        judge_only_fn: Judges a single entity, returns quality scores.
+        is_empty_fn: Returns ``True`` if the entity is invalid/empty.
+        refine_with_initial_fn: Runs the full quality refinement loop with
+            ``initial_entity`` for entities needing refinement.
+        prepare_creator_fn: Callback to load creator model into VRAM.
+        prepare_judge_fn: Callback to load judge model into VRAM.
+        get_name: Extract display name from an entity.
+        on_success: Optional hook called after a successful generation.
+        cancel_check: Optional callable returning ``True`` to cancel.
+        progress_callback: Optional progress update callback.
+        quality_threshold: Quality threshold for pass/fail.
+
+    Returns:
+        List of ``(entity, scores)`` tuples.
+
+    Raises:
+        WorldGenerationError: If no entities could be generated.
+    """
+    from src.services.world_quality_service import EntityGenerationProgress
+    from src.services.world_quality_service._batch import (
+        _aggregate_errors,
+        _log_batch_summary,
+    )
+
+    if quality_threshold is None:
+        quality_threshold = svc.get_config().get_threshold(entity_type)
+
+    results: list[tuple[T, S]] = []
+    errors: list[str] = []
+    batch_start_time = time.time()
+    completed_times: list[float] = []
+
+    logger.info(
+        "Starting phased %s pipeline: %d entities (batch creates, then batch judges)",
+        entity_type,
+        count,
+    )
+
+    # ── Phase 1: Batch creates ──────────────────────────────────────────
+    if prepare_creator_fn:
+        logger.info("Phase 1: loading creator model for batch creation")
+        prepare_creator_fn()
+
+    created_entities: list[tuple[int, T]] = []  # (index, entity) pairs
+    create_errors = 0
+
+    for i in range(count):
+        if cancel_check and cancel_check():
+            logger.info(
+                "Phased %s creation cancelled after %d/%d",
+                entity_type,
+                len(created_entities),
+                count,
+            )
+            break
+
+        if progress_callback:
+            progress_callback(
+                EntityGenerationProgress(
+                    current=i + 1,
+                    total=count,
+                    entity_type=entity_type,
+                    phase="generating",
+                    elapsed_seconds=time.time() - batch_start_time,
+                    estimated_remaining_seconds=svc._calculate_eta(
+                        completed_times, max(count - i, 0)
+                    ),
+                )
+            )
+
+        entity_start = time.time()
+        try:
+            entity = create_only_fn(i)
+            if entity is not None and not is_empty_fn(entity):
+                created_entities.append((i, entity))
+                logger.debug(
+                    "Phase 1: created %s %d/%d '%s' in %.2fs",
+                    entity_type,
+                    i + 1,
+                    count,
+                    get_name(entity),
+                    time.time() - entity_start,
+                )
+            else:
+                create_errors += 1
+                error_msg = f"{entity_type} creation returned empty on index {i}"
+                errors.append(error_msg)
+                logger.warning("Phase 1: %s", error_msg)
+        except (WorldGenerationError, ValueError) as e:
+            create_errors += 1
+            error_msg = summarize_llm_error(e, max_length=200)
+            errors.append(error_msg)
+            logger.error(
+                "Phase 1: failed to create %s %d/%d: %s", entity_type, i + 1, count, error_msg
+            )
+        except Exception as e:
+            create_errors += 1
+            error_msg = summarize_llm_error(e, max_length=200)
+            errors.append(error_msg)
+            logger.error(
+                "Phase 1: unexpected error creating %s %d/%d: %s",
+                entity_type,
+                i + 1,
+                count,
+                error_msg,
+            )
+
+    logger.info(
+        "Phase 1 complete: %d/%d %ss created (%d failed) in %.1fs",
+        len(created_entities),
+        count,
+        entity_type,
+        create_errors,
+        time.time() - batch_start_time,
+    )
+
+    if not created_entities:
+        if errors:
+            raise WorldGenerationError(
+                f"Phased pipeline: failed to create any {entity_type}s. Errors: {'; '.join(errors)}"
+            )
+        return []
+
+    # ── Phase 2: Batch judges ───────────────────────────────────────────
+    if prepare_judge_fn:
+        logger.info("Phase 2: loading judge model for batch judging")
+        prepare_judge_fn()
+
+    # Track: (index, entity, scores, passed_threshold)
+    judged: list[tuple[int, T, S, bool]] = []
+    judge_errors = 0
+
+    for idx, entity in created_entities:
+        if cancel_check and cancel_check():
+            logger.info(
+                "Phased %s judging cancelled after %d/%d",
+                entity_type,
+                len(judged),
+                len(created_entities),
+            )
+            break
+
+        entity_name = get_name(entity)
+        judge_start = time.time()
+        try:
+            scores = judge_only_fn(entity)
+            judge_elapsed = time.time() - judge_start
+            rounded_score = round(scores.average, 1)
+            passed = rounded_score >= quality_threshold
+            judged.append((idx, entity, scores, passed))
+            logger.info(
+                "Phase 2: judged %s '%s': score=%.1f %s (%.2fs)",
+                entity_type,
+                entity_name,
+                scores.average,
+                "PASS" if passed else "FAIL",
+                judge_elapsed,
+            )
+        except (WorldGenerationError, ValueError) as e:
+            judge_errors += 1
+            error_msg = summarize_llm_error(e, max_length=200)
+            errors.append(error_msg)
+            logger.error(
+                "Phase 2: failed to judge %s '%s': %s",
+                entity_type,
+                entity_name,
+                error_msg,
+            )
+            # Entity created successfully but judge failed — still worth
+            # attempting refinement (which includes its own judge call).
+            judged.append((idx, entity, None, False))  # type: ignore[arg-type]
+        except Exception as e:
+            judge_errors += 1
+            error_msg = summarize_llm_error(e, max_length=200)
+            errors.append(error_msg)
+            logger.error(
+                "Phase 2: unexpected error judging %s '%s': %s",
+                entity_type,
+                entity_name,
+                error_msg,
+            )
+            judged.append((idx, entity, None, False))  # type: ignore[arg-type]
+
+    logger.info(
+        "Phase 2 complete: %d/%d %ss judged (%d errors) in %.1fs",
+        len(judged),
+        len(created_entities),
+        entity_type,
+        judge_errors,
+        time.time() - batch_start_time,
+    )
+
+    # ── Phase 3: Handle results ─────────────────────────────────────────
+    passed_count = 0
+    needs_refinement: list[tuple[int, T]] = []
+
+    for idx, entity, scores, passed in judged:
+        if passed and scores is not None:
+            # Entity passed threshold — emit directly
+            entity_start = time.time()
+            try:
+                if on_success:
+                    on_success(entity)
+                entity_name = get_name(entity)
+                results.append((entity, scores))
+                completed_times.append(time.time() - batch_start_time)
+                passed_count += 1
+                logger.info(
+                    "Phase 3: %s '%s' passed threshold (%.1f >= %.1f), emitting directly",
+                    entity_type,
+                    entity_name,
+                    scores.average,
+                    quality_threshold,
+                )
+                if progress_callback:
+                    progress_callback(
+                        EntityGenerationProgress(
+                            current=min(len(results), count),
+                            total=count,
+                            entity_type=entity_type,
+                            entity_name=entity_name,
+                            phase="complete",
+                            elapsed_seconds=time.time() - batch_start_time,
+                            estimated_remaining_seconds=svc._calculate_eta(
+                                completed_times, max(count - len(results), 0)
+                            ),
+                        )
+                    )
+            except DuplicateNameError as e:
+                dup_msg = summarize_llm_error(e, max_length=200)
+                errors.append(dup_msg)
+                logger.warning("Phase 3: duplicate %s rejected: %s", entity_type, dup_msg)
+            except WorldGenerationError as e:
+                error_msg = summarize_llm_error(e, max_length=200)
+                errors.append(error_msg)
+                logger.error("Phase 3: on_success rejected %s: %s", entity_type, error_msg)
+        else:
+            # Entity failed threshold or judge errored — queue for refinement
+            needs_refinement.append((idx, entity))
+
+    logger.info(
+        "Phase 3: %d/%d %ss passed threshold, %d need refinement",
+        passed_count,
+        len(judged),
+        entity_type,
+        len(needs_refinement),
+    )
+
+    # ── Phase 3b: Refine entities that failed threshold ─────────────────
+    # Each refinement call invokes the full quality_refinement_loop with
+    # initial_entity, which handles its own model swapping, early-stopping,
+    # hail-mary, and analytics.
+    for _idx, entity in needs_refinement:
+        if cancel_check and cancel_check():
+            logger.info(
+                "Phased %s refinement cancelled after %d results",
+                entity_type,
+                len(results),
+            )
+            break
+
+        entity_name = get_name(entity)
+        refine_start = time.time()
+        try:
+            logger.info(
+                "Phase 3b: refining %s '%s' via quality_refinement_loop",
+                entity_type,
+                entity_name,
+            )
+            refined_entity, refined_scores, iterations = refine_with_initial_fn(entity)
+            refine_elapsed = time.time() - refine_start
+
+            if on_success:
+                on_success(refined_entity)
+
+            results.append((refined_entity, refined_scores))
+            completed_times.append(refine_elapsed)
+            refined_name = get_name(refined_entity)
+            logger.info(
+                "Phase 3b: %s '%s' refined in %d iteration(s), score=%.1f (%.2fs)",
+                entity_type,
+                refined_name,
+                iterations,
+                refined_scores.average,
+                refine_elapsed,
+            )
+            if progress_callback:
+                progress_callback(
+                    EntityGenerationProgress(
+                        current=min(len(results), count),
+                        total=count,
+                        entity_type=entity_type,
+                        entity_name=refined_name,
+                        phase="complete",
+                        elapsed_seconds=time.time() - batch_start_time,
+                        estimated_remaining_seconds=svc._calculate_eta(
+                            completed_times, max(count - len(results), 0)
+                        ),
+                    )
+                )
+        except DuplicateNameError as e:
+            dup_msg = summarize_llm_error(e, max_length=200)
+            errors.append(dup_msg)
+            logger.warning(
+                "Phase 3b: duplicate %s '%s' during refinement: %s",
+                entity_type,
+                entity_name,
+                dup_msg,
+            )
+        except WorldGenerationError as e:
+            error_msg = summarize_llm_error(e, max_length=200)
+            errors.append(error_msg)
+            logger.error(
+                "Phase 3b: failed to refine %s '%s': %s",
+                entity_type,
+                entity_name,
+                error_msg,
+            )
+        except Exception as e:
+            error_msg = summarize_llm_error(e, max_length=200)
+            errors.append(error_msg)
+            logger.error(
+                "Phase 3b: unexpected error refining %s '%s': %s",
+                entity_type,
+                entity_name,
+                error_msg,
+            )
+
+    # ── Final summary ───────────────────────────────────────────────────
+    total_elapsed = time.time() - batch_start_time
+    logger.info(
+        "Phased %s pipeline complete: %d/%d entities in %.1fs "
+        "(phase1: %d created, phase2: %d judged, phase3: %d passed + %d refined)",
+        entity_type,
+        len(results),
+        count,
+        total_elapsed,
+        len(created_entities),
+        len(judged),
+        passed_count,
+        len(needs_refinement),
+    )
+
+    if not results and errors:
+        raise WorldGenerationError(
+            f"Phased pipeline: failed to generate any {entity_type}s. Errors: {'; '.join(errors)}"
+        )
+
+    if errors:
+        logger.warning(
+            "Phased pipeline: generated %d/%d %ss. %d errors: %s",
+            len(results),
+            count,
+            entity_type,
+            len(errors),
+            _aggregate_errors(errors),
+        )
+
+    _log_batch_summary(results, entity_type, quality_threshold, total_elapsed, get_name=get_name)
 
     return results
 

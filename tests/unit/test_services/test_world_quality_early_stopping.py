@@ -315,10 +315,16 @@ class TestFactionGenerationEarlyStopping:
     ):
         """Test that faction generation stops early after consecutive degradations."""
         # Create faction that degrades after initial peak
-        test_faction = {"name": "TestFaction", "description": "A test faction"}
+        test_faction = {
+            "name": "TestFaction",
+            "description": "A test faction with rich lore and complex political dynamics in the world",
+        }
         mock_create.return_value = test_faction
         mock_refine.side_effect = _make_unique_refine(
-            lambda n: {"name": "TestFaction", "description": f"A test faction v{n}"}
+            lambda n: {
+                "name": "TestFaction",
+                "description": f"A test faction with rich lore and complex political dynamics in the world v{n}",
+            }
         )
 
         # Score progression: 8.2 -> 7.9 -> 7.6 (should stop here with patience=2)
@@ -378,10 +384,16 @@ class TestFactionGenerationEarlyStopping:
         The single degradation (8.0->7.5) doesn't trigger early stopping,
         allowing the loop to continue and eventually meet threshold.
         """
-        test_faction = {"name": "TestFaction", "description": "A test faction"}
+        test_faction = {
+            "name": "TestFaction",
+            "description": "A test faction with rich lore and complex political dynamics in the world",
+        }
         mock_create.return_value = test_faction
         mock_refine.side_effect = _make_unique_refine(
-            lambda n: {"name": "TestFaction", "description": f"A test faction v{n}"}
+            lambda n: {
+                "name": "TestFaction",
+                "description": f"A test faction with rich lore and complex political dynamics in the world v{n}",
+            }
         )
 
         # Score progression: 8.0 -> 7.5 -> 9.5 (meets threshold=9.0, stops)
@@ -431,10 +443,16 @@ class TestFactionGenerationEarlyStopping:
         Scores degrade consistently after peak, triggering early stopping
         after patience (2) consecutive degradations, saving compute.
         """
-        test_faction = {"name": "TestFaction", "description": "A test faction"}
+        test_faction = {
+            "name": "TestFaction",
+            "description": "A test faction with rich lore and complex political dynamics in the world",
+        }
         mock_create.return_value = test_faction
         mock_refine.side_effect = _make_unique_refine(
-            lambda n: {"name": "TestFaction", "description": f"A test faction v{n}"}
+            lambda n: {
+                "name": "TestFaction",
+                "description": f"A test faction with rich lore and complex political dynamics in the world v{n}",
+            }
         )
 
         # Scores degrade consistently after peak
@@ -503,7 +521,9 @@ class TestCharacterGenerationEarlyStopping:
         mock_create.return_value = test_char
         mock_refine.side_effect = _make_unique_refine(
             lambda n: Character(
-                name="ZeroChar", role="protagonist", description=f"Zero scores v{n}"
+                name="ZeroChar",
+                role="protagonist",
+                description=f"Zero scores entity with a sufficiently long description for testing purposes v{n}",
             )
         )
 
@@ -662,10 +682,16 @@ class TestLocationGenerationEarlyStopping:
 
         Uses 0.1 instead of 0.0 because exact-zero triggers re-judging (Fix 8).
         """
-        test_loc = {"name": "ZeroLoc", "description": "Zero scores"}
+        test_loc = {
+            "name": "ZeroLoc",
+            "description": "Zero scores entity with a sufficiently long description for testing purposes here",
+        }
         mock_create.return_value = test_loc
         mock_refine.side_effect = _make_unique_refine(
-            lambda n: {"name": "ZeroLoc", "description": f"Zero scores v{n}"}
+            lambda n: {
+                "name": "ZeroLoc",
+                "description": f"Zero scores entity with a sufficiently long description for testing purposes v{n}",
+            }
         )
 
         near_zero_scores = LocationQualityScores(
@@ -694,10 +720,16 @@ class TestLocationGenerationEarlyStopping:
         self, mock_refine, mock_judge, mock_create, service, story_state
     ):
         """Test that location generation stops early after consecutive degradations."""
-        test_loc = {"name": "TestLocation", "description": "A test location"}
+        test_loc = {
+            "name": "TestLocation",
+            "description": "A test location with atmospheric details and narrative significance for the story",
+        }
         mock_create.return_value = test_loc
         mock_refine.side_effect = _make_unique_refine(
-            lambda n: {"name": "TestLocation", "description": f"A test location v{n}"}
+            lambda n: {
+                "name": "TestLocation",
+                "description": f"A test location with atmospheric details and narrative significance for the story v{n}",
+            }
         )
 
         # Score progression: 8.0 -> 7.5 -> 7.0 (should stop here with patience=2)
@@ -856,10 +888,16 @@ class TestItemGenerationEarlyStopping:
 
         Uses 0.1 instead of 0.0 because exact-zero triggers re-judging (Fix 8).
         """
-        test_item = {"name": "ZeroItem", "description": "Zero scores"}
+        test_item = {
+            "name": "ZeroItem",
+            "description": "Zero scores entity with a sufficiently long description for testing purposes here",
+        }
         mock_create.return_value = test_item
         mock_refine.side_effect = _make_unique_refine(
-            lambda n: {"name": "ZeroItem", "description": f"Zero scores v{n}"}
+            lambda n: {
+                "name": "ZeroItem",
+                "description": f"Zero scores entity with a sufficiently long description for testing purposes v{n}",
+            }
         )
 
         near_zero_scores = ItemQualityScores(
@@ -888,10 +926,16 @@ class TestItemGenerationEarlyStopping:
         self, mock_refine, mock_judge, mock_create, service, story_state
     ):
         """Test that item generation stops early after consecutive degradations."""
-        test_item = {"name": "TestItem", "description": "A test item"}
+        test_item = {
+            "name": "TestItem",
+            "description": "A test item of great significance with mysterious powers and deep story potential",
+        }
         mock_create.return_value = test_item
         mock_refine.side_effect = _make_unique_refine(
-            lambda n: {"name": "TestItem", "description": f"A test item v{n}"}
+            lambda n: {
+                "name": "TestItem",
+                "description": f"A test item of great significance with mysterious powers and deep story potential v{n}",
+            }
         )
 
         # Score progression: 8.0 -> 7.5 -> 7.0 (should stop here with patience=2)
@@ -953,10 +997,16 @@ class TestConceptGenerationEarlyStopping:
 
         Uses 0.1 instead of 0.0 because exact-zero triggers re-judging (Fix 8).
         """
-        test_concept = {"name": "ZeroConcept", "description": "Zero scores"}
+        test_concept = {
+            "name": "ZeroConcept",
+            "description": "Zero scores entity with a sufficiently long description for testing purposes here",
+        }
         mock_create.return_value = test_concept
         mock_refine.side_effect = _make_unique_refine(
-            lambda n: {"name": "ZeroConcept", "description": f"Zero scores v{n}"}
+            lambda n: {
+                "name": "ZeroConcept",
+                "description": f"Zero scores entity with a sufficiently long description for testing purposes v{n}",
+            }
         )
 
         near_zero_scores = ConceptQualityScores(
@@ -985,10 +1035,16 @@ class TestConceptGenerationEarlyStopping:
         self, mock_refine, mock_judge, mock_create, service, story_state
     ):
         """Test that concept generation stops early after consecutive degradations."""
-        test_concept = {"name": "TestConcept", "description": "A test concept"}
+        test_concept = {
+            "name": "TestConcept",
+            "description": "A test concept exploring deep philosophical themes and their narrative implications",
+        }
         mock_create.return_value = test_concept
         mock_refine.side_effect = _make_unique_refine(
-            lambda n: {"name": "TestConcept", "description": f"A test concept v{n}"}
+            lambda n: {
+                "name": "TestConcept",
+                "description": f"A test concept exploring deep philosophical themes and their narrative implications v{n}",
+            }
         )
 
         # Score progression: 8.0 -> 7.5 -> 7.0 (should stop here with patience=2)

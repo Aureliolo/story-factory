@@ -53,6 +53,14 @@ class RefinementHistory(BaseModel):
         default=False,
         description="True when entity was admitted despite not meeting quality threshold",
     )
+    actual_scoring_rounds: int | None = Field(
+        default=None,
+        description=(
+            "Actual number of judge calls from the quality loop. "
+            "Set by the loop after completion; includes hail-mary attempts "
+            "that did not beat the best score (not tracked in iterations)."
+        ),
+    )
 
     def add_iteration(
         self,
@@ -205,7 +213,7 @@ class RefinementHistory(BaseModel):
                 "improved": False,
                 "reason": "Not enough iterations to compare",
                 "best_iteration": self.best_iteration,
-                "scoring_rounds": len(self.iterations),
+                "scoring_rounds": self.actual_scoring_rounds or len(self.iterations),
                 "score_progression": score_progression,
                 "first_score": first_score,
                 "peak_score": self.peak_score,

@@ -256,6 +256,11 @@ class EmbeddingService:
     def embed_entity(self, db: WorldDatabase, entity: Entity) -> bool:
         """Embed an entity and store it in the database.
 
+        Pre-truncates the description to fit within the embedding model's
+        context budget after accounting for the entity name prefix,
+        skipping the embedding entirely if the overhead (prefix + header)
+        exceeds the context budget.
+
         Args:
             db: WorldDatabase instance with vec support.
             entity: The entity to embed.
@@ -264,7 +269,60 @@ class EmbeddingService:
             True if the embedding was stored, False otherwise.
         """
         model = self._get_model()
-        text = f"{entity.name}: {entity.description}"
+        prefix = get_embedding_prefix(model)
+
+        # Build the structural portion (always kept intact)
+        header = f"{entity.name}: "
+        overhead_chars = len(prefix) + len(header)
+
+        # Estimate max chars from model context
+        with self._lock:
+            client = self._get_client()
+            context_limit = get_model_context_size(client, model)
+        if context_limit is None:
+            with _warned_context_models_lock:
+                if model not in _warned_context_models:
+                    logger.warning(
+                        "Context size unavailable for embedding model in embed_entity, "
+                        "falling back to %d tokens (this warning will not repeat)",
+                        _FALLBACK_CONTEXT_TOKENS,
+                    )
+                    _warned_context_models.add(model)
+            context_limit = _FALLBACK_CONTEXT_TOKENS
+        max_chars = (context_limit - _EMBEDDING_CONTEXT_MARGIN_TOKENS) * _CHARS_PER_TOKEN_ESTIMATE
+
+        description = entity.description
+        available_for_desc = max_chars - overhead_chars
+        if available_for_desc <= 0:
+            if overhead_chars > max_chars:
+                logger.warning(
+                    "Entity overhead exceeds max chars (%d > %d); "
+                    "skipping embedding to avoid truncating entity name: %s",
+                    overhead_chars,
+                    max_chars,
+                    entity.name,
+                )
+                self._record_failure(entity.id)
+                return False
+            logger.warning(
+                "Entity overhead meets embedding budget (%d >= %d chars); "
+                "embedding with empty description to preserve entity name: %s",
+                overhead_chars,
+                max_chars,
+                entity.name,
+            )
+            description = ""
+        elif len(description) > available_for_desc:
+            logger.warning(
+                "Truncating entity description for embedding "
+                "(name preserved, desc %d -> %d chars): %s",
+                len(description),
+                available_for_desc,
+                entity.name,
+            )
+            description = description[:available_for_desc]
+
+        text = f"{header}{description}"
         embedding = self.embed_text(text)
         if not embedding:
             self._record_failure(entity.id)
@@ -388,6 +446,11 @@ class EmbeddingService:
     def embed_event(self, db: WorldDatabase, event: WorldEvent) -> bool:
         """Embed an event and store it in the database.
 
+        Pre-truncates the description to fit within the embedding model's
+        context budget after accounting for the event header and chapter suffix,
+        skipping the embedding entirely if the overhead (prefix + header + suffix)
+        exceeds the context budget.
+
         Args:
             db: WorldDatabase instance with vec support.
             event: The event to embed.
@@ -396,8 +459,61 @@ class EmbeddingService:
             True if the embedding was stored, False otherwise.
         """
         model = self._get_model()
+        prefix = get_embedding_prefix(model)
+
+        # Build the structural portions (always kept intact)
+        header = "Event: "
         chapter_part = f" (Chapter {event.chapter_number})" if event.chapter_number else ""
-        text = f"Event: {event.description}{chapter_part}"
+        overhead_chars = len(prefix) + len(header) + len(chapter_part)
+
+        # Estimate max chars from model context
+        with self._lock:
+            client = self._get_client()
+            context_limit = get_model_context_size(client, model)
+        if context_limit is None:
+            with _warned_context_models_lock:
+                if model not in _warned_context_models:
+                    logger.warning(
+                        "Context size unavailable for embedding model in embed_event, "
+                        "falling back to %d tokens (this warning will not repeat)",
+                        _FALLBACK_CONTEXT_TOKENS,
+                    )
+                    _warned_context_models.add(model)
+            context_limit = _FALLBACK_CONTEXT_TOKENS
+        max_chars = (context_limit - _EMBEDDING_CONTEXT_MARGIN_TOKENS) * _CHARS_PER_TOKEN_ESTIMATE
+
+        description = event.description
+        available_for_desc = max_chars - overhead_chars
+        if available_for_desc <= 0:
+            if overhead_chars > max_chars:
+                logger.warning(
+                    "Event overhead exceeds max chars (%d > %d); "
+                    "skipping embedding to avoid truncating event structure: %s",
+                    overhead_chars,
+                    max_chars,
+                    event.description[:60],
+                )
+                self._record_failure(event.id)
+                return False
+            logger.warning(
+                "Event overhead meets embedding budget (%d >= %d chars); "
+                "embedding with empty description to preserve event structure: %s",
+                overhead_chars,
+                max_chars,
+                event.description[:60],
+            )
+            description = ""
+        elif len(description) > available_for_desc:
+            logger.warning(
+                "Truncating event description for embedding "
+                "(structure preserved, desc %d -> %d chars): %s",
+                len(description),
+                available_for_desc,
+                event.description[:60],
+            )
+            description = description[:available_for_desc]
+
+        text = f"{header}{description}{chapter_part}"
         embedding = self.embed_text(text)
         if not embedding:
             self._record_failure(event.id)
@@ -721,9 +837,59 @@ class EmbeddingService:
             db: WorldDatabase instance to attach callbacks to.
         """
 
+        def _pre_truncate_callback_text(text: str) -> str:
+            """Pre-truncate callback text to fit within the embedding context budget.
+
+            Computes the available character budget from the model context window,
+            accounting for the embedding prefix overhead, and truncates the text
+            if it would exceed that budget.
+
+            Args:
+                text: The pre-built text to potentially truncate.
+
+            Returns:
+                The (possibly truncated) text.
+            """
+            try:
+                model = self._get_model()
+                prefix = get_embedding_prefix(model)
+                overhead_chars = len(prefix)
+
+                with self._lock:
+                    client = self._get_client()
+                    context_limit = get_model_context_size(client, model)
+                if context_limit is None:
+                    context_limit = _FALLBACK_CONTEXT_TOKENS
+                max_chars = (
+                    context_limit - _EMBEDDING_CONTEXT_MARGIN_TOKENS
+                ) * _CHARS_PER_TOKEN_ESTIMATE
+
+                available_for_text = max_chars - overhead_chars
+                if available_for_text <= 0:
+                    logger.warning(
+                        "Callback text overhead exceeds max chars (%d > %d); "
+                        "returning empty text for source: %s",
+                        overhead_chars,
+                        max_chars,
+                        text[:60],
+                    )
+                    return ""
+                if len(text) > available_for_text:
+                    logger.warning(
+                        "Truncating callback text for embedding (text %d -> %d chars): %s",
+                        len(text),
+                        available_for_text,
+                        text[:60],
+                    )
+                    return text[:available_for_text]
+            except (ValueError, ConnectionError, TimeoutError) as e:
+                logger.warning("Could not pre-truncate callback text, proceeding as-is: %s", e)
+            return text
+
         def on_content_changed(source_id: str, content_type: str, text: str) -> None:
             """Handle content changes by embedding the new/updated content."""
             try:
+                text = _pre_truncate_callback_text(text)
                 embedding = self.embed_text(text)
                 if embedding:
                     entity_type = ""

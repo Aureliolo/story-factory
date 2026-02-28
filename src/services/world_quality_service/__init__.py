@@ -255,6 +255,7 @@ class WorldQualityService(EntityDelegatesMixin):
         self._calendar_context: str | None = None
         self._calendar_context_lock = threading.RLock()
         self._cached_calendar_string: str | None = None
+        self._calendar_cache_hit_logged: bool = False
         logger.debug("WorldQualityService initialized successfully")
 
     # ========== Calendar context for downstream entity generation ==========
@@ -276,6 +277,7 @@ class WorldQualityService(EntityDelegatesMixin):
             if calendar_dict is None:
                 self._calendar_context = None
                 self._cached_calendar_string = None
+                self._calendar_cache_hit_logged = False
                 logger.debug("Cleared calendar context")
                 return
 
@@ -328,7 +330,7 @@ class WorldQualityService(EntityDelegatesMixin):
                 )
             logger.debug(
                 "Set calendar context for downstream prompts: %s",
-                self._calendar_context[:80] if self._calendar_context else "None",
+                self._calendar_context[:200] if self._calendar_context else "None",
             )
 
     def get_calendar_context(self) -> str:
@@ -346,10 +348,12 @@ class WorldQualityService(EntityDelegatesMixin):
         with self._calendar_context_lock:
             cached = self._cached_calendar_string
         if cached is not None:
-            logger.debug(
-                "get_calendar_context: returning cached calendar context (%d chars)",
-                len(cached),
-            )
+            if not self._calendar_cache_hit_logged:
+                logger.debug(
+                    "get_calendar_context: returning cached calendar context (%d chars)",
+                    len(cached),
+                )
+                self._calendar_cache_hit_logged = True
             return cached
         # Slow path: no calendar has been set yet
         logger.debug("get_calendar_context: returning sentinel calendar context")

@@ -853,6 +853,7 @@ class TestRequiredEntityConstraint:
         config.get_refinement_temperature.return_value = 0.7
         config.max_iterations = 3
         config.early_stop_patience = 2
+        config.early_stopping_min_iterations = 2
         config.dimension_minimum = 6.0
         svc.get_config.return_value = config
 
@@ -1011,6 +1012,7 @@ class TestRequiredEntityConstraint:
         config.get_refinement_temperature.return_value = 0.7
         config.max_iterations = 3
         config.early_stop_patience = 2
+        config.early_stopping_min_iterations = 2
         config.dimension_minimum = 6.0
         svc.get_config.return_value = config
 
@@ -1065,6 +1067,7 @@ class TestRequiredEntityConstraint:
         config.get_refinement_temperature.return_value = 0.7
         config.max_iterations = 3
         config.early_stop_patience = 2
+        config.early_stopping_min_iterations = 2
         config.dimension_minimum = 6.0
         svc.get_config.return_value = config
 
@@ -1578,6 +1581,7 @@ class TestNormalizationConsolidation:
             judge_temperature=0.3,
             max_iterations=1,
             min_iterations=1,
+            early_stopping_min_iterations=1,
             dimension_minimum=6.0,
             get_threshold=MagicMock(return_value=6.0),
             get_refinement_temperature=MagicMock(return_value=0.7),
