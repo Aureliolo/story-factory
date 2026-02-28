@@ -694,7 +694,9 @@ def _judge_relationship_quality(
     if brief:
         if brief.premise:
             story_context_parts.append(f"PREMISE: {brief.premise}")
-        setting_parts = [p for p in (brief.setting_place, brief.setting_time) if p]
+        setting_parts = [
+            p for p in (brief.setting_place, brief.setting_time) if isinstance(p, str) and p
+        ]
         if setting_parts:
             story_context_parts.append(f"SETTING: {', '.join(setting_parts)}")
         if brief.tone:

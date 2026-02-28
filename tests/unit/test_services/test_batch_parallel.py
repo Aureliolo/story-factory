@@ -2166,6 +2166,83 @@ class TestGenerateBatchPhased:
 # ---------------------------------------------------------------------------
 
 
+class TestPhasedCriticalExceptionReRaise:
+    """Tests that MemoryError/RecursionError are re-raised in phased pipeline."""
+
+    def test_phase1_reraises_memory_error(self, phased_svc):
+        """Phase 1 (create) re-raises MemoryError instead of swallowing it."""
+
+        def create_fn(_i):
+            """Raise MemoryError during creation."""
+            raise MemoryError("OOM in create")
+
+        with pytest.raises(MemoryError, match="OOM in create"):
+            _generate_batch_parallel(
+                svc=phased_svc,
+                count=1,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, _make_char_scores(8.0), 1),
+                get_name=lambda e: e["name"],
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=lambda _e: _make_char_scores(8.0),
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=lambda e: (e, _make_char_scores(8.0), 2),
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
+    def test_phase2_reraises_memory_error(self, phased_svc):
+        """Phase 2 (judge) re-raises MemoryError instead of swallowing it."""
+
+        def judge_fn(_entity):
+            """Raise MemoryError during judging."""
+            raise MemoryError("OOM in judge")
+
+        with pytest.raises(MemoryError, match="OOM in judge"):
+            _generate_batch_parallel(
+                svc=phased_svc,
+                count=1,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, _make_char_scores(8.0), 1),
+                get_name=lambda e: e["name"],
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=lambda _i: {"name": "E0"},
+                judge_only_fn=judge_fn,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=lambda e: (e, _make_char_scores(8.0), 2),
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
+    def test_phase3b_reraises_memory_error(self, phased_svc):
+        """Phase 3b (refine) re-raises MemoryError instead of swallowing it."""
+        failing_scores = _make_char_scores(3.0)
+
+        def refine_fn(_entity):
+            """Raise MemoryError during refinement."""
+            raise MemoryError("OOM in refine")
+
+        with pytest.raises(MemoryError, match="OOM in refine"):
+            _generate_batch_parallel(
+                svc=phased_svc,
+                count=1,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, _make_char_scores(8.0), 1),
+                get_name=lambda e: e["name"],
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=lambda _i: {"name": "E0"},
+                judge_only_fn=lambda _e: failing_scores,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=refine_fn,
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
+
 class TestRelationshipPhasedPipeline:
     """Tests for the phased-pipeline callables in generate_relationships_with_quality.
 
