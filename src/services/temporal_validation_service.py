@@ -50,6 +50,7 @@ class TemporalErrorType(StrEnum):
     POST_DESTRUCTION = "post_destruction"  # Event after location/faction destruction
     INVALID_DATE = "invalid_date"  # Date doesn't validate against calendar
     LIFESPAN_OVERLAP = "lifespan_overlap"  # Character lifespan inconsistent with events
+    LIFESPAN_IMPLAUSIBLE = "lifespan_implausible"  # Lifespan duration exceeds plausible maximum
     FOUNDING_ORDER = "founding_order"  # Faction founded before parent faction
     MISSING_TEMPORAL_DATA = "missing_temporal_data"  # Entity has no temporal/lifecycle data
 
@@ -596,11 +597,11 @@ class TemporalValidationService:
             logger.warning("Temporal warning: %s", warning.message)
 
     def auto_correct_era_names(self, world_db: WorldDatabase) -> int:
-        """Resolve and fix mismatched era names on entity timestamps.
+        """Resolve and fix mismatched or missing era names on entity timestamps.
 
         Iterates all entities, extracts lifecycle timestamps with years, resolves
         each year against the calendar's canonical era mapping, and updates the
-        entity's attributes when the stored era_name doesn't match.
+        entity's attributes when the stored era_name is missing or doesn't match.
 
         Args:
             world_db: WorldDatabase containing entities and calendar.
@@ -613,7 +614,7 @@ class TemporalValidationService:
             world_settings = world_db.get_world_settings()
             if world_settings and world_settings.calendar:
                 calendar = world_settings.calendar
-        except Exception as e:
+        except (sqlite3.Error, KeyError, ValueError) as e:
             logger.warning("auto_correct_era_names: could not load calendar: %s", e)
             return 0
 
@@ -657,13 +658,35 @@ class TemporalValidationService:
             attrs = dict(entity.attributes)
             lifecycle_data = attrs.get("lifecycle")
             if not isinstance(lifecycle_data, dict):
+                logger.warning(
+                    "auto_correct_era_names: %s '%s' has non-dict lifecycle data "
+                    "(type=%s), skipping %d correction(s)",
+                    entity.type,
+                    entity.name,
+                    type(lifecycle_data).__name__,
+                    len(corrections),
+                )
                 continue
 
             updated_lifecycle = dict(lifecycle_data)
+            mutated = False
             for ts_label, correct_era in corrections.items():
                 ts_data = updated_lifecycle.get(ts_label)
                 if isinstance(ts_data, dict):
                     updated_lifecycle[ts_label] = {**ts_data, "era_name": correct_era}
+                    mutated = True
+                else:
+                    logger.debug(
+                        "auto_correct_era_names: %s '%s' timestamp '%s' is not a dict "
+                        "(type=%s), skipping",
+                        entity.type,
+                        entity.name,
+                        ts_label,
+                        type(ts_data).__name__,
+                    )
+
+            if not mutated:
+                continue
 
             attrs["lifecycle"] = updated_lifecycle
             world_db.update_entity(entity_id=entity.id, attributes=attrs)
@@ -699,7 +722,7 @@ class TemporalValidationService:
                 entity_id=entity.id,
                 entity_name=entity.name,
                 entity_type=entity.type,
-                error_type=TemporalErrorType.LIFESPAN_OVERLAP,
+                error_type=TemporalErrorType.LIFESPAN_IMPLAUSIBLE,
                 severity=TemporalErrorSeverity.WARNING,
                 message=(
                     f"{entity.type.capitalize()} '{entity.name}' has implausible "

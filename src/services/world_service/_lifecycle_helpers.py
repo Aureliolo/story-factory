@@ -52,19 +52,22 @@ def build_character_lifecycle(char: Character) -> dict[str, Any]:
 
     if char.death_year is not None or char.death_era is not None:
         death: dict[str, Any] = {}
-        if char.death_year is not None:
-            if char.death_year < 0:
-                logger.warning(
-                    "Character '%s' has negative death_year %d — treating as alive (LLM sentinel)",
-                    char.name,
-                    char.death_year,
-                )
-            else:
+        if char.death_year is not None and char.death_year < 0:
+            # Negative death_year is an LLM sentinel for "alive" — skip entire death section
+            logger.warning(
+                "Character '%s' has negative death_year %d — treating as alive "
+                "(LLM sentinel, dropping death data including era '%s')",
+                char.name,
+                char.death_year,
+                char.death_era,
+            )
+        else:
+            if char.death_year is not None:
                 death["year"] = char.death_year
-        if char.death_era is not None:
-            death["era_name"] = char.death_era
-        if death:
-            lifecycle["death"] = death
+            if char.death_era is not None:
+                death["era_name"] = char.death_era
+            if death:
+                lifecycle["death"] = death
 
     if char.temporal_notes:
         lifecycle["temporal_notes"] = char.temporal_notes

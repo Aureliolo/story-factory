@@ -67,7 +67,13 @@ def _recover_orphans(
         existing_rels.append((source_entity_obj.name, target_entity_obj.name, r.relation_type))
 
     # Track orphan names still needing connections (mutable set for fast lookup)
-    orphan_names = {normalized_name_cache.get(o.name, _normalize_name(o.name)) for o in orphans}
+    orphan_names: set[str] = set()
+    for o in orphans:
+        cached = normalized_name_cache.get(o.name)
+        if cached is None:
+            cached = _normalize_name(o.name)
+            normalized_name_cache[o.name] = cached
+        orphan_names.add(cached)
 
     added_count = 0
 

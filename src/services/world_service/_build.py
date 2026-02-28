@@ -503,7 +503,7 @@ def _build_world_entities(
     report_progress("Embedding world content for RAG...")
     try:
         embed_counts = services.embedding.embed_all_world_data(world_db, state)
-        total_embedded = sum(embed_counts.values()) if isinstance(embed_counts, dict) else 0
+        total_embedded = sum(embed_counts.values())
         logger.info(
             "World embedding complete (batch step): %s (total embedded: %d)",
             embed_counts,
@@ -900,6 +900,12 @@ def _generate_relationships(
         cancel_check=cancel_check,
         progress_callback=progress_callback,
     )
+
+    # Refresh entity snapshot before resolving generated relationships so that
+    # entities added during generation are available for fuzzy matching.
+    all_entities = world_db.list_entities()
+    entity_by_id = {e.id: e for e in all_entities}
+
     added_count = 0
     threshold = svc.settings.fuzzy_match_threshold
 

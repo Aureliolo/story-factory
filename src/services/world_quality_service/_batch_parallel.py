@@ -590,11 +590,21 @@ def _generate_batch_phased[T, S: BaseQualityScores](
         try:
             entity = create_only_fn(i)
             if entity is not None and not is_empty_fn(entity):
-                created_entities.append((i, entity))
                 entity_elapsed = time.time() - entity_start
                 completed_times.append(entity_elapsed)
                 if register_created_fn:
-                    register_created_fn(entity)
+                    try:
+                        register_created_fn(entity)
+                    except Exception as reg_err:
+                        logger.warning(
+                            "Phase 1: register_created_fn failed for %s %d/%d '%s': %s",
+                            entity_type,
+                            i + 1,
+                            count,
+                            get_name(entity),
+                            reg_err,
+                        )
+                created_entities.append((i, entity))
                 logger.debug(
                     "Phase 1: created %s %d/%d '%s' in %.2fs",
                     entity_type,

@@ -237,7 +237,7 @@ def log_batch_summary(
         return
 
     averages = [scores.average for _, scores in results]
-    passed = sum(1 for avg in averages if round(avg, 1) >= quality_threshold)
+    passed = sum(1 for avg in averages if avg >= quality_threshold)
     total = len(results)
     min_score = min(averages)
     max_score = max(averages)
@@ -245,7 +245,7 @@ def log_batch_summary(
 
     failed_names: list[str] = []
     for entity, scores in results:
-        if round(scores.average, 1) < quality_threshold:
+        if scores.average < quality_threshold:
             if get_name is not None:
                 name = get_name(entity)
             elif isinstance(entity, dict):

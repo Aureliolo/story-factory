@@ -104,7 +104,6 @@ async def generate_more(
                 page,
                 count,
                 use_quality,
-                all_existing_names,
                 should_cancel,
                 update_progress,
                 progress_label,
@@ -116,7 +115,6 @@ async def generate_more(
                 page,
                 count,
                 use_quality,
-                all_existing_names,
                 should_cancel,
                 update_progress,
                 progress_label,
@@ -216,7 +214,6 @@ async def _generate_characters(
     page,
     count,
     use_quality,
-    all_existing_names,
     should_cancel,
     update_progress,
     progress_label,
@@ -229,7 +226,6 @@ async def _generate_characters(
         page: WorldPage instance.
         count: Number to generate.
         use_quality: Whether quality refinement is enabled.
-        all_existing_names: Existing entity names to avoid duplicates.
         should_cancel: Cancel check callable.
         update_progress: Progress update callback.
         progress_label: Progress label widget.
@@ -345,7 +341,6 @@ async def _generate_locations(
     page,
     count,
     use_quality,
-    all_existing_names,
     should_cancel,
     update_progress,
     progress_label,
@@ -357,7 +352,6 @@ async def _generate_locations(
         page: WorldPage instance.
         count: Number to generate.
         use_quality: Whether quality refinement is enabled.
-        all_existing_names: Existing entity names to avoid duplicates.
         should_cancel: Cancel check callable.
         update_progress: Progress update callback.
         progress_label: Progress label widget.

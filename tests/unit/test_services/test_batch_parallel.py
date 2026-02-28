@@ -2160,6 +2160,50 @@ class TestGenerateBatchPhased:
                     quality_threshold=7.5,
                 )
 
+    def test_register_created_fn_failure_logs_warning(self, phased_svc, caplog):
+        """When register_created_fn raises, entity is still added and warning logged."""
+        from src.services.world_quality_service._batch_parallel import _generate_batch_phased
+
+        scores = _make_char_scores(8.0)
+        create_idx = 0
+
+        def create_fn(_i):
+            """Create test entities sequentially."""
+            nonlocal create_idx
+            entity = {"name": f"E{create_idx}"}
+            create_idx += 1
+            return entity
+
+        registration_attempts: list[str] = []
+
+        def failing_register(entity):
+            """Register that always fails."""
+            registration_attempts.append(entity["name"])
+            raise RuntimeError("Registration failed")
+
+        with caplog.at_level(logging.WARNING):
+            results = _generate_batch_phased(
+                svc=phased_svc,
+                count=2,
+                entity_type="test",
+                create_only_fn=create_fn,
+                judge_only_fn=lambda e: scores,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=lambda e: (e, scores, 1),
+                prepare_creator_fn=None,
+                prepare_judge_fn=None,
+                get_name=lambda e: e["name"],
+                quality_threshold=7.5,
+                register_created_fn=failing_register,
+            )
+
+        # Both entities should still be generated despite registration failure
+        assert len(results) == 2
+        # Registration was attempted for both
+        assert len(registration_attempts) == 2
+        # Warning logged for each failure
+        assert sum("register_created_fn failed" in msg for msg in caplog.messages) == 2
+
 
 # ---------------------------------------------------------------------------
 # generate_relationships_with_quality phased-pipeline tests

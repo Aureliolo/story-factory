@@ -250,19 +250,25 @@ class ModelService:
             # Callers receive [] and cannot distinguish from "no models installed".
             return []
 
-    def _fetch_model_list(self) -> list | None:
-        """Fetch raw model list from Ollama, using the installed cache when available.
+    def _fetch_model_list(self) -> list[Any] | None:
+        """Fetch raw model list from Ollama.
 
-        Returns the response.models list or None on failure.  Shared by both
-        ``list_installed`` and ``list_installed_with_sizes`` to avoid duplicate
-        API calls.
+        Used by ``list_installed_with_sizes`` to get model objects with size
+        metadata.  ``list_installed`` handles its own API call and TTL caching
+        separately.
+
+        Returns:
+            List of Ollama model objects, or None on failure.
         """
+        logger.debug("_fetch_model_list: querying Ollama at %s", self.settings.ollama_url)
         try:
             client = ollama.Client(
                 host=self.settings.ollama_url, timeout=self.settings.ollama_list_models_timeout
             )
             response = client.list()
-            return list(response.models)
+            models = list(response.models)
+            logger.debug("_fetch_model_list: received %d model(s)", len(models))
+            return models
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.warning(f"Failed to list models from Ollama: {e}")
             return None
@@ -270,8 +276,7 @@ class ModelService:
     def list_installed_with_sizes(self) -> dict[str, float]:
         """List installed Ollama models with their actual sizes.
 
-        Shares the underlying Ollama API response with ``list_installed`` via
-        ``_fetch_model_list`` to avoid redundant calls.
+        Uses ``_fetch_model_list`` to get model objects with size metadata.
 
         Returns:
             Dict mapping model ID to size in GB.

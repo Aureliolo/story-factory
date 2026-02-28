@@ -1005,7 +1005,7 @@ class TestGenerateEvents:
         world_service._generate_events(sample_story_state, mock_world_db, mock_services)
 
         call_args = mock_services.world_quality.generate_events_with_quality.call_args
-        entity_context_provider = call_args.kwargs.get("entity_context_provider")
+        entity_context_provider = call_args.kwargs["entity_context_provider"]
         entity_context = entity_context_provider()
         assert "birth_year=1200" in entity_context
         assert "death_year=1260" in entity_context

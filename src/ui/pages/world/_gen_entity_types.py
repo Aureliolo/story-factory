@@ -456,11 +456,18 @@ async def _generate_events(
                 continue
 
             timestamp_in_story = build_event_timestamp(event)
-            participants = resolve_event_participants(
+            participants, dropped = resolve_event_participants(
                 event,
                 all_entities,
                 threshold=page.services.world_quality.settings.fuzzy_match_threshold,
             )
+            if dropped:
+                logger.warning(
+                    "Event '%s' lost %d participant(s): %s",
+                    description[:60],
+                    len(dropped),
+                    dropped,
+                )
             consequences = event.get("consequences", [])
 
             page.state.world_db.add_event(
@@ -564,14 +571,16 @@ async def _generate_relationships(
             if not page.state.world_db or not page.state.project:
                 ui.notify("No project loaded", type="negative")
                 return
+            # Fetch fresh entity list to pick up any entities added during generation
+            fresh_entities = page.state.world_db.list_entities()
             added = 0
             for rel_data, scores in selected:
                 if isinstance(rel_data, dict) and "source" in rel_data and "target" in rel_data:
                     source_entity = next(
-                        (e for e in entities if e.name == rel_data["source"]), None
+                        (e for e in fresh_entities if e.name == rel_data["source"]), None
                     )
                     target_entity = next(
-                        (e for e in entities if e.name == rel_data["target"]), None
+                        (e for e in fresh_entities if e.name == rel_data["target"]), None
                     )
                     if source_entity and target_entity:
                         rel_id = page.services.world.add_relationship(

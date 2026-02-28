@@ -1,5 +1,6 @@
 """Tests for VRAM management functions."""
 
+import logging
 from unittest.mock import MagicMock, patch
 
 from src.memory.mode_models import VramStrategy
@@ -24,7 +25,7 @@ class TestPrepareModelShortCircuit:
     def setup_method(self) -> None:
         """Reset the module-level cache before each test."""
         with _vram._last_prepared_model_lock:
-            _vram._last_prepared_model_id = None
+            _vram._last_prepared_model_key = None
 
     @patch("src.settings.get_available_vram", return_value=24.0)
     @patch("src.settings.get_installed_models_with_sizes", return_value={"test-model:8b": 4.0})
@@ -76,27 +77,87 @@ class TestPrepareModelResidencyCheck:
     def setup_method(self) -> None:
         """Reset the module-level cache before each test."""
         with _vram._last_prepared_model_lock:
-            _vram._last_prepared_model_id = None
+            _vram._last_prepared_model_key = None
 
     @patch("src.settings.get_available_vram", side_effect=RuntimeError("GPU info unavailable"))
     @patch("src.settings.get_installed_models_with_sizes", return_value={"test-model:8b": 4.0})
     @patch("src.settings.get_model_info")
-    def test_residency_check_exception_logged(
+    def test_residency_check_expected_exception_logged_at_debug(
         self,
         _mock_info: MagicMock,
         _mock_installed: MagicMock,
         _mock_vram: MagicMock,
+        caplog,
     ) -> None:
-        """Exception in residency check is caught and logged at debug level."""
+        """Expected exceptions (RuntimeError, etc.) in residency check are logged at DEBUG."""
         svc = MagicMock()
         svc.settings = MagicMock(spec=Settings)
         svc.settings.vram_strategy = VramStrategy.SEQUENTIAL.value
         svc._loaded_models = set()
         svc._ollama_client = MagicMock()
 
-        # Should not raise — the exception is caught inside prepare_model
-        _vram.prepare_model(svc, "test-model:8b")
+        with caplog.at_level(logging.DEBUG, logger="src.services.model_mode_service._vram"):
+            _vram.prepare_model(svc, "test-model:8b")
+
         assert "test-model:8b" in svc._loaded_models
+        assert any(
+            "Could not check GPU residency" in r.message and r.levelno == logging.DEBUG
+            for r in caplog.records
+        )
+
+    @patch(
+        "src.settings.get_available_vram",
+        side_effect=MemoryError("unexpected"),
+    )
+    @patch("src.settings.get_installed_models_with_sizes", return_value={"test-model:8b": 4.0})
+    @patch("src.settings.get_model_info")
+    def test_residency_check_unexpected_exception_logged_at_warning(
+        self,
+        _mock_info: MagicMock,
+        _mock_installed: MagicMock,
+        _mock_vram: MagicMock,
+        caplog,
+    ) -> None:
+        """Unexpected exceptions in residency check are logged at WARNING."""
+        svc = MagicMock()
+        svc.settings = MagicMock(spec=Settings)
+        svc.settings.vram_strategy = VramStrategy.SEQUENTIAL.value
+        svc._loaded_models = set()
+        svc._ollama_client = MagicMock()
+
+        with caplog.at_level(logging.DEBUG, logger="src.services.model_mode_service._vram"):
+            _vram.prepare_model(svc, "test-model:8b")
+
+        assert "test-model:8b" in svc._loaded_models
+        assert any(
+            "Unexpected error checking GPU residency" in r.message and r.levelno == logging.WARNING
+            for r in caplog.records
+        )
+
+    @patch("src.settings.get_available_vram", return_value=6.0)
+    @patch("src.settings.get_installed_models_with_sizes", return_value={"big-model:70b": 20.0})
+    @patch("src.settings.get_model_info")
+    def test_residency_below_threshold_warns(
+        self,
+        _mock_info: MagicMock,
+        _mock_installed: MagicMock,
+        _mock_vram: MagicMock,
+        caplog,
+    ) -> None:
+        """GPU residency below MIN_GPU_RESIDENCY emits a WARNING."""
+        svc = MagicMock()
+        svc.settings = MagicMock(spec=Settings)
+        svc.settings.vram_strategy = VramStrategy.SEQUENTIAL.value
+        svc._loaded_models = set()
+        svc._ollama_client = MagicMock()
+
+        with caplog.at_level(logging.WARNING, logger="src.services.model_mode_service._vram"):
+            _vram.prepare_model(svc, "big-model:70b")
+
+        assert "big-model:70b" in svc._loaded_models
+        assert any(
+            "GPU residency" in r.message and "below minimum" in r.message for r in caplog.records
+        )
 
 
 class TestUnloadClearsLastPreparedCache:
@@ -105,7 +166,7 @@ class TestUnloadClearsLastPreparedCache:
     def setup_method(self) -> None:
         """Reset the module-level cache before each test."""
         with _vram._last_prepared_model_lock:
-            _vram._last_prepared_model_id = None
+            _vram._last_prepared_model_key = None
 
     def test_unload_clears_cache_for_evicted_model(self) -> None:
         """When a model is evicted, the last-prepared cache is cleared."""
@@ -113,11 +174,11 @@ class TestUnloadClearsLastPreparedCache:
         svc._loaded_models = {"model-a:8b", "model-b:8b"}
         svc._ollama_client = MagicMock()
 
-        # Simulate model-a was last prepared
+        # Simulate model-a was last prepared (key is now a (model_id, strategy) tuple)
         with _vram._last_prepared_model_lock:
-            _vram._last_prepared_model_id = "model-a:8b"
+            _vram._last_prepared_model_key = ("model-a:8b", "sequential")
 
         _vram.unload_all_except(svc, "model-b:8b")
 
         with _vram._last_prepared_model_lock:
-            assert _vram._last_prepared_model_id is None
+            assert _vram._last_prepared_model_key is None

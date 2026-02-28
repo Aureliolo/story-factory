@@ -482,18 +482,19 @@ def generate_events_with_quality(
     descriptions = existing_descriptions.copy()
     rejected: list[str] = []
 
-    # Cache entity context by entity count so it's not rebuilt when no entities were added
+    # Cache entity context by content hash so it's not rebuilt when unchanged.
+    # Uses hash comparison to detect real content changes (not just line count).
     _cached_context: list[str] = [""]  # mutable container for closure
-    _cached_count: list[int] = [-1]
+    _cached_hash: list[int] = [0]
 
     def _get_entity_context() -> str:
-        """Return entity context, rebuilding only when entity count changes."""
+        """Return entity context, rebuilding only when content actually changes."""
         fresh = entity_context_provider()
-        line_count = fresh.count("\n")
-        if line_count != _cached_count[0]:
+        fresh_hash = hash(fresh)
+        if fresh_hash != _cached_hash[0]:
             _cached_context[0] = fresh
-            _cached_count[0] = line_count
-            logger.debug("Event entity context refreshed (%d lines)", line_count)
+            _cached_hash[0] = fresh_hash
+            logger.debug("Event entity context refreshed (%d lines)", fresh.count("\n"))
         return _cached_context[0]
 
     return _generate_batch(

@@ -384,10 +384,12 @@ def quality_refinement_loop[T, S: BaseQualityScores](
             # to the best iteration's entity before the next refinement cycle.
             # This prevents wasting a refinement+judge cycle on a degraded entity
             # while still letting the patience mechanism handle persistent degradation.
+            entity_reverted = False
             if scores.average < history.peak_score and history.best_iteration != current_iter:
                 best_entity_data_snap = history.get_best_entity()
                 if best_entity_data_snap:
                     entity = _reconstruct_entity(best_entity_data_snap, entity, entity_type)
+                    entity_reverted = True
                     logger.info(
                         "%s '%s' score regressed (%.1f < %.1f), reverting to best "
                         "iteration %d for next refinement",
@@ -417,7 +419,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
             if rounded_score >= entity_threshold and not below_floor:
                 # H1 fix: if monotonicity guard reverted entity to best iteration,
                 # return scores from that iteration for consistency.
-                if history.best_iteration != current_iter:
+                if entity_reverted and history.best_iteration > 0:
                     best_record = history.iterations[history.best_iteration - 1]
                     scores = score_cls(**best_record.scores)
                     logger.info(
