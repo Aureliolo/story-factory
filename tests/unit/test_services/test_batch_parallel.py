@@ -842,6 +842,42 @@ class TestCollectLateResults:
                     None,
                 )
 
+    def test_vram_allocation_error_cause_reraised_from_late_future(self):
+        """Exception with VRAMAllocationError __cause__ is re-raised from late future."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        def vram_fail():
+            """Raise WorldGenerationError caused by VRAMAllocationError."""
+            try:
+                raise VRAMAllocationError("GPU OOM", model_id="test:8b")
+            except VRAMAllocationError:
+                raise WorldGenerationError("Generation failed") from VRAMAllocationError(
+                    "GPU OOM", model_id="test:8b"
+                )
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(vram_fail)
+            try:
+                future.result()
+            except WorldGenerationError:
+                pass
+
+            pending: dict = {future: (0, 0.0)}
+            results: list = []
+            completed_times: list[float] = []
+            errors: list[str] = []
+
+            with pytest.raises(WorldGenerationError):
+                _collect_late_results(
+                    pending,
+                    results,
+                    completed_times,
+                    errors,
+                    "test",
+                    lambda e: e["name"],
+                    None,
+                )
+
     def test_on_success_called_for_late_results(self):
         """on_success hook is invoked for each successful late result."""
         from concurrent.futures import ThreadPoolExecutor

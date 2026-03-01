@@ -790,8 +790,8 @@ class TestMakeModelPreparers:
     @patch("src.services.world_quality_service._model_resolver.prepare_model")
     @patch("src.services.world_quality_service._model_resolver.pair_fits", return_value=True)
     @patch("src.services.world_quality_service._model_resolver.get_vram_snapshot")
-    def test_vram_error_in_preparer_is_swallowed(self, _snapshot, _pair_fits, mock_prepare):
-        """VRAMAllocationError in a preparer closure is caught (non-fatal)."""
+    def test_vram_error_in_preparer_propagates(self, _snapshot, _pair_fits, mock_prepare):
+        """VRAMAllocationError in a preparer closure propagates (non-retryable)."""
         from src.services.world_quality_service._model_resolver import make_model_preparers
 
         snapshot = MagicMock()
@@ -804,6 +804,7 @@ class TestMakeModelPreparers:
         svc = self._make_service()
         prep_creator, _prep_judge = make_model_preparers(svc, "character")
 
-        # Must not raise — VRAMAllocationError is swallowed in the closure
+        # VRAMAllocationError must propagate — it's non-retryable
         assert prep_creator is not None
-        prep_creator()
+        with pytest.raises(VRAMAllocationError):
+            prep_creator()
