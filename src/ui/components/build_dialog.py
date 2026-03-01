@@ -122,6 +122,8 @@ async def show_build_structure_dialog(
             # Progress callback to update dialog
             def on_progress(progress) -> None:
                 """Update the dialog label and progress bar with current build progress."""
+                # Write to AppState FIRST — state survives dialog destruction
+                state.update_build_progress(progress.step, progress.total_steps, progress.message)
                 safe_progress_update(
                     progress_label,
                     progress_bar,
@@ -191,6 +193,7 @@ async def show_build_structure_dialog(
             ui.notify(f"Error: {e}", type="negative")
             dialog.close()
         finally:
+            state.clear_build_progress()
             state.end_background_task(f"build_structure_{mode}")
 
     card_bg = "#1f2937"

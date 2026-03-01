@@ -634,7 +634,7 @@ class ModelService:
                     target_model,
                 )
             else:
-                logger.warning(
+                logger.info(
                     "Target model '%s' is NOT loaded (loaded: %s) — first LLM call will "
                     "incur a cold-start penalty (~30-60s for loading model into VRAM)",
                     target_model,

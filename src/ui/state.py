@@ -115,6 +115,12 @@ class AppState:
     _background_task_count: int = 0
     _background_task_lock: threading.Lock = field(default_factory=threading.Lock)
 
+    # ========== Build Progress (survives dialog destruction) ==========
+    build_in_progress: bool = False
+    build_step: int = 0
+    build_total_steps: int = 0
+    build_message: str = ""
+
     # ========== Project List Cache ==========
     # Cache stores ProjectSummary objects from ProjectService.list_projects()
     _project_list_cache: list[Any] | None = field(default=None, repr=False)
@@ -477,6 +483,29 @@ class AppState:
         self.generation_is_paused = False
         self.generation_can_resume = False
         logger.debug("Generation flags reset")
+
+    # ========== Build Progress Methods ==========
+
+    def update_build_progress(self, step: int, total_steps: int, message: str) -> None:
+        """Update build progress state (survives dialog destruction).
+
+        Args:
+            step: Current build step number.
+            total_steps: Total number of build steps.
+            message: Human-readable progress message.
+        """
+        self.build_in_progress = True
+        self.build_step = step
+        self.build_total_steps = total_steps
+        self.build_message = message
+
+    def clear_build_progress(self) -> None:
+        """Reset build progress state after build completes or fails."""
+        self.build_in_progress = False
+        self.build_step = 0
+        self.build_total_steps = 0
+        self.build_message = ""
+        logger.debug("Build progress cleared")
 
     # ========== Project List Cache Methods ==========
 

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import ollama
 
 from src.memory.mode_models import VramStrategy
+from src.utils.exceptions import VRAMAllocationError
 from src.utils.validation import validate_not_empty
 
 # Track last prepared model+strategy to suppress repeated log messages
@@ -92,38 +93,38 @@ def prepare_model(svc: ModelModeService, model_id: str) -> None:
             # Need to free up space
             unload_all_except(svc, model_id)
 
-    # Model will be loaded on first use by Ollama
-    svc._loaded_models.add(model_id)
-
-    # M6: warn if model residency is below minimum threshold.
-    # Reuse `installed` and `available` from the ADAPTIVE branch when possible;
-    # otherwise fetch fresh values for the SEQUENTIAL path.
+    # Pre-load residency guard: block oversized models BEFORE marking as loaded.
+    # This prevents VRAM OOM by refusing to load models that would push past the
+    # 80% GPU residency threshold.  Query fresh free VRAM after any eviction above.
     try:
-        if strategy != VramStrategy.ADAPTIVE:
-            # SEQUENTIAL path: need fresh values since they weren't fetched above
-            installed = get_installed_models_with_sizes()
-            from src.settings import get_available_vram
+        from src.settings import get_available_vram
 
-            available = get_available_vram()
-        # `installed` and `available` are now set from either ADAPTIVE or fresh fetch
-        if model_id in installed:
-            model_size_gb = installed[model_id]
+        fresh_installed = get_installed_models_with_sizes()
+        fresh_available = get_available_vram()
+        if model_id in fresh_installed:
+            model_size_gb = fresh_installed[model_id]
             if model_size_gb > 0:
-                residency = min(available / model_size_gb, 1.0)
+                residency = min(fresh_available / model_size_gb, 1.0)
                 if residency < MIN_GPU_RESIDENCY:
-                    logger.warning(
-                        "Model %s GPU residency %.0f%% is below minimum %.0f%% "
-                        "(model=%.1fGB, available_vram=%.1fGB)",
-                        model_id,
-                        residency * 100,
-                        MIN_GPU_RESIDENCY * 100,
-                        model_size_gb,
-                        available,
+                    raise VRAMAllocationError(
+                        f"Model {model_id} GPU residency {residency:.0%} is below "
+                        f"minimum {MIN_GPU_RESIDENCY:.0%} "
+                        f"(model={model_size_gb:.1f}GB, free_vram={fresh_available:.1f}GB). "
+                        f"Not loading to avoid OOM.",
+                        model_id=model_id,
+                        model_size_gb=model_size_gb,
+                        available_vram_gb=float(fresh_available),
+                        residency=residency,
                     )
+    except VRAMAllocationError:
+        raise
     except (ConnectionError, TimeoutError, ollama.ResponseError, RuntimeError) as e:
         logger.debug("Could not check GPU residency for %s: %s", model_id, e)
     except Exception as e:
         logger.warning("Unexpected error checking GPU residency for %s: %s", model_id, e)
+
+    # Model will be loaded on first use by Ollama
+    svc._loaded_models.add(model_id)
 
 
 def unload_all_except(svc: ModelModeService, keep_model: str) -> None:
@@ -160,12 +161,15 @@ def unload_all_except(svc: ModelModeService, keep_model: str) -> None:
     # Only remove successfully unloaded models from tracking
     svc._loaded_models = (svc._loaded_models - successfully_unloaded) | {keep_model}
 
-    # Clear last-prepared cache when models are evicted so the next
-    # prepare_model() call for the kept model actually runs setup.
+    # Clear last-prepared cache unconditionally when any models were evicted.
+    # The previous logic only cleared when the cached model was evicted, but
+    # eviction changes the VRAM landscape — the next prepare_model() must
+    # re-evaluate residency even for the kept model.
     global _last_prepared_model_key
     with _last_prepared_model_lock:
-        if _last_prepared_model_key and _last_prepared_model_key[0] in successfully_unloaded:
+        if _last_prepared_model_key:
             logger.debug(
-                "Cleared last-prepared model cache (evicted %s)", _last_prepared_model_key[0]
+                "Cleared last-prepared model cache after eviction (was %s)",
+                _last_prepared_model_key[0],
             )
             _last_prepared_model_key = None

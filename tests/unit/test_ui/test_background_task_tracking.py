@@ -357,3 +357,46 @@ class TestProjectListCache:
             result3 = state.get_cached_projects(fetch_projects)
             assert call_count == initial_call_count + 1  # Incremented, cache miss
             assert result3[0]["id"] == "2"
+
+
+class TestBuildProgress:
+    """Tests for build progress state fields."""
+
+    def test_build_in_progress_defaults_false(self):
+        """build_in_progress should default to False."""
+        state = AppState()
+        assert state.build_in_progress is False
+        assert state.build_step == 0
+        assert state.build_total_steps == 0
+        assert state.build_message == ""
+
+    def test_update_build_progress_sets_fields(self):
+        """update_build_progress should set all progress fields."""
+        state = AppState()
+        state.update_build_progress(3, 10, "[3/10] Generating locations...")
+
+        assert state.build_in_progress is True
+        assert state.build_step == 3
+        assert state.build_total_steps == 10
+        assert state.build_message == "[3/10] Generating locations..."
+
+    def test_clear_build_progress_resets_fields(self):
+        """clear_build_progress should reset all progress fields."""
+        state = AppState()
+        state.update_build_progress(5, 10, "Building...")
+
+        state.clear_build_progress()
+
+        assert state.build_in_progress is False
+        assert state.build_step == 0
+        assert state.build_total_steps == 0
+        assert state.build_message == ""
+
+    def test_update_build_progress_overwrites_previous(self):
+        """Calling update_build_progress again should overwrite previous values."""
+        state = AppState()
+        state.update_build_progress(1, 10, "Step 1")
+        state.update_build_progress(5, 10, "Step 5")
+
+        assert state.build_step == 5
+        assert state.build_message == "Step 5"

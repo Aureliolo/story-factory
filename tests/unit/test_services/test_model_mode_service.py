@@ -680,10 +680,10 @@ class TestModelModeServiceAdditional:
 
         service._loaded_models = {"model-a", "model-b"}
 
-        # Mock low VRAM scenario - less than required
-        # get_installed_models_with_sizes returns size 10GB, which needs ~12GB VRAM (20% overhead)
-        # But only 4GB available, so should unload other models
-        with patch("src.settings.get_available_vram", return_value=4):
+        # Mock low VRAM scenario:
+        # 1st call (ADAPTIVE check): 4GB available, model needs ~12GB → triggers eviction
+        # 2nd call (residency guard): 20GB available (after eviction freed VRAM) → passes
+        with patch("src.settings.get_available_vram", side_effect=[4, 20]):
             with patch(
                 "src.settings.get_installed_models_with_sizes", return_value={"model-c": 10.0}
             ):

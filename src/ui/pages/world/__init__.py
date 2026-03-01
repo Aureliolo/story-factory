@@ -149,6 +149,26 @@ class WorldPage:
 
     # ========== Build ==========
 
+    def _build_in_progress_banner(self) -> None:
+        """Build a banner showing world build is in progress."""
+        with (
+            ui.card()
+            .classes("w-full mb-4 border-l-4 border-blue-500 p-4")
+            .style("background-color: #1e3a5f")
+        ):
+            with ui.row().classes("items-center gap-3"):
+                ui.spinner("dots", size="lg", color="blue")
+                with ui.column().classes("gap-1"):
+                    ui.label("World Build In Progress").classes("text-lg font-bold text-blue-200")
+                    ui.label(self.state.build_message or "Building...").classes(
+                        "text-sm text-blue-300"
+                    )
+            if self.state.build_total_steps > 0:
+                ui.linear_progress(
+                    value=self.state.build_step / self.state.build_total_steps,
+                    show_value=False,
+                ).classes("w-full mt-2")
+
     def build(self) -> None:
         """Build the world page UI."""
         if not self.state.has_project:
@@ -159,6 +179,10 @@ class WorldPage:
         if not self.state.interview_complete:
             self._build_interview_required_message()
             return
+
+        # Show build-in-progress banner if a build is running
+        if self.state.build_in_progress:
+            self._build_in_progress_banner()
 
         # Pre-fetch entity options once for all child sections to avoid duplicate API calls
         if self.state.world_db:

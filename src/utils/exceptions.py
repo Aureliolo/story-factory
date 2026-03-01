@@ -6,7 +6,8 @@ Exception Hierarchy:
     ├── LLMError (LLM/Ollama related errors)
     │   ├── LLMConnectionError (connection failures)
     │   ├── LLMGenerationError (generation failures after retries)
-    │   └── CircuitOpenError (circuit breaker blocking requests)
+    │   ├── CircuitOpenError (circuit breaker blocking requests)
+    │   └── VRAMAllocationError (model too large for available GPU VRAM)
     ├── ValidationError (validation failures)
     │   └── ResponseValidationError (AI response validation)
     ├── ConfigError (configuration parsing/validation failures)
@@ -142,6 +143,52 @@ class CircuitOpenError(LLMError):
             "CircuitOpenError initialized: message=%s, time_until_retry=%s",
             message,
             time_until_retry,
+        )
+
+
+class VRAMAllocationError(LLMError):
+    """Raised when a model cannot be loaded because it would exceed available GPU VRAM.
+
+    The 80% GPU residency rule requires that at least 80% of a model fits in
+    GPU VRAM. Models split heavily between GPU and system RAM run 5-10x slower.
+    This error is non-retryable — retrying the same model wastes time.
+
+    Attributes:
+        model_id: The model that failed the residency check.
+        model_size_gb: Size of the model in GB.
+        available_vram_gb: Free VRAM in GB at the time of the check.
+        residency: Computed residency ratio (available / model_size).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        model_id: str | None = None,
+        model_size_gb: float | None = None,
+        available_vram_gb: float | None = None,
+        residency: float | None = None,
+    ):
+        """Initialize VRAMAllocationError with GPU context.
+
+        Args:
+            message: Human-readable error message.
+            model_id: The model that failed the residency check.
+            model_size_gb: Size of the model in GB.
+            available_vram_gb: Free VRAM in GB at the time of the check.
+            residency: Computed residency ratio (available / model_size).
+        """
+        super().__init__(message)
+        self.model_id = model_id
+        self.model_size_gb = model_size_gb
+        self.available_vram_gb = available_vram_gb
+        self.residency = residency
+        logger.debug(
+            "VRAMAllocationError initialized: model=%s, size=%.1fGB, "
+            "available=%.1fGB, residency=%.0f%%",
+            model_id,
+            model_size_gb or 0,
+            available_vram_gb or 0,
+            (residency or 0) * 100,
         )
 
 

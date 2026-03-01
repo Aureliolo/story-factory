@@ -7,10 +7,42 @@ the Settings hierarchy and avoiding self-judging bias.
 import logging
 from typing import TYPE_CHECKING
 
+from src.services.model_mode_service._vram import MIN_GPU_RESIDENCY
+from src.settings import get_available_vram, get_installed_models_with_sizes
+
 if TYPE_CHECKING:
     from src.services.world_quality_service import WorldQualityService
 
 logger = logging.getLogger(__name__)
+
+
+def _model_fits_in_vram(model_id: str) -> bool:
+    """Check whether a model meets the GPU residency threshold.
+
+    Returns True if the model is not in the installed list (unknown size —
+    optimistic) or if its residency ratio meets ``MIN_GPU_RESIDENCY``.
+    """
+    try:
+        installed = get_installed_models_with_sizes()
+        if model_id not in installed:
+            return True  # Unknown size — let Ollama decide
+        model_size = installed[model_id]
+        if model_size <= 0:
+            return True
+        available = get_available_vram()
+        residency = min(available / model_size, 1.0)
+        if residency < MIN_GPU_RESIDENCY:
+            logger.debug(
+                "Model %s fails VRAM residency check (%.0f%% < %.0f%%)",
+                model_id,
+                residency * 100,
+                MIN_GPU_RESIDENCY * 100,
+            )
+            return False
+        return True
+    except Exception as e:
+        logger.debug("VRAM check failed for %s, assuming fits: %s", model_id, e)
+        return True
 
 
 def resolve_model_for_role(service: WorldQualityService, agent_role: str) -> str:
@@ -154,6 +186,13 @@ def get_judge_model(service: WorldQualityService, entity_type: str | None = None
                 continue
             for alt_model in alternatives:
                 if alt_model != creator_model:
+                    # Skip alternatives that would violate the VRAM residency threshold
+                    if not _model_fits_in_vram(alt_model):
+                        logger.debug(
+                            "Skipping judge alternative '%s' — fails VRAM residency check",
+                            alt_model,
+                        )
+                        continue
                     # Use INFO for non-judge tags so users see when a model is
                     # repurposed from another role as judge.
                     log_fn = logger.debug if search_role == "judge" else logger.info
