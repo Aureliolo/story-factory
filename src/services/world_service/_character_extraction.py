@@ -3,6 +3,7 @@
 import logging
 
 from src.memory.story_state import StoryState
+from src.memory.world_calendar import WorldCalendar
 from src.memory.world_database import WorldDatabase
 from src.services.world_service._lifecycle_helpers import build_character_lifecycle
 
@@ -22,6 +23,9 @@ def _extract_characters_to_world(state: StoryState, world_db: WorldDatabase) -> 
     char_id_map: dict[str, str] = {}
     newly_added: set[str] = set()
 
+    # Retrieve calendar for era validation/auto-resolution
+    calendar = _get_calendar(world_db)
+
     # Pass 1: add all characters, building a name→ID map
     for char in state.characters:
         existing = world_db.get_entity_by_name(char.name, entity_type="character")
@@ -39,7 +43,7 @@ def _extract_characters_to_world(state: StoryState, world_db: WorldDatabase) -> 
                 "personality_traits": char.trait_names,
                 "goals": char.goals,
                 "arc_notes": char.arc_notes,
-                **build_character_lifecycle(char),
+                **build_character_lifecycle(char, calendar=calendar),
             },
         )
         char_id_map[char.name] = entity_id
@@ -84,3 +88,20 @@ def _extract_characters_to_world(state: StoryState, world_db: WorldDatabase) -> 
             implicit_rel_count,
         )
     return added_count, implicit_rel_count
+
+
+def _get_calendar(world_db: WorldDatabase) -> WorldCalendar | None:
+    """Retrieve the WorldCalendar from world settings, if available.
+
+    Args:
+        world_db: WorldDatabase to query for settings.
+
+    Returns:
+        WorldCalendar if one exists in world settings, None otherwise.
+    """
+    world_settings = world_db.get_world_settings()
+    if world_settings is None or world_settings.calendar is None:
+        logger.debug("No calendar available in world settings for era resolution")
+        return None
+    logger.debug("Using calendar '%s' for era resolution", world_settings.calendar.current_era_name)
+    return world_settings.calendar

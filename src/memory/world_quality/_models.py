@@ -381,6 +381,40 @@ class BaseQualityScores(BaseModel):
             )
         return min(scores.values())
 
+    @property
+    def minimum_score_for_average(self) -> float:
+        """Lowest score across dimensions that participate in the average.
+
+        Like ``minimum_score`` but excludes dimensions in ``_EXCLUDED_FROM_AVERAGE``
+        (e.g. ``temporal_plausibility``). This is used by the quality loop's
+        dimension floor check so that structurally excluded dimensions don't
+        force unnecessary refinement.
+
+        Falls back to ``minimum_score`` when all dimensions participate in
+        the average (i.e. ``_EXCLUDED_FROM_AVERAGE`` is empty).
+
+        Raises:
+            StoryFactoryError: If no numeric scoring dimensions remain after exclusion.
+        """
+        if not self._EXCLUDED_FROM_AVERAGE:
+            return self.minimum_score
+
+        included_scores = [
+            val
+            for name, _display, val in self._score_fields()
+            if name not in self._EXCLUDED_FROM_AVERAGE
+        ]
+        if not included_scores:
+            logger.error(
+                "minimum_score_for_average: all dimensions excluded for %s",
+                type(self).__name__,
+            )
+            raise StoryFactoryError(
+                f"{type(self).__name__}: no dimensions remain after excluding "
+                f"{self._EXCLUDED_FROM_AVERAGE} from floor check."
+            )
+        return min(included_scores)
+
 
 class RefinementConfig(BaseModel):
     """Configuration for the quality refinement loop."""

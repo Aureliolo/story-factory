@@ -110,6 +110,9 @@ def save_to_settings(page: SettingsPage) -> None:
         # Small model timeout cap
         ("_small_model_size_threshold_input", "small_model_size_threshold_gb", float),
         ("_small_model_timeout_cap_input", "small_model_timeout_cap", float),
+        # Streaming timeouts
+        ("_streaming_inter_chunk_timeout_input", "streaming_inter_chunk_timeout", int),
+        ("_streaming_wall_clock_timeout_input", "streaming_wall_clock_timeout", int),
         # Model service cache TTLs
         ("_model_health_cache_ttl_input", "model_health_cache_ttl", float),
         ("_model_installed_cache_ttl_input", "model_installed_cache_ttl", float),
@@ -211,6 +214,9 @@ def refresh_from_settings(page: SettingsPage) -> None:
         # Small model timeout cap
         ("_small_model_size_threshold_input", "small_model_size_threshold_gb"),
         ("_small_model_timeout_cap_input", "small_model_timeout_cap"),
+        # Streaming timeouts
+        ("_streaming_inter_chunk_timeout_input", "streaming_inter_chunk_timeout"),
+        ("_streaming_wall_clock_timeout_input", "streaming_wall_clock_timeout"),
         # Model service cache TTLs
         ("_model_health_cache_ttl_input", "model_health_cache_ttl"),
         ("_model_installed_cache_ttl_input", "model_installed_cache_ttl"),

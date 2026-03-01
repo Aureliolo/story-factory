@@ -28,7 +28,7 @@ class TestPrepareModelShortCircuit:
     def setup_method(self) -> None:
         """Reset the module-level cache before each test."""
         with _vram._last_prepared_model_lock:
-            _vram._last_prepared_model_key = None
+            _vram._last_prepared_models.clear()
 
     @patch("src.settings.get_available_vram", return_value=24.0)
     @patch("src.settings.get_installed_models_with_sizes", return_value={"test-model:8b": 4.0})
@@ -80,7 +80,7 @@ class TestPrepareModelResidencyCheck:
     def setup_method(self) -> None:
         """Reset the module-level cache before each test."""
         with _vram._last_prepared_model_lock:
-            _vram._last_prepared_model_key = None
+            _vram._last_prepared_models.clear()
 
     @patch("src.settings.get_available_vram", side_effect=RuntimeError("GPU info unavailable"))
     @patch("src.settings.get_installed_models_with_sizes", return_value={"test-model:8b": 4.0})
@@ -166,7 +166,7 @@ class TestUnloadClearsLastPreparedCache:
     def setup_method(self) -> None:
         """Reset the module-level cache before each test."""
         with _vram._last_prepared_model_lock:
-            _vram._last_prepared_model_key = None
+            _vram._last_prepared_models.clear()
 
     def test_unload_clears_cache_for_evicted_model(self) -> None:
         """When a model is evicted, the last-prepared cache is cleared."""
@@ -174,14 +174,14 @@ class TestUnloadClearsLastPreparedCache:
         svc._loaded_models = {"model-a:8b", "model-b:8b"}
         svc._ollama_client = MagicMock()
 
-        # Simulate model-a was last prepared (key is now a (model_id, strategy) tuple)
+        # Simulate model-a was last prepared for "creator" role
         with _vram._last_prepared_model_lock:
-            _vram._last_prepared_model_key = ("model-a:8b", "sequential")
+            _vram._last_prepared_models["creator"] = ("model-a:8b", "sequential")
 
         _vram.unload_all_except(svc, "model-b:8b")
 
         with _vram._last_prepared_model_lock:
-            assert _vram._last_prepared_model_key is None
+            assert _vram._last_prepared_models == {}
 
     def test_unload_clears_cache_unconditionally(self) -> None:
         """Cache is always cleared when models are evicted, even for the kept model."""
@@ -191,10 +191,10 @@ class TestUnloadClearsLastPreparedCache:
 
         # Simulate model-b was last prepared — it's also the kept model
         with _vram._last_prepared_model_lock:
-            _vram._last_prepared_model_key = ("model-b:8b", "sequential")
+            _vram._last_prepared_models["judge"] = ("model-b:8b", "sequential")
 
         _vram.unload_all_except(svc, "model-b:8b")
 
-        # Cache should be cleared unconditionally after eviction
+        # Cache should be cleared after successful eviction of model-a
         with _vram._last_prepared_model_lock:
-            assert _vram._last_prepared_model_key is None
+            assert _vram._last_prepared_models == {}

@@ -39,7 +39,7 @@ def _reset_prepare_model_cache() -> None:
     import src.services.model_mode_service._vram as vram_mod
 
     with _last_prepared_model_lock:
-        vram_mod._last_prepared_model_key = None
+        vram_mod._last_prepared_models.clear()
 
 
 # ──── Phase 1A: get_available_vram queries memory.free ────
@@ -181,12 +181,12 @@ class TestUnloadCacheInvalidation:
         # Simulate: model-A was prepared, now we unload model-B keeping model-C
         mock_svc._loaded_models = {"model-a", "model-b"}
         with _last_prepared_model_lock:
-            vram_mod._last_prepared_model_key = ("model-a", "SEQUENTIAL")
+            vram_mod._last_prepared_models["creator"] = ("model-a", "SEQUENTIAL")
 
         unload_all_except(mock_svc, "model-c")
 
         with _last_prepared_model_lock:
-            assert vram_mod._last_prepared_model_key is None
+            assert vram_mod._last_prepared_models == {}
 
 
 # ──── Phase 1D: warmup calls prepare_model ────

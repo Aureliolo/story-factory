@@ -67,6 +67,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     auto_pass_score: S | None = None,
     prepare_creator: Callable[[], None] | None = None,
     prepare_judge: Callable[[], None] | None = None,
+    iteration_callback: Callable[[int, int, str], None] | None = None,
 ) -> tuple[T, S, int]:
     """Run the quality refinement loop for any entity type.
 
@@ -96,6 +97,9 @@ def quality_refinement_loop[T, S: BaseQualityScores](
             to prepare VRAM (e.g. unload the judge model). None = no-op.
         prepare_judge: Optional callback called before judge_fn() to prepare VRAM
             (e.g. unload the creator model). None = no-op.
+        iteration_callback: Optional callback fired at each iteration with
+            (current_iteration, max_iterations, entity_name). Used for sub-step
+            progress tracking in the build UI.
 
     Returns:
         Tuple of (best_entity, best_scores, scoring_rounds) where scoring_rounds
@@ -180,6 +184,14 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     stage = ""  # Tracks current phase: "create", "judge", or "refine"
 
     while iteration < config.max_iterations:
+        # Fire iteration callback for sub-step progress tracking (H2)
+        if iteration_callback:
+            iteration_callback(
+                iteration + 1,
+                config.max_iterations,
+                get_name(entity) if entity is not None else "",
+            )
+
         try:
             # Creation, refinement, or re-judge after previous judge error
             if needs_judging:
@@ -399,6 +411,24 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                         history.peak_score,
                         history.best_iteration,
                     )
+                    # Per-dimension regression details (H3)
+                    best_dim_scores = history.iterations[history.best_iteration - 1].scores
+                    dim_changes = []
+                    for dim, val in scores.to_dict().items():
+                        if isinstance(val, (int, float)) and dim not in _SCORE_METADATA_KEYS:
+                            prev_val = best_dim_scores.get(dim)
+                            if isinstance(prev_val, (int, float)):
+                                delta = val - prev_val
+                                if abs(delta) >= 0.1:
+                                    sign = "+" if delta > 0 else ""
+                                    dim_changes.append(f"{dim} {sign}{delta:.1f}")
+                    if dim_changes:
+                        logger.info(
+                            "%s '%s' dimension changes vs best: %s",
+                            entity_type.capitalize(),
+                            get_name(entity),
+                            ", ".join(dim_changes),
+                        )
                 else:
                     logger.warning(
                         "%s '%s' score regressed (%.1f < %.1f) but could not retrieve "
@@ -414,7 +444,11 @@ def quality_refinement_loop[T, S: BaseQualityScores](
             # the %.1f log display (e.g. 7.46 rounds to 7.5, passes >= 7.5).
             rounded_score = round(scores.average, 1)
             dimension_floor = config.dimension_minimum
-            below_floor = scores.minimum_score < dimension_floor if dimension_floor > 0.0 else False
+            below_floor = (
+                scores.minimum_score_for_average < dimension_floor
+                if dimension_floor > 0.0
+                else False
+            )
 
             if rounded_score >= entity_threshold and not below_floor:
                 # H1 fix: if monotonicity guard reverted entity to best iteration,
@@ -431,7 +465,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                         entity_type.capitalize(),
                         get_name(entity),
                         history.best_iteration,
-                        reverted_scores.minimum_score,
+                        reverted_scores.minimum_score_for_average,
                         dimension_floor,
                     )
                     continue
@@ -462,7 +496,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                     entity_type.capitalize(),
                     get_name(entity),
                     scores.average,
-                    scores.minimum_score,
+                    scores.minimum_score_for_average,
                     dimension_floor,
                 )
 
@@ -575,15 +609,8 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     best_floor_met = True
     if best_entity_data and dimension_floor > 0.0 and history.best_iteration:
         best_record_scores = history.iterations[history.best_iteration - 1].scores
-        best_min_score = min(
-            (
-                v
-                for k, v in best_record_scores.items()
-                if isinstance(v, (int, float)) and k not in _SCORE_METADATA_KEYS
-            ),
-            default=0.0,
-        )
-        best_floor_met = best_min_score >= dimension_floor
+        best_scores_obj = score_cls(**best_record_scores)
+        best_floor_met = best_scores_obj.minimum_score_for_average >= dimension_floor
 
     threshold_met_pre_hail_mary = (
         round(history.peak_score, 1) >= entity_threshold and best_floor_met
@@ -661,7 +688,19 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                 if prepare_creator:
                     prepare_creator()
                 fresh_entity = create_fn(creation_retries + 1)
-                if fresh_entity is not None and not is_empty(fresh_entity):
+                # Skip hail-mary judge if output is identical to best entity (M3)
+                if (
+                    fresh_entity is not None
+                    and not is_empty(fresh_entity)
+                    and best_entity_data is not None
+                    and serialize(fresh_entity) == best_entity_data
+                ):
+                    logger.info(
+                        "%s hail-mary produced identical output to best entity, "
+                        "skipping judge call",
+                        entity_type.capitalize(),
+                    )
+                elif fresh_entity is not None and not is_empty(fresh_entity):
                     if prepare_judge:
                         prepare_judge()
                     fresh_scores = judge_fn(fresh_entity)
@@ -724,14 +763,8 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                         # C2 fix: recompute best_floor_met from new best iteration
                         if dimension_floor > 0.0 and history.best_iteration:
                             hm_best_scores = history.iterations[history.best_iteration - 1].scores
-                            hm_best_min = min(
-                                (
-                                    v
-                                    for k, v in hm_best_scores.items()
-                                    if isinstance(v, (int, float)) and k not in _SCORE_METADATA_KEYS
-                                ),
-                                default=0.0,
-                            )
+                            hm_scores_obj = score_cls(**hm_best_scores)
+                            hm_best_min = hm_scores_obj.minimum_score_for_average
                             best_floor_met = hm_best_min >= dimension_floor
                             logger.debug(
                                 "%s hail-mary: recomputed best_floor_met=%s "

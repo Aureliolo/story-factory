@@ -17,7 +17,7 @@ from pydantic import BaseModel, ValidationError
 
 from src.settings import Settings
 from src.utils.exceptions import LLMError, VRAMAllocationError
-from src.utils.streaming import consume_stream
+from src.utils.streaming import StreamTimeoutError, consume_stream
 
 logger = logging.getLogger(__name__)
 
@@ -245,7 +245,11 @@ def generate_structured[T: BaseModel](
                 },
                 stream=True,
             )
-            response = consume_stream(stream)
+            response = consume_stream(
+                stream,
+                inter_chunk_timeout=getattr(settings, "streaming_inter_chunk_timeout", None),
+                wall_clock_timeout=getattr(settings, "streaming_wall_clock_timeout", None),
+            )
             duration = time.time() - start_time
 
             # Extract token counts from streamed response
@@ -281,6 +285,7 @@ def generate_structured[T: BaseModel](
         except (
             ConnectionError,
             TimeoutError,
+            StreamTimeoutError,
             httpx.TimeoutException,
             httpx.TransportError,
             httpcore.RemoteProtocolError,
@@ -288,12 +293,23 @@ def generate_structured[T: BaseModel](
             httpcore.NetworkError,
         ) as e:
             last_error = e
-            logger.warning(
-                "Transient error in structured output (attempt %d/%d): %s",
-                attempt + 1,
-                max_retries,
-                e,
-            )
+            if isinstance(e, StreamTimeoutError):
+                logger.warning(
+                    "Stream timeout in structured output (attempt %d/%d, "
+                    "type=%s, partial=%d chars): %s",
+                    attempt + 1,
+                    max_retries,
+                    e.timeout_type,
+                    e.partial_content_length,
+                    e,
+                )
+            else:
+                logger.warning(
+                    "Transient error in structured output (attempt %d/%d): %s",
+                    attempt + 1,
+                    max_retries,
+                    e,
+                )
             if attempt < max_retries - 1:
                 backoff = min(2**attempt, 10)
                 logger.debug("Backing off %.1fs before retry", backoff)

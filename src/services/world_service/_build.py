@@ -10,6 +10,15 @@ from src.memory.story_state import PlotOutline, StoryState
 from src.memory.world_calendar import WorldCalendar
 from src.memory.world_database import WorldDatabase
 from src.memory.world_settings import WorldSettings
+from src.services.world_service._build_utils import (
+    calculate_total_steps as _calculate_total_steps,
+)
+from src.services.world_service._build_utils import (
+    clear_world_db as _clear_world_db,
+)
+from src.services.world_service._build_utils import (
+    get_calendar_from_world_db as _get_calendar_from_world_db,
+)
 from src.services.world_service._character_extraction import _extract_characters_to_world
 from src.services.world_service._event_helpers import _generate_events
 from src.services.world_service._lifecycle_helpers import build_entity_lifecycle
@@ -260,6 +269,9 @@ def _build_world_entities(
     plot, chapters), locations, factions, items, concepts, relationships, orphan
     recovery, events, temporal validation, and embeddings.
     """
+    # Retrieve calendar for era validation/auto-resolution in lifecycle builders
+    calendar = _get_calendar_from_world_db(world_db)
+
     # Step 2: Generate story structure (characters, chapters) if requested
     if options.generate_structure:
         check_cancelled()
@@ -348,6 +360,7 @@ def _build_world_entities(
             world_db,
             services,
             cancel_check=options.is_cancelled,
+            calendar=calendar,
         )
         counts["locations"] = loc_count
         logger.info(f"Generated {loc_count} locations")
@@ -362,6 +375,7 @@ def _build_world_entities(
             world_db,
             services,
             cancel_check=options.is_cancelled,
+            calendar=calendar,
         )
         counts["factions"] = faction_count
         counts["implicit_relationships"] += implicit_rel_count
@@ -377,6 +391,7 @@ def _build_world_entities(
             world_db,
             services,
             cancel_check=options.is_cancelled,
+            calendar=calendar,
         )
         counts["items"] = item_count
         logger.info(f"Generated {item_count} items")
@@ -391,6 +406,7 @@ def _build_world_entities(
             world_db,
             services,
             cancel_check=options.is_cancelled,
+            calendar=calendar,
         )
         counts["concepts"] = concept_count
         logger.info(f"Generated {concept_count} concepts")
@@ -542,71 +558,13 @@ def _build_world_entities(
         )
 
 
-def _calculate_total_steps(
-    options: WorldBuildOptions,
-    *,
-    generate_calendar: bool = False,
-    validate_temporal: bool = False,
-) -> int:
-    """Calculate total number of steps for progress reporting."""
-    steps = 3  # Character extraction + embedding + completion
-    if options.clear_existing:
-        steps += 1
-    if generate_calendar:
-        steps += 1
-    if options.generate_structure:
-        steps += 1
-        # Quality review steps for Architect output (characters, plot, chapters)
-        steps += 3
-    if options.generate_locations:
-        steps += 1
-    if options.generate_factions:
-        steps += 1
-    if options.generate_items:
-        steps += 1
-    if options.generate_concepts:
-        steps += 1
-    if options.generate_relationships:
-        steps += 1
-        # +1 for orphan recovery step after relationship generation
-        steps += 1
-    if options.generate_events:
-        steps += 1
-    if validate_temporal:
-        steps += 1
-    logger.debug(
-        "_calculate_total_steps: %d steps (calendar=%s, temporal=%s)",
-        steps,
-        generate_calendar,
-        validate_temporal,
-    )
-    return steps
-
-
-def _clear_world_db(world_db: WorldDatabase) -> None:
-    """Clear all entities, relationships, and events from world database."""
-    # Delete events first (they reference entities via participants)
-    world_db.clear_events()
-
-    # Delete relationships (they reference entities)
-    relationships = world_db.list_relationships()
-    logger.info(f"Deleting {len(relationships)} existing relationships...")
-    for rel in relationships:
-        world_db.delete_relationship(rel.id)
-
-    # Delete all entities
-    entities = world_db.list_entities()
-    logger.info(f"Deleting {len(entities)} existing entities...")
-    for entity in entities:
-        world_db.delete_entity(entity.id)
-
-
 def _generate_locations(
     svc: WorldService,
     state: StoryState,
     world_db: WorldDatabase,
     services: ServiceContainer,
     cancel_check: Callable[[], bool] | None = None,
+    calendar: WorldCalendar | None = None,
 ) -> int:
     """Generate and add locations to world database using quality refinement."""
     # Use project-level settings if available, otherwise fall back to global
@@ -646,7 +604,7 @@ def _generate_locations(
                 attributes={
                     "significance": loc.get("significance", ""),
                     "quality_scores": scores.to_dict(),
-                    **build_entity_lifecycle(loc, "location"),
+                    **build_entity_lifecycle(loc, "location", calendar=calendar),
                 },
             )
             added_count += 1
@@ -662,6 +620,7 @@ def _generate_factions(
     world_db: WorldDatabase,
     services: ServiceContainer,
     cancel_check: Callable[[], bool] | None = None,
+    calendar: WorldCalendar | None = None,
 ) -> tuple[int, int]:
     """Generate and add factions to world database.
 
@@ -708,7 +667,7 @@ def _generate_factions(
                     "values": faction.get("values", []),
                     "base_location": faction.get("base_location", ""),
                     "quality_scores": faction_scores.to_dict(),
-                    **build_entity_lifecycle(faction, "faction"),
+                    **build_entity_lifecycle(faction, "faction", calendar=calendar),
                 },
             )
             added_count += 1
@@ -751,6 +710,7 @@ def _generate_items(
     world_db: WorldDatabase,
     services: ServiceContainer,
     cancel_check: Callable[[], bool] | None = None,
+    calendar: WorldCalendar | None = None,
 ) -> int:
     """Generate and add items to world database."""
     # Use project-level settings if available, otherwise fall back to global
@@ -788,7 +748,7 @@ def _generate_items(
                     "owner": item.get("owner", ""),
                     "location": item.get("location", ""),
                     "quality_scores": item_scores.to_dict(),
-                    **build_entity_lifecycle(item, "item"),
+                    **build_entity_lifecycle(item, "item", calendar=calendar),
                 },
             )
             added_count += 1
@@ -804,6 +764,7 @@ def _generate_concepts(
     world_db: WorldDatabase,
     services: ServiceContainer,
     cancel_check: Callable[[], bool] | None = None,
+    calendar: WorldCalendar | None = None,
 ) -> int:
     """Generate and add concepts to world database."""
     # Use project-level settings if available, otherwise fall back to global
@@ -842,7 +803,7 @@ def _generate_concepts(
                     "type": concept.get("type", ""),
                     "importance": concept.get("importance", ""),
                     "quality_scores": concept_scores.to_dict(),
-                    **build_entity_lifecycle(concept, "concept"),
+                    **build_entity_lifecycle(concept, "concept", calendar=calendar),
                 },
             )
             added_count += 1

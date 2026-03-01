@@ -1,14 +1,18 @@
 """Model resolution logic for WorldQualityService.
 
 Handles the resolution of models for creator and judge roles, respecting
-the Settings hierarchy and avoiding self-judging bias.
+the Settings hierarchy and avoiding self-judging bias. Includes pair-aware
+resolution to ensure creator+judge models fit together in VRAM.
 """
 
 import logging
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from src.services.model_mode_service._vram import MIN_GPU_RESIDENCY
+from src.services.model_mode_service._vram import MIN_GPU_RESIDENCY, prepare_model
+from src.services.model_mode_service._vram_budget import get_vram_snapshot, pair_fits
 from src.settings import get_available_vram, get_installed_models_with_sizes
+from src.utils.exceptions import VRAMAllocationError
 
 if TYPE_CHECKING:
     from src.services.world_quality_service import WorldQualityService
@@ -99,6 +103,75 @@ def resolve_model_for_role(service: WorldQualityService, agent_role: str) -> str
         agent_role,
     )
     return model
+
+
+def resolve_model_pair(service: WorldQualityService, entity_type: str) -> tuple[str, str]:
+    """Resolve creator and judge models as a pair that fits in VRAM.
+
+    Resolves both models and checks that the pair fits in available VRAM.
+    If the pair doesn't fit, falls back to self-judging (same model for both).
+
+    The result is cached per entity_type via the existing model cache.
+
+    Args:
+        service: WorldQualityService instance.
+        entity_type: Entity type (e.g. "character", "location").
+
+    Returns:
+        Tuple of (creator_model, judge_model).
+    """
+    # Check if we already have a cached pair
+    creator_role = service.ENTITY_CREATOR_ROLES.get(entity_type, "writer")
+    judge_role = service.ENTITY_JUDGE_ROLES.get(entity_type, "judge")
+
+    cached_creator = service._model_cache.get_creator_model(creator_role)
+    cached_judge = service._model_cache.get_judge_model(judge_role, cached_creator)
+
+    if cached_creator is not None and cached_judge is not None:
+        return cached_creator, cached_judge
+
+    # Resolve both models
+    creator = resolve_model_for_role(service, creator_role)
+    judge = resolve_model_for_role(service, judge_role)
+
+    if creator != judge:
+        # Check VRAM pair fit
+        try:
+            snapshot = get_vram_snapshot()
+            creator_size = snapshot.installed_models.get(creator, 0.0)
+            judge_size = snapshot.installed_models.get(judge, 0.0)
+
+            if not pair_fits(creator_size, judge_size, snapshot.available_vram_gb):
+                logger.warning(
+                    "Model pair does not fit for %s: creator=%s (%.1fGB) + "
+                    "judge=%s (%.1fGB), available=%.1fGB. "
+                    "Falling back to self-judging.",
+                    entity_type,
+                    creator,
+                    creator_size,
+                    judge,
+                    judge_size,
+                    snapshot.available_vram_gb,
+                )
+                judge = creator
+        except Exception as e:
+            logger.debug(
+                "Could not check pair VRAM fit for %s: %s — proceeding with resolved models",
+                entity_type,
+                e,
+            )
+
+    # Store in cache via the standard path
+    service._model_cache.store_creator_model(creator_role, creator)
+    service._model_cache.store_judge_model(judge_role, judge, creator)
+
+    logger.info(
+        "Resolved model pair for %s: creator=%s, judge=%s",
+        entity_type,
+        creator,
+        judge,
+    )
+    return creator, judge
 
 
 def get_creator_model(service: WorldQualityService, entity_type: str | None = None) -> str:
@@ -239,3 +312,78 @@ def get_judge_model(service: WorldQualityService, entity_type: str | None = None
             agent_role,
         )
     return stored
+
+
+def make_model_preparers(
+    service: WorldQualityService,
+    entity_type: str,
+) -> tuple[Callable[[], None] | None, Callable[[], None] | None]:
+    """Return (prepare_creator, prepare_judge) callbacks for VRAM management.
+
+    Uses pair-aware model resolution to ensure both creator and judge models
+    fit in VRAM together. When the resolved pair uses the same model, returns
+    ``(None, None)`` to skip unnecessary VRAM management.
+
+    Args:
+        service: WorldQualityService instance.
+        entity_type: Entity type (e.g. "character", "location") used to
+            resolve creator and judge models.
+
+    Returns:
+        Tuple of (prepare_creator_fn, prepare_judge_fn). Both are None when
+        creator == judge.
+    """
+    creator_model, judge_model = resolve_model_pair(service, entity_type)
+    if creator_model == judge_model:
+        logger.debug(
+            "Same model for creator and judge (%s) on %s — skipping VRAM preparation",
+            creator_model,
+            entity_type,
+        )
+        return None, None
+
+    logger.info(
+        "Model pair for %s: creator=%s, judge=%s — enabling VRAM preparation",
+        entity_type,
+        creator_model,
+        judge_model,
+    )
+
+    def prepare_creator() -> None:
+        """Ensure creator model is loaded in VRAM, evicting others if needed."""
+        try:
+            prepare_model(service.mode_service, creator_model, role="creator")
+        except VRAMAllocationError:
+            logger.warning(
+                "VRAMAllocationError preparing creator model '%s' for %s — "
+                "continuing without preparation",
+                creator_model,
+                entity_type,
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to prepare creator model '%s' for VRAM "
+                "(continuing without preparation): %s",
+                creator_model,
+                e,
+            )
+
+    def prepare_judge() -> None:
+        """Ensure judge model is loaded in VRAM, evicting others if needed."""
+        try:
+            prepare_model(service.mode_service, judge_model, role="judge")
+        except VRAMAllocationError:
+            logger.warning(
+                "VRAMAllocationError preparing judge model '%s' for %s — "
+                "continuing without preparation",
+                judge_model,
+                entity_type,
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to prepare judge model '%s' for VRAM (continuing without preparation): %s",
+                judge_model,
+                e,
+            )
+
+    return prepare_creator, prepare_judge

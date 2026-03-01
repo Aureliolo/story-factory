@@ -39,7 +39,6 @@ from src.memory.world_quality import (
     RelationshipQualityScores,
 )
 from src.services.model_mode_service import ModelModeService
-from src.services.model_mode_service._vram import prepare_model as _prepare_model
 from src.services.world_quality_service._analytics import (
     log_refinement_analytics as _log_refinement_analytics,
 )
@@ -121,6 +120,9 @@ from src.services.world_quality_service._model_resolver import (
 )
 from src.services.world_quality_service._model_resolver import (
     get_judge_model as _get_judge_model,
+)
+from src.services.world_quality_service._model_resolver import (
+    make_model_preparers as _make_model_preparers_impl,
 )
 from src.services.world_quality_service._model_resolver import (
     resolve_model_for_role as _resolve_model_for_role,
@@ -518,11 +520,9 @@ class WorldQualityService(EntityDelegatesMixin):
     ) -> tuple[Callable[[], None] | None, Callable[[], None] | None]:
         """Return (prepare_creator, prepare_judge) callbacks for VRAM management.
 
-        When the creator and judge models differ for a given entity type, returns
-        callbacks that call ``prepare_model()`` to ensure the target model is
-        loaded in VRAM, evicting others as the VRAM strategy requires. When both
-        roles use the same model, returns ``(None, None)`` to skip unnecessary
-        VRAM management.
+        Uses pair-aware model resolution to ensure both creator and judge models
+        fit in VRAM together. When the resolved pair uses the same model, returns
+        ``(None, None)`` to skip unnecessary VRAM management.
 
         Args:
             entity_type: Entity type (e.g. "character", "location") used to
@@ -532,48 +532,7 @@ class WorldQualityService(EntityDelegatesMixin):
             Tuple of (prepare_creator_fn, prepare_judge_fn). Both are None when
             creator == judge.
         """
-        creator_model = self._get_creator_model(entity_type)
-        judge_model = self._get_judge_model(entity_type)
-        if creator_model == judge_model:
-            logger.debug(
-                "Same model for creator and judge (%s) on %s — skipping VRAM preparation",
-                creator_model,
-                entity_type,
-            )
-            return None, None
-
-        logger.debug(
-            "Different models for %s: creator=%s, judge=%s — enabling VRAM preparation",
-            entity_type,
-            creator_model,
-            judge_model,
-        )
-
-        def prepare_creator() -> None:
-            """Ensure creator model is loaded in VRAM, evicting others if needed."""
-            try:
-                _prepare_model(self.mode_service, creator_model)
-            except Exception as e:
-                logger.warning(
-                    "Failed to prepare creator model '%s' for VRAM "
-                    "(continuing without preparation): %s",
-                    creator_model,
-                    e,
-                )
-
-        def prepare_judge() -> None:
-            """Ensure judge model is loaded in VRAM, evicting others if needed."""
-            try:
-                _prepare_model(self.mode_service, judge_model)
-            except Exception as e:
-                logger.warning(
-                    "Failed to prepare judge model '%s' for VRAM "
-                    "(continuing without preparation): %s",
-                    judge_model,
-                    e,
-                )
-
-        return prepare_creator, prepare_judge
+        return _make_model_preparers_impl(self, entity_type)
 
     def _get_creator_model(self, entity_type: str | None = None) -> str:
         """

@@ -298,7 +298,7 @@ class BaseAgent:
 
                         logger.info(
                             f"{self.name}: Structured output received "
-                            f"({response_model.__name__}, {duration:.2f}s, "
+                            f"(model={self.model}, {response_model.__name__}, {duration:.2f}s, "
                             f"tokens: {prompt_tokens}+{completion_tokens}={total_tokens})"
                         )
                         circuit_breaker.record_success()
@@ -523,7 +523,7 @@ class BaseAgent:
 
                         logger.info(
                             f"{self.name}: LLM response received "
-                            f"({len(content)} chars, {duration:.2f}s, "
+                            f"(model={use_model}, {len(content)} chars, {duration:.2f}s, "
                             f"tokens: {prompt_tokens}+{completion_tokens}={total_tokens})"
                         )
 
