@@ -2290,6 +2290,45 @@ class TestGenerateBatchPhased:
 
         assert any("duplicate retry failed" in msg for msg in caplog.messages)
 
+    def test_phased_duplicate_retry_reraises_fatal_error(self, phased_svc):
+        """Phase 3 duplicate retry re-raises MemoryError (fatal) instead of swallowing."""
+        scores = _make_char_scores(8.0)
+        create_idx = 0
+
+        def create_fn(_i):
+            """Create entities sequentially."""
+            nonlocal create_idx
+            entity = {"name": f"E{create_idx}"}
+            create_idx += 1
+            return entity
+
+        def on_success_reject_e0(entity):
+            """Reject E0 with DuplicateNameError."""
+            if entity["name"] == "E0":
+                raise DuplicateNameError("E0 is a duplicate")
+
+        def refine_fn_fatal(entity):
+            """Refinement raises a fatal MemoryError."""
+            raise MemoryError("OOM during duplicate retry")
+
+        with pytest.raises(MemoryError, match="OOM during duplicate retry"):
+            _generate_batch_parallel(
+                svc=phased_svc,
+                count=2,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, scores, 1),
+                get_name=lambda e: e["name"],
+                on_success=on_success_reject_e0,
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=lambda e: scores,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=refine_fn_fatal,
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
 
 # ---------------------------------------------------------------------------
 # generate_relationships_with_quality phased-pipeline tests
