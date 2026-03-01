@@ -66,6 +66,25 @@ class TestBuildEventTimestampH2:
         mock_calendar.get_era_for_year.assert_called_once_with(1200)
 
 
+class TestBuildEventTimestampCalendarEraError:
+    """Tests for build_event_timestamp when calendar era resolution raises."""
+
+    def test_build_event_timestamp_calendar_era_resolution_error(self, caplog):
+        """Calendar era resolution error is caught and logged at DEBUG."""
+        mock_calendar = MagicMock()
+        mock_calendar.get_era_for_year.side_effect = ValueError("bad year")
+
+        with caplog.at_level(logging.DEBUG, logger="src.services.world_service._event_helpers"):
+            result = build_event_timestamp(
+                {"year": 1200, "month": None, "day": None, "era_name": None},
+                calendar=mock_calendar,
+            )
+
+        assert "Year 1200" in result
+        assert any("could not resolve era" in msg for msg in caplog.messages)
+        mock_calendar.get_era_for_year.assert_called_once_with(1200)
+
+
 class TestResolveParticipantsStripsBrackets:
     """Tests for resolve_event_participants M6 bracket-stripping."""
 

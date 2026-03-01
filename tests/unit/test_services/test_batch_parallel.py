@@ -2204,6 +2204,92 @@ class TestGenerateBatchPhased:
         # Warning logged for each failure
         assert sum("register_created_fn failed" in msg for msg in caplog.messages) == 2
 
+    def test_phased_duplicate_retry_recovers_slot(self, phased_svc):
+        """Phase 3 retries via refine_with_initial_fn on DuplicateNameError from on_success."""
+        scores = _make_char_scores(8.0)
+        create_idx = 0
+        on_success_calls = 0
+
+        def create_fn(_i):
+            """Create entities sequentially."""
+            nonlocal create_idx
+            entity = {"name": f"E{create_idx}"}
+            create_idx += 1
+            return entity
+
+        def on_success_reject_first(entity):
+            """Reject E0 on first attempt only, then accept everything."""
+            nonlocal on_success_calls
+            on_success_calls += 1
+            if entity["name"] == "E0" and on_success_calls == 1:
+                raise DuplicateNameError("E0 is a duplicate")
+
+        def refine_fn(entity):
+            """Refine entity and return with passing scores."""
+            return {"name": "E0-refined"}, scores, 1
+
+        results = _generate_batch_parallel(
+            svc=phased_svc,
+            count=2,
+            entity_type="test",
+            generate_fn=lambda _i: ({"name": "fallback"}, scores, 1),
+            get_name=lambda e: e["name"],
+            on_success=on_success_reject_first,
+            quality_threshold=7.5,
+            max_workers=2,
+            create_only_fn=create_fn,
+            judge_only_fn=lambda e: scores,
+            is_empty_fn=lambda e: not e.get("name"),
+            refine_with_initial_fn=refine_fn,
+            prepare_creator_fn=lambda: None,
+            prepare_judge_fn=lambda: None,
+        )
+
+        result_names = [e["name"] for e, _ in results]
+        assert "E0-refined" in result_names
+        assert len(results) == 2
+
+    def test_phased_duplicate_retry_fails_with_exception(self, phased_svc, caplog):
+        """Phase 3 duplicate retry fails with non-DuplicateNameError exception."""
+        scores = _make_char_scores(8.0)
+        create_idx = 0
+
+        def create_fn(_i):
+            """Create entities sequentially."""
+            nonlocal create_idx
+            entity = {"name": f"E{create_idx}"}
+            create_idx += 1
+            return entity
+
+        def on_success_reject_e0(entity):
+            """Reject E0 with DuplicateNameError."""
+            if entity["name"] == "E0":
+                raise DuplicateNameError("E0 is a duplicate")
+
+        def refine_fn_fails(entity):
+            """All refinement retries fail with RuntimeError."""
+            raise RuntimeError("refine failed")
+
+        with caplog.at_level(logging.WARNING):
+            _generate_batch_parallel(
+                svc=phased_svc,
+                count=2,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, scores, 1),
+                get_name=lambda e: e["name"],
+                on_success=on_success_reject_e0,
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=lambda e: scores,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=refine_fn_fails,
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
+        assert any("duplicate retry failed" in msg for msg in caplog.messages)
+
 
 # ---------------------------------------------------------------------------
 # generate_relationships_with_quality phased-pipeline tests

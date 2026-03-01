@@ -1455,6 +1455,89 @@ class TestConflictWarningThrottle:
         assert len(conflict_warnings) == 2
 
 
+class TestSubThresholdSelfJudgingWarning:
+    """Test that self-judging with a low-quality model triggers a sub-threshold warning."""
+
+    def test_exact_match_quality_lookup(self, settings, mock_mode_service, caplog, monkeypatch):
+        """When model matches exactly in RECOMMENDED_MODELS, quality is read from it (line 310)."""
+        import logging
+        from unittest.mock import patch
+
+        from src.services.world_quality_service import _model_resolver
+
+        fake_registry: dict[str, dict[str, object]] = {
+            "low-quality:8b": {
+                "name": "Low Quality 8B",
+                "size_gb": 4.5,
+                "vram_required": 8,
+                "quality": 5,
+                "speed": 9,
+                "uncensored": False,
+                "description": "Low quality model",
+                "tags": ["writer"],
+            },
+        }
+        monkeypatch.setattr(_model_resolver, "RECOMMENDED_MODELS", fake_registry)
+
+        settings.use_per_agent_models = True
+        settings.agent_models = {"writer": "low-quality:8b", "judge": "low-quality:8b"}
+
+        service = WorldQualityService(settings, mock_mode_service)
+
+        with (
+            patch.object(settings, "get_models_for_role", return_value=["low-quality:8b"]),
+            caplog.at_level(logging.WARNING),
+        ):
+            service._get_judge_model(entity_type="character")
+
+        assert any(
+            "sub-threshold" in record.message and "quality=5.0" in record.message
+            for record in caplog.records
+        ), "Expected sub-threshold warning with quality=5.0 from exact match"
+
+    def test_prefix_match_quality_lookup(self, settings, mock_mode_service, caplog, monkeypatch):
+        """When model matches by prefix in RECOMMENDED_MODELS, quality is read (lines 314-315)."""
+        import logging
+        from unittest.mock import patch
+
+        from src.services.world_quality_service import _model_resolver
+
+        # Registry has "low-quality:8b" but model resolves to "low-quality:8b-q4_K_M"
+        # The prefix match logic splits on ":" and compares "low-quality" prefix
+        fake_registry: dict[str, dict[str, object]] = {
+            "low-quality:8b": {
+                "name": "Low Quality 8B",
+                "size_gb": 4.5,
+                "vram_required": 8,
+                "quality": 6,
+                "speed": 9,
+                "uncensored": False,
+                "description": "Low quality model",
+                "tags": ["writer"],
+            },
+        }
+        monkeypatch.setattr(_model_resolver, "RECOMMENDED_MODELS", fake_registry)
+
+        settings.use_per_agent_models = True
+        settings.agent_models = {
+            "writer": "low-quality:8b-q4_K_M",
+            "judge": "low-quality:8b-q4_K_M",
+        }
+
+        service = WorldQualityService(settings, mock_mode_service)
+
+        with (
+            patch.object(settings, "get_models_for_role", return_value=["low-quality:8b-q4_K_M"]),
+            caplog.at_level(logging.WARNING),
+        ):
+            service._get_judge_model(entity_type="character")
+
+        assert any(
+            "sub-threshold" in record.message and "quality=6.0" in record.message
+            for record in caplog.records
+        ), "Expected sub-threshold warning with quality=6.0 from prefix match"
+
+
 class TestJudgePromptOutputFormatParametric:
     """Test that all entity judge prompts use parametric placeholders in OUTPUT FORMAT.
 

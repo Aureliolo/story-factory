@@ -447,6 +447,30 @@ class TestVramZeroRetry:
     @patch("src.services.model_mode_service._vram_budget.time.sleep")
     @patch(
         "src.settings.get_installed_models_with_sizes",
+        return_value={"test-model:8b": 4.5},
+    )
+    @patch("src.settings.get_available_vram")
+    def test_vram_zero_retry_exception_continues(self, mock_vram, mock_models, mock_sleep):
+        """When get_available_vram raises during retry, continue to next attempt."""
+        previous = VRAMSnapshot(
+            available_vram_gb=24.0,
+            installed_models={"test-model:8b": 4.5},
+            timestamp=time_module.monotonic() - 60,
+        )
+        _vram_budget_mod._cached_snapshot = previous
+
+        # Initial returns 0, retry 1 raises ConnectionError, retry 2 returns 24.0
+        mock_vram.side_effect = [0, ConnectionError("nvidia-smi failed"), 24.0]
+
+        snapshot = get_vram_snapshot()
+
+        assert snapshot.available_vram_gb == 24.0
+        assert mock_vram.call_count == 3
+        assert mock_sleep.call_count == 2
+
+    @patch("src.services.model_mode_service._vram_budget.time.sleep")
+    @patch(
+        "src.settings.get_installed_models_with_sizes",
         return_value={},
     )
     @patch(
