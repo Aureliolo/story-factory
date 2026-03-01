@@ -18,7 +18,13 @@ from src.services.world_quality_service._batch_parallel import (
     _generate_batch_parallel,
     _ThreadSafeRelsList,
 )
-from src.utils.exceptions import DuplicateNameError, VRAMAllocationError, WorldGenerationError
+from src.utils.exceptions import (
+    DatabaseClosedError,
+    DuplicateNameError,
+    GenerationCancelledError,
+    VRAMAllocationError,
+    WorldGenerationError,
+)
 
 
 def _make_char_scores(avg: float, feedback: str = "Test") -> CharacterQualityScores:
@@ -907,6 +913,68 @@ class TestCollectLateResults:
         assert len(results) == 1
         assert len(success_calls) == 1
         assert success_calls[0] == {"name": "Late"}
+
+    def test_generation_cancelled_error_reraised_from_late_future(self):
+        """GenerationCancelledError from a late future is re-raised, not swallowed."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        def cancelled():
+            """Raise GenerationCancelledError."""
+            raise GenerationCancelledError("user cancelled")
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(cancelled)
+            try:
+                future.result()
+            except GenerationCancelledError:
+                pass
+
+            pending: dict = {future: (0, 0.0)}
+            results: list = []
+            completed_times: list[float] = []
+            errors: list[str] = []
+
+            with pytest.raises(GenerationCancelledError, match="user cancelled"):
+                _collect_late_results(
+                    pending,
+                    results,
+                    completed_times,
+                    errors,
+                    "test",
+                    lambda e: e["name"],
+                    None,
+                )
+
+    def test_database_closed_error_reraised_from_late_future(self):
+        """DatabaseClosedError from a late future is re-raised, not swallowed."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        def db_closed():
+            """Raise DatabaseClosedError."""
+            raise DatabaseClosedError("database closed")
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(db_closed)
+            try:
+                future.result()
+            except DatabaseClosedError:
+                pass
+
+            pending: dict = {future: (0, 0.0)}
+            results: list = []
+            completed_times: list[float] = []
+            errors: list[str] = []
+
+            with pytest.raises(DatabaseClosedError, match="database closed"):
+                _collect_late_results(
+                    pending,
+                    results,
+                    completed_times,
+                    errors,
+                    "test",
+                    lambda e: e["name"],
+                    None,
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -2241,6 +2309,45 @@ class TestGenerateBatchPhased:
         # Warning logged for each failure
         assert sum("register_created_fn failed" in msg for msg in caplog.messages) == 2
 
+    def test_register_created_fn_fatal_exception_reraises_from_inner_handler(
+        self, phased_svc, caplog
+    ):
+        """When register_created_fn raises GenerationCancelledError, it re-raises from inner handler.
+
+        The inner except block (line 554-561) re-raises the fatal exception. The outer
+        except catches it as a generic error. This test covers line 561 for code coverage.
+        """
+        from src.services.world_quality_service._batch_parallel import _generate_batch_phased
+
+        scores = _make_char_scores(8.0)
+
+        def create_fn(_i):
+            """Create a test entity."""
+            return {"name": "E0"}
+
+        def fatal_register(_entity):
+            """Registration raises a fatal error."""
+            raise GenerationCancelledError("user cancelled during registration")
+
+        with caplog.at_level(logging.ERROR):
+            with pytest.raises(WorldGenerationError, match="failed to create any"):
+                _generate_batch_phased(
+                    svc=phased_svc,
+                    count=1,
+                    entity_type="test",
+                    create_only_fn=create_fn,
+                    judge_only_fn=lambda e: scores,
+                    is_empty_fn=lambda e: not e.get("name"),
+                    refine_with_initial_fn=lambda e: (e, scores, 1),
+                    prepare_creator_fn=None,
+                    prepare_judge_fn=None,
+                    get_name=lambda e: e["name"],
+                    quality_threshold=7.5,
+                    register_created_fn=fatal_register,
+                )
+        # The error message appears in logs (caught by outer handler)
+        assert any("user cancelled during registration" in msg for msg in caplog.messages)
+
     def test_phased_duplicate_retry_recovers_slot(self, phased_svc):
         """Phase 3 retries via refine_with_initial_fn on DuplicateNameError from on_success."""
         scores = _make_char_scores(8.0)
@@ -2506,6 +2613,100 @@ class TestGenerateBatchPhased:
                 prepare_judge_fn=lambda: None,
             )
         assert isinstance(exc_info.value.__cause__, VRAMAllocationError)
+
+    def test_phased_duplicate_retry_reraises_direct_vram_allocation_error(self, phased_svc):
+        """Phase 3 duplicate retry re-raises direct VRAMAllocationError (not wrapped)."""
+        scores = _make_char_scores(8.0)
+        create_idx = 0
+
+        def create_fn(_i):
+            """Create entities sequentially."""
+            nonlocal create_idx
+            entity = {"name": f"E{create_idx}"}
+            create_idx += 1
+            return entity
+
+        def on_success_reject_e0(entity):
+            """Reject E0 with DuplicateNameError."""
+            if entity["name"] == "E0":
+                raise DuplicateNameError("E0 is a duplicate")
+
+        def refine_fn_direct_vram(entity):
+            """Refinement raises VRAMAllocationError directly (not wrapped)."""
+            raise VRAMAllocationError("Direct GPU OOM", model_id="test:8b")
+
+        with pytest.raises(VRAMAllocationError, match="Direct GPU OOM"):
+            _generate_batch_parallel(
+                svc=phased_svc,
+                count=2,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, scores, 1),
+                get_name=lambda e: e["name"],
+                on_success=on_success_reject_e0,
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=lambda e: scores,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=refine_fn_direct_vram,
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
+    def test_phased_duplicate_recovery_progress_callback_failure(self, phased_svc, caplog):
+        """Phase 3 duplicate recovery catches progress_callback failure without crashing."""
+        scores = _make_char_scores(8.0)
+        create_idx = 0
+        on_success_calls = 0
+
+        def create_fn(_i):
+            """Create entities sequentially."""
+            nonlocal create_idx
+            entity = {"name": f"E{create_idx}"}
+            create_idx += 1
+            return entity
+
+        def on_success_reject_first(entity):
+            """Reject E0 on first attempt only, then accept everything."""
+            nonlocal on_success_calls
+            on_success_calls += 1
+            if entity["name"] == "E0" and on_success_calls == 1:
+                raise DuplicateNameError("E0 is a duplicate")
+
+        def refine_fn(entity):
+            """Refine entity and return with passing scores."""
+            return {"name": "E0-refined"}, scores, 1
+
+        def bad_progress_callback(progress):
+            """Progress callback that raises during duplicate recovery."""
+            if hasattr(progress, "entity_name") and progress.entity_name == "E0-refined":
+                raise RuntimeError("callback exploded")
+
+        with caplog.at_level(logging.WARNING):
+            results = _generate_batch_parallel(
+                svc=phased_svc,
+                count=2,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, scores, 1),
+                get_name=lambda e: e["name"],
+                on_success=on_success_reject_first,
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=lambda e: scores,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=refine_fn,
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+                progress_callback=bad_progress_callback,
+            )
+
+        # Recovery should still succeed despite callback failure
+        result_names = [e["name"] for e, _ in results]
+        assert "E0-refined" in result_names
+        assert len(results) == 2
+        # Warning logged for the callback failure
+        assert any("progress_callback failed" in msg for msg in caplog.messages)
 
 
 # ---------------------------------------------------------------------------
