@@ -592,7 +592,15 @@ def _generate_batch_phased[T, S: BaseQualityScores](
             logger.error(
                 "Phase 1: failed to create %s %d/%d: %s", entity_type, i + 1, count, error_msg
             )
-        except MemoryError, RecursionError, KeyboardInterrupt, SystemExit:
+        except (
+            GenerationCancelledError,
+            DatabaseClosedError,
+            VRAMAllocationError,
+            MemoryError,
+            RecursionError,
+            KeyboardInterrupt,
+            SystemExit,
+        ):
             raise
         except Exception as e:
             create_errors += 1
@@ -794,6 +802,8 @@ def _generate_batch_phased[T, S: BaseQualityScores](
                                 "Phase 3: duplicate retry failed for %s: %s", entity_type, retry_err
                             )
                             break
+                        except GenerationCancelledError, DatabaseClosedError:
+                            raise
                         except Exception as retry_err:
                             logger.warning(
                                 "Phase 3: duplicate retry failed for %s: %s", entity_type, retry_err

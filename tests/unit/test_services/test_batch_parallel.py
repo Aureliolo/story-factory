@@ -2309,14 +2309,8 @@ class TestGenerateBatchPhased:
         # Warning logged for each failure
         assert sum("register_created_fn failed" in msg for msg in caplog.messages) == 2
 
-    def test_register_created_fn_fatal_exception_reraises_from_inner_handler(
-        self, phased_svc, caplog
-    ):
-        """When register_created_fn raises GenerationCancelledError, it re-raises from inner handler.
-
-        The inner except block (line 554-561) re-raises the fatal exception. The outer
-        except catches it as a generic error. This test covers line 561 for code coverage.
-        """
+    def test_register_created_fn_fatal_exception_propagates(self, phased_svc):
+        """When register_created_fn raises GenerationCancelledError, it propagates fully."""
         from src.services.world_quality_service._batch_parallel import _generate_batch_phased
 
         scores = _make_char_scores(8.0)
@@ -2329,24 +2323,21 @@ class TestGenerateBatchPhased:
             """Registration raises a fatal error."""
             raise GenerationCancelledError("user cancelled during registration")
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(WorldGenerationError, match="failed to create any"):
-                _generate_batch_phased(
-                    svc=phased_svc,
-                    count=1,
-                    entity_type="test",
-                    create_only_fn=create_fn,
-                    judge_only_fn=lambda e: scores,
-                    is_empty_fn=lambda e: not e.get("name"),
-                    refine_with_initial_fn=lambda e: (e, scores, 1),
-                    prepare_creator_fn=None,
-                    prepare_judge_fn=None,
-                    get_name=lambda e: e["name"],
-                    quality_threshold=7.5,
-                    register_created_fn=fatal_register,
-                )
-        # The error message appears in logs (caught by outer handler)
-        assert any("user cancelled during registration" in msg for msg in caplog.messages)
+        with pytest.raises(GenerationCancelledError, match="user cancelled during registration"):
+            _generate_batch_phased(
+                svc=phased_svc,
+                count=1,
+                entity_type="test",
+                create_only_fn=create_fn,
+                judge_only_fn=lambda e: scores,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=lambda e: (e, scores, 1),
+                prepare_creator_fn=None,
+                prepare_judge_fn=None,
+                get_name=lambda e: e["name"],
+                quality_threshold=7.5,
+                register_created_fn=fatal_register,
+            )
 
     def test_phased_duplicate_retry_recovers_slot(self, phased_svc):
         """Phase 3 retries via refine_with_initial_fn on DuplicateNameError from on_success."""
@@ -2786,6 +2777,97 @@ class TestPhasedCriticalExceptionReRaise:
                 judge_only_fn=lambda _e: failing_scores,
                 is_empty_fn=lambda e: not e.get("name"),
                 refine_with_initial_fn=refine_fn,
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
+
+class TestPhasedFatalExceptionPropagation:
+    """Tests that fatal exceptions propagate through outer handlers in phased pipeline."""
+
+    def test_phase1_outer_handler_reraises_generation_cancelled(self, phased_svc):
+        """Phase 1 outer except re-raises GenerationCancelledError from create_only_fn."""
+
+        def create_fn(_i):
+            """Raise GenerationCancelledError during creation."""
+            raise GenerationCancelledError("cancelled in create")
+
+        with pytest.raises(GenerationCancelledError, match="cancelled in create"):
+            _generate_batch_parallel(
+                svc=phased_svc,
+                count=1,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, _make_char_scores(8.0), 1),
+                get_name=lambda e: e["name"],
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=lambda _e: _make_char_scores(8.0),
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=lambda e: (e, _make_char_scores(8.0), 2),
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
+    def test_phase1_outer_handler_reraises_database_closed(self, phased_svc):
+        """Phase 1 outer except re-raises DatabaseClosedError from create_only_fn."""
+
+        def create_fn(_i):
+            """Raise DatabaseClosedError during creation."""
+            raise DatabaseClosedError("database closed in create")
+
+        with pytest.raises(DatabaseClosedError, match="database closed in create"):
+            _generate_batch_parallel(
+                svc=phased_svc,
+                count=1,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, _make_char_scores(8.0), 1),
+                get_name=lambda e: e["name"],
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=lambda _e: _make_char_scores(8.0),
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=lambda e: (e, _make_char_scores(8.0), 2),
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
+    def test_phase3_duplicate_retry_reraises_generation_cancelled(self, phased_svc):
+        """Phase 3 duplicate retry re-raises GenerationCancelledError."""
+        scores = _make_char_scores(8.0)
+        create_idx = 0
+
+        def create_fn(_i):
+            """Create entities sequentially."""
+            nonlocal create_idx
+            entity = {"name": f"E{create_idx}"}
+            create_idx += 1
+            return entity
+
+        def on_success_reject_e0(entity):
+            """Reject E0 with DuplicateNameError."""
+            if entity["name"] == "E0":
+                raise DuplicateNameError("E0 is a duplicate")
+
+        def refine_fn_cancelled(_entity):
+            """Refinement raises GenerationCancelledError."""
+            raise GenerationCancelledError("cancelled during duplicate retry")
+
+        with pytest.raises(GenerationCancelledError, match="cancelled during duplicate retry"):
+            _generate_batch_parallel(
+                svc=phased_svc,
+                count=2,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, scores, 1),
+                get_name=lambda e: e["name"],
+                on_success=on_success_reject_e0,
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=lambda e: scores,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=refine_fn_cancelled,
                 prepare_creator_fn=lambda: None,
                 prepare_judge_fn=lambda: None,
             )

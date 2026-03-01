@@ -152,14 +152,15 @@ def set_log_level(level: str) -> None:
     No-ops if the requested level matches the current level.
 
     Args:
-        level: Log level name (DEBUG, INFO, WARNING, ERROR).
+        level: Log level name (DEBUG, INFO, WARNING, ERROR, CRITICAL).
 
     Raises:
         ValueError: If level is not a valid logging level name.
     """
     log_level = getattr(logging, level.upper(), None)
     if log_level is None:
-        raise ValueError(f"Invalid log level: {level}")
+        msg = f"Invalid log level: {level!r}. Must be DEBUG, INFO, WARNING, ERROR, or CRITICAL"
+        raise ValueError(msg)
     root_logger = logging.getLogger()
     if root_logger.level == log_level:
         logger.debug("Log level already set to %s; skipping reconfiguration", level)
