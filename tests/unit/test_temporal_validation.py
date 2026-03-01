@@ -2146,8 +2146,9 @@ class TestValidateWorldCache:
         result1 = service.validate_world(world_db)
         result2 = service.validate_world(world_db)
 
-        # Second call should return the cached result
-        assert result1 is result2
+        # Cache returns a deep copy — results should be equal but not identical
+        assert result1 == result2
+        assert result1 is not result2
         # list_relationships should only be called once (skipped on cache hit)
         world_db.list_relationships.assert_called_once()
 
@@ -2184,3 +2185,22 @@ class TestValidateWorldCache:
         assert world_db.list_entities.call_count == 2
         # Results should be different objects (re-validated)
         assert result1 is not result2
+
+    def test_validate_world_cache_invalidates_on_db_changes(self):
+        """Changing conn.total_changes invalidates cache even before TTL expiry."""
+        from src.settings import Settings
+
+        settings = Settings()
+        settings.validate_temporal_consistency = True
+        service = TemporalValidationService(settings)
+
+        world_db = self._make_world_db_mock()
+
+        result1 = service.validate_world(world_db)
+        # Simulate a database mutation
+        world_db.conn.total_changes += 1
+        result2 = service.validate_world(world_db)
+
+        # Cache should have been invalidated by the total_changes bump
+        assert result1 is not result2
+        assert world_db.list_relationships.call_count == 2

@@ -46,9 +46,10 @@ def _sanitize_event_text(text: str) -> str:
     Returns:
         Cleaned text with Markdown formatting and title prefixes removed.
     """
-    text = _TITLE_PREFIX_RE.sub("", text.strip())
+    text = text.strip()
     text = _MD_BOLD_RE.sub(r"\1", text)
     text = _MD_ITALIC_RE.sub(r"\1", text)
+    text = _TITLE_PREFIX_RE.sub("", text)
     return text.strip()
 
 

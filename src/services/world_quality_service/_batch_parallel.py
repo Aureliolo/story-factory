@@ -1,18 +1,22 @@
 """Parallel batch generation for entity pipelines.
 
-Provides :class:`_ThreadSafeRelsList`, :func:`_generate_batch_parallel`,
-and :func:`_generate_batch_phased`.
+Provides :func:`_generate_batch_parallel` and :func:`_generate_batch_phased`.
+Re-exports :class:`_ThreadSafeRelsList` and :func:`_collect_late_results`
+from :mod:`._batch_helpers`.
 """
 
 import concurrent.futures as cf
 import logging
-import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING
 
 from src.memory.world_quality import BaseQualityScores
+from src.services.world_quality_service._batch_helpers import (
+    _collect_late_results,
+    _ThreadSafeRelsList,
+)
 from src.utils.exceptions import (
     DuplicateNameError,
     VRAMAllocationError,
@@ -23,62 +27,11 @@ from src.utils.exceptions import (
 if TYPE_CHECKING:
     from src.services.world_quality_service import EntityGenerationProgress, WorldQualityService
 
+__all__ = ["_ThreadSafeRelsList", "_collect_late_results", "_generate_batch_parallel"]
+
 logger = logging.getLogger(__name__)
 
 _MAX_DUPLICATE_RECOVERY_RETRIES = 2
-
-
-class _ThreadSafeRelsList:
-    """Thread-safe wrapper for the shared relationship deduplication list.
-
-    Workers get point-in-time snapshots of the list, accepting that snapshots
-    may be stale by at most ``max_workers - 1`` items (because completions are
-    processed one at a time in the main thread, and each triggers at most one
-    new submission).  The ``_is_duplicate_relationship()`` check in the quality
-    refinement loop rejects duplicates that exist in the snapshot; as an
-    additional safety net, :meth:`append_if_new_pair` performs an atomic
-    check-and-insert to catch duplicates that concurrent workers may produce
-    from identical snapshots.
-    """
-
-    def __init__(self, initial: list[tuple[str, str, str]]) -> None:
-        """Initialize with an existing relationship list to deduplicate against."""
-        self._lock = threading.Lock()
-        self._data: list[tuple[str, str, str]] = list(initial)
-
-    def snapshot(self) -> list[tuple[str, str, str]]:
-        """Return a copy of the list under lock."""
-        with self._lock:
-            return list(self._data)
-
-    def append(self, rel: tuple[str, str, str]) -> None:
-        """Atomically add a new relationship."""
-        with self._lock:
-            self._data.append(rel)
-
-    def append_if_new_pair(self, rel: tuple[str, str, str]) -> bool:
-        """Atomically append only if the source/target pair is not already present.
-
-        The check is bidirectional: ``(A, B)`` and ``(B, A)`` are treated as
-        the same pair regardless of relation type.
-
-        Returns:
-            True if the pair was new and was appended, False if it already existed.
-        """
-        source, target, _rel_type = rel
-        with self._lock:
-            for existing_source, existing_target, _ in self._data:
-                if (source == existing_source and target == existing_target) or (
-                    source == existing_target and target == existing_source
-                ):
-                    return False
-            self._data.append(rel)
-            return True
-
-    def __len__(self) -> int:
-        """Return the number of relationships in the list."""
-        with self._lock:
-            return len(self._data)
 
 
 def _generate_batch_parallel[T, S: BaseQualityScores](
@@ -779,6 +732,20 @@ def _generate_batch_phased[T, S: BaseQualityScores](
                                 on_success(retry_entity)
                             results.append((retry_entity, retry_scores))
                             completed_times.append(time.time() - entity_start)
+                            if progress_callback:
+                                progress_callback(
+                                    EntityGenerationProgress(
+                                        current=min(len(results), count),
+                                        total=count,
+                                        entity_type=entity_type,
+                                        entity_name=get_name(retry_entity),
+                                        phase="complete",
+                                        elapsed_seconds=time.time() - batch_start_time,
+                                        estimated_remaining_seconds=svc._calculate_eta(
+                                            completed_times, max(count - len(results), 0)
+                                        ),
+                                    )
+                                )
                             logger.info(
                                 "Phase 3: recovered duplicate %s via retry %d",
                                 entity_type,
@@ -796,6 +763,15 @@ def _generate_batch_phased[T, S: BaseQualityScores](
                             continue
                         except MemoryError, RecursionError, KeyboardInterrupt, SystemExit:
                             raise
+                        except WorldGenerationError as retry_err:
+                            if isinstance(
+                                getattr(retry_err, "__cause__", None), VRAMAllocationError
+                            ):
+                                raise
+                            logger.warning(
+                                "Phase 3: duplicate retry failed for %s: %s", entity_type, retry_err
+                            )
+                            break
                         except Exception as retry_err:
                             logger.warning(
                                 "Phase 3: duplicate retry failed for %s: %s", entity_type, retry_err
@@ -942,55 +918,3 @@ def _generate_batch_phased[T, S: BaseQualityScores](
     _log_batch_summary(results, entity_type, quality_threshold, total_elapsed, get_name=get_name)
 
     return results
-
-
-def _collect_late_results[T, S: BaseQualityScores](
-    pending: dict[Future[tuple[T, S, int]], tuple[int, float]],
-    results: list[tuple[T, S]],
-    completed_times: list[float],
-    errors: list[str],
-    entity_type: str,
-    get_name: Callable[[T], str],
-    on_success: Callable[[T], None] | None,
-) -> None:
-    """Collect results from futures that were already running during early termination.
-
-    Futures that have already started cannot be cancelled by ``Future.cancel()``.
-    Rather than silently discarding their results when the executor shuts down,
-    this function waits for them and appends any successes to ``results``.
-
-    Args:
-        pending: The pending futures dict (read-only; not modified here).
-        results: Mutable results list to append late successes to.
-        completed_times: Mutable timing list for late successes.
-        errors: Mutable error list for late failures.
-        entity_type: For logging.
-        get_name: Entity name extractor.
-        on_success: Optional success hook.
-    """
-    for remaining_future, (_remaining_idx, remaining_start) in list(pending.items()):
-        if remaining_future.cancelled():
-            continue
-        try:
-            entity, scores, _iters = remaining_future.result()
-            entity_name = get_name(entity)
-            if on_success:
-                on_success(entity)
-            results.append((entity, scores))
-            completed_times.append(time.time() - remaining_start)
-            logger.info(
-                "Collected late %s '%s' during early termination",
-                entity_type,
-                entity_name,
-            )
-        except Exception as late_err:
-            if isinstance(late_err, (MemoryError, RecursionError)):
-                raise
-            late_msg = summarize_llm_error(late_err, max_length=200)
-            errors.append(late_msg)
-            logger.warning(
-                "Discarded late %s during early termination: %s",
-                entity_type,
-                late_msg,
-                exc_info=True,
-            )

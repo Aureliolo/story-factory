@@ -164,7 +164,7 @@ def resolve_model_pair(service: WorldQualityService, entity_type: str) -> tuple[
                     snapshot.available_vram_gb,
                 )
                 judge = creator
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
             logger.warning(
                 "Could not check pair VRAM fit for %s (%s: %s) — "
                 "proceeding without pair validation, OOM risk may be elevated",
@@ -390,12 +390,7 @@ def make_model_preparers(
         try:
             prepare_model(service.mode_service, creator_model, role="creator")
         except VRAMAllocationError:
-            logger.warning(
-                "VRAMAllocationError preparing creator model '%s' for %s — "
-                "continuing without preparation",
-                creator_model,
-                entity_type,
-            )
+            raise  # Non-retryable — must propagate to stop the batch
         except Exception as e:
             logger.warning(
                 "Failed to prepare creator model '%s' for VRAM "
@@ -409,12 +404,7 @@ def make_model_preparers(
         try:
             prepare_model(service.mode_service, judge_model, role="judge")
         except VRAMAllocationError:
-            logger.warning(
-                "VRAMAllocationError preparing judge model '%s' for %s — "
-                "continuing without preparation",
-                judge_model,
-                entity_type,
-            )
+            raise  # Non-retryable — must propagate to stop the batch
         except Exception as e:
             logger.warning(
                 "Failed to prepare judge model '%s' for VRAM (continuing without preparation): %s",

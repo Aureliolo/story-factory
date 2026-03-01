@@ -47,7 +47,10 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
         log_file: File path for logs. "default" uses logs/story_factory.log,
                   None disables file logging.
     """
-    log_level = getattr(logging, level.upper(), logging.INFO)
+    log_level = getattr(logging, level.upper(), None)
+    if log_level is None:
+        msg = f"Invalid log level: {level!r}. Must be DEBUG, INFO, WARNING, ERROR, or CRITICAL"
+        raise ValueError(msg)
 
     # Create formatter with correlation ID
     formatter = logging.Formatter(

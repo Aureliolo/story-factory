@@ -15,10 +15,10 @@ class TestProseSentimentKeywordNormalization:
         yield
         normalize_relation_type.cache_clear()
 
-    def test_normalize_admiration_to_trusts(self):
-        """normalize_relation_type('admiration') should map to 'trusts'."""
+    def test_normalize_admiration_to_admires(self):
+        """normalize_relation_type('admiration') should map to 'admires'."""
         result = normalize_relation_type("admiration")
-        assert result == "trusts"
+        assert result == "admires"
 
     def test_normalize_hostility_to_enemy_of(self):
         """normalize_relation_type('hostility') should map to 'enemy_of'."""

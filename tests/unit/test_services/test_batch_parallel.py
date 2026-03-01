@@ -18,7 +18,7 @@ from src.services.world_quality_service._batch_parallel import (
     _generate_batch_parallel,
     _ThreadSafeRelsList,
 )
-from src.utils.exceptions import DuplicateNameError, WorldGenerationError
+from src.utils.exceptions import DuplicateNameError, VRAMAllocationError, WorldGenerationError
 
 
 def _make_char_scores(avg: float, feedback: str = "Test") -> CharacterQualityScores:
@@ -2325,6 +2325,48 @@ class TestGenerateBatchPhased:
                 judge_only_fn=lambda e: scores,
                 is_empty_fn=lambda e: not e.get("name"),
                 refine_with_initial_fn=refine_fn_fatal,
+                prepare_creator_fn=lambda: None,
+                prepare_judge_fn=lambda: None,
+            )
+
+    def test_phased_duplicate_retry_reraises_vram_allocation_error(self, phased_svc):
+        """Phase 3 duplicate retry re-raises VRAMAllocationError (non-retryable)."""
+        scores = _make_char_scores(8.0)
+        create_idx = 0
+
+        def create_fn(_i):
+            """Create entities sequentially."""
+            nonlocal create_idx
+            entity = {"name": f"E{create_idx}"}
+            create_idx += 1
+            return entity
+
+        def on_success_reject_e0(entity):
+            """Reject E0 with DuplicateNameError."""
+            if entity["name"] == "E0":
+                raise DuplicateNameError("E0 is a duplicate")
+
+        def refine_fn_vram(entity):
+            """Refinement raises WorldGenerationError caused by VRAMAllocationError."""
+            vram_err = VRAMAllocationError("GPU OOM")
+            gen_err = WorldGenerationError("VRAM exhausted")
+            gen_err.__cause__ = vram_err
+            raise gen_err
+
+        with pytest.raises(WorldGenerationError, match="VRAM exhausted"):
+            _generate_batch_parallel(
+                svc=phased_svc,
+                count=2,
+                entity_type="test",
+                generate_fn=lambda _i: ({"name": "fallback"}, scores, 1),
+                get_name=lambda e: e["name"],
+                on_success=on_success_reject_e0,
+                quality_threshold=7.5,
+                max_workers=2,
+                create_only_fn=create_fn,
+                judge_only_fn=lambda e: scores,
+                is_empty_fn=lambda e: not e.get("name"),
+                refine_with_initial_fn=refine_fn_vram,
                 prepare_creator_fn=lambda: None,
                 prepare_judge_fn=lambda: None,
             )

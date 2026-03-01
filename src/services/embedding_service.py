@@ -41,7 +41,8 @@ _warned_context_models_lock = threading.Lock()
 
 # M7: Track entity labels for which a truncation warning has already fired.
 # Second+ truncations for the same label log at DEBUG instead of WARNING.
-# Reset at the start of each full embedding pass so re-embedding shows fresh warnings.
+# Reset at the start of each full embedding pass and when attaching to a new database
+# so re-embedding and callback-driven embedding show fresh warnings.
 _truncation_warned: set[str] = set()
 _truncation_warned_lock = threading.Lock()
 
@@ -49,7 +50,9 @@ _truncation_warned_lock = threading.Lock()
 def _reset_truncation_warnings() -> None:
     """Reset truncation dedup so re-embedding logs fresh warnings."""
     with _truncation_warned_lock:
+        cleared_count = len(_truncation_warned)
         _truncation_warned.clear()
+    logger.debug("Reset truncation warning dedup set (cleared=%d)", cleared_count)
 
 
 class EmbeddingService:
@@ -832,6 +835,8 @@ class EmbeddingService:
         Args:
             db: WorldDatabase instance to attach callbacks to.
         """
+
+        _reset_truncation_warnings()
 
         def _pre_truncate_callback_text(text: str) -> str:
             """Pre-truncate callback text to fit within the embedding context budget.

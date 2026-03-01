@@ -18,7 +18,7 @@ from src.services.world_service._event_helpers import (
     build_event_timestamp,
     resolve_event_participants,
 )
-from src.utils.exceptions import GenerationCancelledError
+from src.utils.exceptions import DatabaseClosedError, GenerationCancelledError
 
 
 class TestSanitizeEventText:
@@ -35,6 +35,10 @@ class TestSanitizeEventText:
     def test_sanitize_title_prefix(self):
         """Strip 'Event Title:' prefix from event text."""
         assert _sanitize_event_text("Event Title: The Storm") == "The Storm"
+
+    def test_sanitize_markdown_wrapped_title_prefix(self):
+        """Strip markdown-wrapped title prefix like '**Event Title:** The Storm'."""
+        assert _sanitize_event_text("**Event Title:** The Storm") == "The Storm"
 
 
 class TestBuildEventTimestampH2:
@@ -547,4 +551,31 @@ class TestGenerateEventsReraisesFatalExceptions:
         ]
 
         with pytest.raises(GenerationCancelledError):
+            _generate_events(svc, state, world_db, services)
+
+    def test_database_closed_error_propagates_from_add_event(self):
+        """DatabaseClosedError from add_event should propagate, not be swallowed."""
+        svc = MagicMock()
+        svc.settings.world_gen_events_min = 1
+        svc.settings.world_gen_events_max = 1
+        svc.settings.fuzzy_match_threshold = 0.8
+
+        state = MagicMock()
+        state.target_events_min = None
+        state.target_events_max = None
+
+        world_db = MagicMock()
+        world_db.list_entities.return_value = []
+        world_db.list_relationships.return_value = []
+        world_db.list_events.return_value = []
+        world_db.add_event.side_effect = DatabaseClosedError("db closed")
+
+        mock_scores = MagicMock()
+        mock_scores.average = 7.0
+        services = MagicMock()
+        services.world_quality.generate_events_with_quality.return_value = [
+            ({"description": "A great battle", "consequences": []}, mock_scores),
+        ]
+
+        with pytest.raises(DatabaseClosedError):
             _generate_events(svc, state, world_db, services)
