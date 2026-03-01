@@ -544,8 +544,8 @@ class TestCharacterGenerationEarlyStopping:
         )
 
         # Score-plateau early-stop (#328) triggers after 2 consecutive identical scores
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert mock_judge.call_count == 3
+        # hail-mary skipped (identical output)
+        assert mock_judge.call_count == 2
         # Returns best character (first iteration, since scores never improve)
         assert char.name == "ZeroChar"
         assert final_scores.average == pytest.approx(0.1)
@@ -708,8 +708,8 @@ class TestLocationGenerationEarlyStopping:
         )
 
         # Score-plateau early-stop (#328) triggers after 2 consecutive identical scores
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert mock_judge.call_count == 3
+        # hail-mary skipped (identical output)
+        assert mock_judge.call_count == 2
         assert loc["name"] == "ZeroLoc"
         assert final_scores.average == pytest.approx(0.1)
 
@@ -868,10 +868,10 @@ class TestRelationshipGenerationEarlyStopping:
         )
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert mock_judge.call_count == 4
+        # hail-mary skipped (identical output)
+        assert mock_judge.call_count == 3
         # Returns total iteration count and best scores (8.0)
-        assert iterations == 4
+        assert iterations == 3
         assert final_scores.average == 8.0
 
 
@@ -914,8 +914,8 @@ class TestItemGenerationEarlyStopping:
         )
 
         # Score-plateau early-stop (#328) triggers after 2 consecutive identical scores
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert mock_judge.call_count == 3
+        # hail-mary skipped (identical output)
+        assert mock_judge.call_count == 2
         assert item["name"] == "ZeroItem"
         assert final_scores.average == pytest.approx(0.1)
 
@@ -1023,8 +1023,8 @@ class TestConceptGenerationEarlyStopping:
         )
 
         # Score-plateau early-stop (#328) triggers after 2 consecutive identical scores
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert mock_judge.call_count == 3
+        # hail-mary skipped (identical output)
+        assert mock_judge.call_count == 2
         assert concept["name"] == "ZeroConcept"
         assert final_scores.average == pytest.approx(0.1)
 
@@ -1183,10 +1183,10 @@ class TestEventGenerationEarlyStopping:
         )
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert mock_judge.call_count == 4
+        # hail-mary skipped (identical output)
+        assert mock_judge.call_count == 3
         # Returns total iteration count and best scores (8.2)
-        assert iterations == 4
+        assert iterations == 3
         assert final_scores.average == pytest.approx(8.2)
 
     @patch.object(WorldQualityService, "_create_event")

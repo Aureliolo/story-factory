@@ -35,6 +35,8 @@ def mock_settings():
     settings.ollama_url = "http://localhost:11434"
     settings.ollama_timeout = 120
     settings.context_size = 32768
+    settings.streaming_inter_chunk_timeout = 120
+    settings.streaming_wall_clock_timeout = 600
     return settings
 
 

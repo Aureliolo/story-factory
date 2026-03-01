@@ -3716,7 +3716,7 @@ class TestPrepareModelCallbacks:
 
         # Main loop iter 0: prep_creator, create, prep_judge, judge (below threshold)
         # Main loop iter 1: prep_creator before refine → unchanged detection → early stop
-        # Hail-mary: prep_creator, create, prep_judge, judge
+        # Hail-mary: prep_creator, create → identical output to best → judge skipped (M3)
         assert call_order == [
             "prepare_creator",
             "create",
@@ -3725,8 +3725,7 @@ class TestPrepareModelCallbacks:
             "prepare_creator",  # refine attempt (before unchanged detection breaks)
             "prepare_creator",  # hail-mary create
             "create",
-            "prepare_judge",
-            "judge",
+            # prepare_judge + judge skipped: hail-mary produced identical output (M3)
         ]
 
     def test_prepare_creator_called_in_auto_pass(self, mock_svc, config):

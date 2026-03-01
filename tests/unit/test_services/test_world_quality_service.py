@@ -5939,10 +5939,9 @@ class TestMakeModelPreparers:
     def test_same_model_returns_none_pair(self, service):
         """When creator and judge resolve to the same model, return (None, None)."""
         service._model_cache.invalidate()
-        # Both roles resolve to the same test-model via mock
-        with (
-            patch.object(service, "_get_creator_model", return_value="test-model:8b"),
-            patch.object(service, "_get_judge_model", return_value="test-model:8b"),
+        with patch(
+            "src.services.world_quality_service._model_resolver.resolve_model_pair",
+            return_value=("test-model:8b", "test-model:8b"),
         ):
             prep_c, prep_j = service._make_model_preparers("character")
 
@@ -5951,9 +5950,9 @@ class TestMakeModelPreparers:
 
     def test_different_models_returns_callables(self, service):
         """When creator and judge differ, return callable preparers."""
-        with (
-            patch.object(service, "_get_creator_model", return_value="creator-model:8b"),
-            patch.object(service, "_get_judge_model", return_value="judge-model:8b"),
+        with patch(
+            "src.services.world_quality_service._model_resolver.resolve_model_pair",
+            return_value=("creator-model:8b", "judge-model:8b"),
         ):
             prep_c, prep_j = service._make_model_preparers("character")
 
@@ -5963,26 +5962,36 @@ class TestMakeModelPreparers:
     def test_preparers_call_prepare_model(self, service):
         """Returned preparers delegate to prepare_model with correct model IDs."""
         with (
-            patch.object(service, "_get_creator_model", return_value="creator-model:8b"),
-            patch.object(service, "_get_judge_model", return_value="judge-model:8b"),
-            patch("src.services.world_quality_service._prepare_model") as mock_prepare,
+            patch(
+                "src.services.world_quality_service._model_resolver.resolve_model_pair",
+                return_value=("creator-model:8b", "judge-model:8b"),
+            ),
+            patch(
+                "src.services.world_quality_service._model_resolver.prepare_model",
+            ) as mock_prepare,
         ):
             prep_c, prep_j = service._make_model_preparers("location")
 
             prep_c()
-            mock_prepare.assert_called_once_with(service.mode_service, "creator-model:8b")
+            mock_prepare.assert_called_once_with(
+                service.mode_service, "creator-model:8b", role="creator"
+            )
 
             mock_prepare.reset_mock()
             prep_j()
-            mock_prepare.assert_called_once_with(service.mode_service, "judge-model:8b")
+            mock_prepare.assert_called_once_with(
+                service.mode_service, "judge-model:8b", role="judge"
+            )
 
     def test_prepare_creator_graceful_on_failure(self, service):
-        """prepare_creator logs warning and continues when _prepare_model raises."""
+        """prepare_creator logs warning and continues when prepare_model raises."""
         with (
-            patch.object(service, "_get_creator_model", return_value="creator-model:8b"),
-            patch.object(service, "_get_judge_model", return_value="judge-model:8b"),
             patch(
-                "src.services.world_quality_service._prepare_model",
+                "src.services.world_quality_service._model_resolver.resolve_model_pair",
+                return_value=("creator-model:8b", "judge-model:8b"),
+            ),
+            patch(
+                "src.services.world_quality_service._model_resolver.prepare_model",
                 side_effect=ConnectionError("Ollama unreachable"),
             ),
         ):
@@ -5991,12 +6000,14 @@ class TestMakeModelPreparers:
             prep_c()
 
     def test_prepare_judge_graceful_on_failure(self, service):
-        """prepare_judge logs warning and continues when _prepare_model raises."""
+        """prepare_judge logs warning and continues when prepare_model raises."""
         with (
-            patch.object(service, "_get_creator_model", return_value="creator-model:8b"),
-            patch.object(service, "_get_judge_model", return_value="judge-model:8b"),
             patch(
-                "src.services.world_quality_service._prepare_model",
+                "src.services.world_quality_service._model_resolver.resolve_model_pair",
+                return_value=("creator-model:8b", "judge-model:8b"),
+            ),
+            patch(
+                "src.services.world_quality_service._model_resolver.prepare_model",
                 side_effect=ValueError("Invalid vram_strategy"),
             ),
         ):
