@@ -2125,6 +2125,7 @@ class TestValidateWorldCache:
         world_db.list_entities.return_value = []
         world_db.list_relationships.return_value = []
         world_db.get_world_settings.return_value = None
+        world_db.conn.total_changes = 0
         return world_db
 
     def test_validate_world_cache_hit(self):

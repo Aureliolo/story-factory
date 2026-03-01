@@ -128,7 +128,9 @@ class TemporalValidationService:
         """
         self.settings = settings
         # L2: result cache to avoid duplicate validation on rebuild
-        self._result_cache: tuple[tuple[int, int], float, TemporalValidationResult] | None = None
+        self._result_cache: tuple[tuple[int, int, int], float, TemporalValidationResult] | None = (
+            None
+        )
         logger.debug("Initialized TemporalValidationService")
 
     def validate_entity(
@@ -213,9 +215,9 @@ class TemporalValidationService:
         # Get all entities
         all_entities = world_db.list_entities()
 
-        # L2: check result cache (keyed on db identity + entity count)
+        # L2: check result cache (keyed on db identity + entity count + change counter)
         now = time.monotonic()
-        cache_key = (id(world_db), len(all_entities))
+        cache_key = (id(world_db), len(all_entities), world_db.conn.total_changes)
         if self._result_cache is not None:
             cached_key, cached_time, cached_result = self._result_cache
             if cached_key == cache_key and (now - cached_time) < _VALIDATION_CACHE_TTL:
