@@ -269,6 +269,25 @@ _WORD_TO_RELATION: dict[str, str] = {
     "resents": "resents",
     "threaten": "threatens",
     "threatens": "threatens",
+    # L1: Prose sentiment keywords (formerly in separate _PROSE_SENTIMENT_KEYWORDS dict).
+    # Merged here to use priority-based word-level matching instead of substring search.
+    "admiration": "trusts",
+    "hostility": "enemy_of",
+    "partnership": "allies_with",
+    "cooperation": "allies_with",
+    "animosity": "enemy_of",
+    "antagonism": "rivals",
+    "camaraderie": "friends",
+    "enmity": "enemy_of",
+    "affection": "cares_for",
+    "devotion": "devoted_to",
+    "respect": "respects",
+    "distrust": "distrusts",
+    "suspicion": "suspects",
+    "reverence": "admires",
+    "alliance": "allies_with",
+    "loyalty": "loyal_to",
+    "tension": "conflicts_with",
 }
 
 

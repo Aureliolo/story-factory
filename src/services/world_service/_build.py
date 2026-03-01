@@ -474,9 +474,46 @@ def _build_world_entities(
     if options.generate_events:
         check_cancelled()
         report_progress("Generating world events...", "event")
+
+        # H5: Wire sub-step progress for events (same pattern as _rel_progress_adapter)
+        event_progress_cb = None
+        if raw_progress_callback and step_context:
+            from src.services.world_service import WorldBuildProgress as WBP
+
+            def _event_progress_adapter(p: EntityGenerationProgress) -> None:
+                """Map EntityGenerationProgress to WorldBuildProgress for events."""
+                try:
+                    cur_step, tot_steps = step_context()
+                    raw_progress_callback(
+                        WBP(
+                            step=cur_step,
+                            total_steps=tot_steps,
+                            message=(
+                                f"[{cur_step}/{tot_steps}] Generating event "
+                                f"{p.current}/{p.total}..."
+                            ),
+                            entity_type="event",
+                            count=p.current,
+                            sub_current=p.current,
+                            sub_total=p.total,
+                            sub_entity_name=p.entity_name,
+                        )
+                    )
+                except MemoryError, RecursionError:
+                    raise
+                except Exception:
+                    logger.warning("Event sub-step progress callback failed", exc_info=True)
+
+            event_progress_cb = _event_progress_adapter
+
         try:
             event_count = _generate_events(
-                svc, state, world_db, services, cancel_check=options.is_cancelled
+                svc,
+                state,
+                world_db,
+                services,
+                cancel_check=options.is_cancelled,
+                progress_callback=event_progress_cb,
             )
             counts["events"] = event_count
             logger.info("Generated %d world events", event_count)

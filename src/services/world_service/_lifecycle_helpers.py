@@ -162,6 +162,15 @@ def build_character_lifecycle(
                 death["year"] = char.death_year
             if death_era is not None:
                 death["era_name"] = death_era
+            elif char.death_year is not None:
+                # M5: death era could not be resolved — log for visibility
+                logger.debug(
+                    "%s: death_year=%d but era_name is None (calendar %s, death_era claim=%r)",
+                    entity_label,
+                    char.death_year,
+                    "available" if calendar else "absent",
+                    char.death_era,
+                )
             if death:
                 lifecycle["death"] = death
 

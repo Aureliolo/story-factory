@@ -8,6 +8,7 @@ top-level ``_generate_events`` orchestrator extracted from ``_build.py``.
 import json
 import logging
 import random
+import re
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -18,13 +19,37 @@ from src.services.world_service._name_matching import _find_entity_by_name
 from src.utils.exceptions import DatabaseClosedError, GenerationCancelledError
 
 if TYPE_CHECKING:
+    from src.memory.world_calendar import WorldCalendar
     from src.services import ServiceContainer
     from src.services.world_service import WorldService
 
 logger = logging.getLogger(__name__)
 
+# Markdown/title-prefix cleanup regexes for LLM output sanitization (H1)
+_MD_BOLD_RE = re.compile(r"\*{2}(.+?)\*{2}")
+_MD_ITALIC_RE = re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)")
+_TITLE_PREFIX_RE = re.compile(r"^(?:event\s+title|title)\s*:\s*", re.IGNORECASE)
+
 # Lifecycle sub-dict keys that may contain temporal 'year' values
 _LIFECYCLE_TEMPORAL_KEYS = ("birth", "death", "founding", "dissolution", "creation")
+
+
+def _sanitize_event_text(text: str) -> str:
+    """Strip Markdown artifacts and title prefixes from LLM event text.
+
+    Removes ``**bold**``, ``*italic*``, and leading ``Title:`` / ``Event Title:``
+    prefixes that LLMs sometimes inject into event descriptions and names.
+
+    Args:
+        text: Raw event text from LLM output.
+
+    Returns:
+        Cleaned text with Markdown formatting and title prefixes removed.
+    """
+    text = _TITLE_PREFIX_RE.sub("", text.strip())
+    text = _MD_BOLD_RE.sub(r"\1", text)
+    text = _MD_ITALIC_RE.sub(r"\1", text)
+    return text.strip()
 
 
 def _parse_lifecycle_sub(value: Any) -> dict[str, Any] | None:
@@ -146,11 +171,17 @@ def build_event_entity_context(world_db: WorldDatabase) -> str:
     return "\n\n".join(context_parts)
 
 
-def build_event_timestamp(event: dict[str, Any]) -> str:
+def build_event_timestamp(
+    event: dict[str, Any],
+    *,
+    calendar: WorldCalendar | None = None,
+) -> str:
     """Build a human-readable timestamp string from an event's temporal fields.
 
     Args:
         event: Event dict with optional 'year', 'month', and 'era_name' keys.
+        calendar: Optional WorldCalendar for era auto-resolution when era_name
+            is missing but year is present.
 
     Returns:
         Comma-separated timestamp string (e.g. "Year 1200, Month 3, Dark Age"),
@@ -160,12 +191,33 @@ def build_event_timestamp(event: dict[str, Any]) -> str:
     year = event.get("year")
     month = event.get("month")
     era_name = event.get("era_name", "")
+
+    # H2: auto-resolve era from calendar when year is present but era is missing
+    if year is not None and not era_name and calendar is not None:
+        try:
+            era = calendar.get_era_for_year(int(year))
+            if era is not None:
+                era_name = era.name
+                logger.debug(
+                    "build_event_timestamp: auto-resolved era '%s' for year %s from calendar",
+                    era_name,
+                    year,
+                )
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.debug("build_event_timestamp: could not resolve era for year %s: %s", year, e)
+
     if year is not None:
         timestamp_parts.append(f"Year {year}")
     if month is not None:
         timestamp_parts.append(f"Month {month}")
     if era_name:
         timestamp_parts.append(era_name)
+
+    if not timestamp_parts:
+        logger.warning(
+            "build_event_timestamp: event has no temporal fields (year/month/era all absent)"
+        )
+
     result = ", ".join(timestamp_parts)
     logger.debug(
         "build_event_timestamp: year=%s month=%s era=%s -> '%s'", year, month, era_name, result
@@ -207,6 +259,10 @@ def resolve_event_participants(
                 type(p).__name__,
                 p,
             )
+        # M6: strip bracket/markdown artifacts from participant names
+        if entity_name:
+            entity_name = entity_name.strip().strip("[]")
+            entity_name = _sanitize_event_text(entity_name)
         if entity_name:
             matched = _find_entity_by_name(all_entities, entity_name, threshold=threshold)
             if matched:
@@ -229,6 +285,7 @@ def _generate_events(
     world_db: WorldDatabase,
     services: ServiceContainer,
     cancel_check: Callable[[], bool] | None = None,
+    progress_callback: Callable[..., None] | None = None,
 ) -> int:
     """Generate and add world events to the database using quality refinement.
 
@@ -243,6 +300,7 @@ def _generate_events(
         world_db: World database to read entities from and persist events to.
         services: Service container providing the world quality service.
         cancel_check: Optional callable that returns True to stop generation.
+        progress_callback: Optional callback for per-event progress updates.
 
     Returns:
         Number of events successfully added to the world database.
@@ -273,7 +331,13 @@ def _generate_events(
         entity_context_provider=lambda: build_event_entity_context(world_db),
         count=event_count,
         cancel_check=cancel_check,
+        progress_callback=progress_callback,
     )
+
+    # Retrieve calendar for era auto-resolution in timestamps (H2)
+    from src.services.world_service._build_utils import get_calendar_from_world_db
+
+    calendar = get_calendar_from_world_db(world_db)
 
     all_entities = world_db.list_entities()
     threshold = svc.settings.fuzzy_match_threshold
@@ -284,12 +348,12 @@ def _generate_events(
             break
 
         try:
-            description = event.get("description", "")
+            description = _sanitize_event_text(event.get("description", ""))
             if not description:
                 logger.warning("Skipping event with empty description: %s", event)
                 continue
 
-            timestamp_in_story = build_event_timestamp(event)
+            timestamp_in_story = build_event_timestamp(event, calendar=calendar)
             participants, dropped = resolve_event_participants(
                 event, all_entities, threshold=threshold
             )

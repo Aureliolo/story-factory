@@ -2,6 +2,7 @@
 
 import logging
 import sqlite3
+import time
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
@@ -105,6 +106,9 @@ class TemporalValidationResult(BaseModel):
         return self.error_count + self.warning_count
 
 
+_VALIDATION_CACHE_TTL = 30.0  # seconds
+
+
 class TemporalValidationService:
     """Service for validating temporal consistency of world entities.
 
@@ -123,6 +127,10 @@ class TemporalValidationService:
             settings: Application settings.
         """
         self.settings = settings
+        # L2: result cache to avoid duplicate validation on rebuild
+        self._result_cache: tuple[tuple[int, int, int], float, TemporalValidationResult] | None = (
+            None
+        )
         logger.debug("Initialized TemporalValidationService")
 
     def validate_entity(
@@ -186,6 +194,10 @@ class TemporalValidationService:
     def validate_world(self, world_db: WorldDatabase) -> TemporalValidationResult:
         """Validate temporal consistency of entire world.
 
+        Results are cached for ``_VALIDATION_CACHE_TTL`` seconds, keyed on
+        the world_db identity and entity count, to avoid duplicate validation
+        during rebuild (L2).
+
         Args:
             world_db: WorldDatabase to validate.
 
@@ -202,6 +214,18 @@ class TemporalValidationService:
 
         # Get all entities
         all_entities = world_db.list_entities()
+
+        # L2: check result cache (keyed on db identity + entity count + change counter)
+        now = time.monotonic()
+        cache_key = (id(world_db), len(all_entities), world_db.conn.total_changes)
+        if self._result_cache is not None:
+            cached_key, cached_time, cached_result = self._result_cache
+            if cached_key == cache_key and (now - cached_time) < _VALIDATION_CACHE_TTL:
+                logger.debug(
+                    "Returning cached temporal validation result (age=%.1fs)",
+                    now - cached_time,
+                )
+                return cached_result
 
         # Get all relationships
         all_relationships = [
@@ -233,6 +257,10 @@ class TemporalValidationService:
             f"World validation complete: {len(result.errors)} errors, "
             f"{len(result.warnings)} warnings across {len(all_entities)} entities"
         )
+
+        # L2: populate cache
+        self._result_cache = (cache_key, time.monotonic(), result)
+
         return result
 
     def _validate_character(

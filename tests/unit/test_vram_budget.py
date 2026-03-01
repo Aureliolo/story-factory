@@ -1,10 +1,12 @@
 """Tests for VRAM budget planning: pair_fits, plan_vram_budget, snapshot caching."""
 
 import logging
+import time as time_module
 from unittest.mock import patch
 
 import pytest
 
+import src.services.model_mode_service._vram_budget as _vram_budget_mod
 from src.services.model_mode_service._vram_budget import (
     VRAMBudget,
     VRAMSnapshot,
@@ -374,3 +376,120 @@ class TestInvalidateVramSnapshot:
             invalidate_vram_snapshot()
 
         assert "VRAM snapshot cache invalidated" in caplog.text
+
+
+# ──── VRAM zero-retry tests ────
+
+
+class TestVramZeroRetry:
+    """Tests for transient 0 GB VRAM retry logic in get_vram_snapshot()."""
+
+    @patch("src.services.model_mode_service._vram_budget.time.sleep")
+    @patch(
+        "src.settings.get_installed_models_with_sizes",
+        return_value={"test-model:8b": 4.5},
+    )
+    @patch("src.settings.get_available_vram")
+    def test_vram_zero_recovers_on_retry(self, mock_vram, mock_models, mock_sleep):
+        """When get_available_vram returns 0 then recovers, snapshot uses recovered value.
+
+        Scenario: previous snapshot had 24 GB, nvidia-smi returns 0 on first attempt
+        (model eviction in progress), then returns 24 GB on the first retry.
+        """
+        # Seed a previous snapshot with 24 GB so the retry path activates
+        previous = VRAMSnapshot(
+            available_vram_gb=24.0,
+            installed_models={"test-model:8b": 4.5},
+            timestamp=time_module.monotonic() - 60,  # expired TTL
+        )
+        _vram_budget_mod._cached_snapshot = previous
+
+        # First call returns 0 (triggers retry), first retry returns 24.0
+        mock_vram.side_effect = [0, 24.0]
+
+        snapshot = get_vram_snapshot()
+
+        assert snapshot.available_vram_gb == 24.0
+        # Called twice: initial 0 + one successful retry
+        assert mock_vram.call_count == 2
+        mock_sleep.assert_called_once_with(0.5)
+
+    @patch("src.services.model_mode_service._vram_budget.time.sleep")
+    @patch(
+        "src.settings.get_installed_models_with_sizes",
+        return_value={"test-model:8b": 4.5},
+    )
+    @patch("src.settings.get_available_vram")
+    def test_vram_zero_exhausts_retries_uses_previous(self, mock_vram, mock_models, mock_sleep):
+        """When all retries return 0 and a previous snapshot exists, use previous value.
+
+        Scenario: previous snapshot had 24 GB, nvidia-smi persistently returns 0
+        (e.g., driver issue). After 3 retries, fallback to the previous 24 GB value
+        to avoid a pessimistic self-judging cascade.
+        """
+        previous = VRAMSnapshot(
+            available_vram_gb=24.0,
+            installed_models={"test-model:8b": 4.5},
+            timestamp=time_module.monotonic() - 60,  # expired TTL
+        )
+        _vram_budget_mod._cached_snapshot = previous
+
+        # All calls return 0: initial + 3 retries
+        mock_vram.return_value = 0
+
+        snapshot = get_vram_snapshot()
+
+        assert snapshot.available_vram_gb == 24.0
+        # Called 4 times: 1 initial + 3 retries
+        assert mock_vram.call_count == 4
+        assert mock_sleep.call_count == 3
+
+    @patch("src.services.model_mode_service._vram_budget.time.sleep")
+    @patch(
+        "src.settings.get_installed_models_with_sizes",
+        return_value={"test-model:8b": 4.5},
+    )
+    @patch("src.settings.get_available_vram")
+    def test_vram_zero_retry_exception_continues(self, mock_vram, mock_models, mock_sleep):
+        """When get_available_vram raises during retry, continue to next attempt."""
+        previous = VRAMSnapshot(
+            available_vram_gb=24.0,
+            installed_models={"test-model:8b": 4.5},
+            timestamp=time_module.monotonic() - 60,
+        )
+        _vram_budget_mod._cached_snapshot = previous
+
+        # Initial returns 0, retry 1 raises ConnectionError, retry 2 returns 24.0
+        mock_vram.side_effect = [0, ConnectionError("nvidia-smi failed"), 24.0]
+
+        snapshot = get_vram_snapshot()
+
+        assert snapshot.available_vram_gb == 24.0
+        assert mock_vram.call_count == 3
+        assert mock_sleep.call_count == 2
+
+    @patch("src.services.model_mode_service._vram_budget.time.sleep")
+    @patch(
+        "src.settings.get_installed_models_with_sizes",
+        return_value={},
+    )
+    @patch(
+        "src.settings.get_available_vram",
+        return_value=0,
+    )
+    def test_vram_zero_no_previous_stays_zero(self, mock_vram, mock_models, mock_sleep):
+        """When no previous snapshot exists and VRAM is 0, accept 0 (first-run pessimistic).
+
+        Scenario: first run on a system with no GPU or nvidia-smi not available.
+        No previous snapshot to retry against, so 0 is accepted immediately
+        without any retry attempts.
+        """
+        # Ensure no previous snapshot (autouse fixture already clears, but be explicit)
+        _vram_budget_mod._cached_snapshot = None
+
+        snapshot = get_vram_snapshot()
+
+        assert snapshot.available_vram_gb == 0.0
+        # Called once — no retries because no previous snapshot
+        mock_vram.assert_called_once()
+        mock_sleep.assert_not_called()

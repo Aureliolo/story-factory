@@ -28,11 +28,15 @@ _ABBREVIATION_DOT_RE = re.compile(r"(?<=\w)\.")
 def _normalize_name(name: str) -> str:
     """Normalize an entity name for fuzzy comparison.
 
-    Collapses whitespace, lowercases, and strips common English articles
-    ("The", "A", "An") that LLMs frequently prepend, causing mismatches
-    (e.g., "The Echoes of the Network" vs "Echoes of the Network").
+    Collapses whitespace, lowercases, strips surrounding square brackets
+    (LLM artifact), and strips common English articles ("The", "A", "An")
+    that LLMs frequently prepend, causing mismatches.
     """
     original = name
+    name = name.strip()
+    # Strip surrounding square brackets (LLM participant name artifact)
+    if name.startswith("[") and name.endswith("]"):
+        name = name[1:-1]
     normalized = " ".join(name.split()).lower()
     for article in _LEADING_ARTICLES:
         if normalized.startswith(article):

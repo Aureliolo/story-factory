@@ -114,6 +114,9 @@ class ModelService:
         self._installed_cache: _TTLCached[list[str]] = _TTLCached(
             settings.model_installed_cache_ttl
         )
+        self._installed_with_sizes_cache: _TTLCached[dict[str, float]] = _TTLCached(
+            settings.model_installed_cache_ttl
+        )
         self._vram_cache: _TTLCached[int] = _TTLCached(settings.model_vram_cache_ttl)
 
         logger.debug("ModelService initialized successfully")
@@ -276,11 +279,19 @@ class ModelService:
     def list_installed_with_sizes(self) -> dict[str, float]:
         """List installed Ollama models with their actual sizes.
 
-        Uses ``_fetch_model_list`` to get model objects with size metadata.
+        Results are cached for ``settings.model_installed_cache_ttl`` seconds
+        to avoid redundant Ollama API calls (H7: was making ~30 uncached calls
+        at startup).
 
         Returns:
             Dict mapping model ID to size in GB.
         """
+        now = time.monotonic()
+        cached = self._installed_with_sizes_cache.get(now)
+        if cached is not None:
+            logger.debug("list_installed_with_sizes: returning cached result")
+            return dict(cached)  # Defensive copy
+
         logger.debug("list_installed_with_sizes called")
         raw_models = self._fetch_model_list()
         if raw_models is None:
@@ -298,7 +309,8 @@ class ModelService:
             self._last_model_count_with_sizes = count
         else:
             logger.debug(f"Found {count} installed models with sizes")
-        return models
+        self._installed_with_sizes_cache.set(models, now)
+        return dict(models)  # Defensive copy
 
     def list_available(self) -> list[ModelStatus]:
         """List all available models with their status.
@@ -479,6 +491,7 @@ class ModelService:
         """
         self._health_cache.invalidate()
         self._installed_cache.invalidate()
+        self._installed_with_sizes_cache.invalidate()
         self._vram_cache.invalidate()
         logger.debug("ModelService caches invalidated")
 
