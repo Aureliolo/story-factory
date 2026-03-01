@@ -700,6 +700,9 @@ class TestBatchParallelVRAMPropagation:
         config.quality_threshold = 7.5
         config.get_threshold = MagicMock(return_value=7.5)
         mock_svc.get_config = MagicMock(return_value=config)
+        # Same creator/judge model → stays in rolling-window path (not phased)
+        mock_svc._get_creator_model = MagicMock(return_value="same-model:8b")
+        mock_svc._get_judge_model = MagicMock(return_value="same-model:8b")
 
         def gen_fn(retries: int) -> tuple[dict, MagicMock, int]:
             """Raise WorldGenerationError wrapping VRAMAllocationError."""
@@ -714,7 +717,7 @@ class TestBatchParallelVRAMPropagation:
                 entity_type="location",
                 generate_fn=gen_fn,
                 get_name=lambda e: e.get("name", ""),
-                max_workers=1,
+                max_workers=2,  # Must be >1 to enter rolling-window path
             )
 
     def _make_phased_svc(self):
@@ -927,6 +930,22 @@ class TestHailMaryVRAMPropagation:
 
 class TestModelFitsUnexpectedException:
     """Tests for unexpected exception path in _model_fits_in_vram."""
+
+    @patch("src.services.world_quality_service._model_resolver.get_available_vram")
+    @patch("src.services.world_quality_service._model_resolver.get_installed_models_with_sizes")
+    def test_expected_exception_logs_debug_and_returns_true(
+        self, mock_installed, mock_vram, caplog
+    ):
+        """Expected exception (ConnectionError etc.) should log debug and return True."""
+        from src.services.world_quality_service._model_resolver import _model_fits_in_vram
+
+        mock_installed.side_effect = ConnectionError("Ollama not running")
+
+        with caplog.at_level(logging.DEBUG):
+            result = _model_fits_in_vram("test-model:8b")
+
+        assert result is True
+        assert "VRAM check failed for" in caplog.text
 
     @patch("src.services.world_quality_service._model_resolver.get_available_vram")
     @patch("src.services.world_quality_service._model_resolver.get_installed_models_with_sizes")
