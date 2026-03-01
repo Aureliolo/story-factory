@@ -366,10 +366,10 @@ class TestFactionGenerationEarlyStopping:
         )
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert mock_judge.call_count == 4
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert mock_judge.call_count == 3
         # Returns total iteration count and best scores (8.2)
-        assert iterations == 4
+        assert iterations == 3
         assert final_scores.average == pytest.approx(8.2)
 
     @patch.object(WorldQualityService, "_create_faction")
@@ -494,10 +494,10 @@ class TestFactionGenerationEarlyStopping:
         )
 
         # Should only run 3 iterations in loop (early stopping saves compute)
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert mock_judge.call_count == 4
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert mock_judge.call_count == 3
         # Returns total iteration count and best scores (8.0)
-        assert iterations == 4
+        assert iterations == 3
         assert final_scores.average == 8.0
 
 
@@ -608,10 +608,10 @@ class TestCharacterGenerationEarlyStopping:
         )
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert mock_judge.call_count == 4
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert mock_judge.call_count == 3
         # Returns total iteration count and best scores (8.2)
-        assert iterations == 4
+        assert iterations == 3
         assert final_scores.average == pytest.approx(8.2)
 
     @patch.object(WorldQualityService, "_create_character")
@@ -771,10 +771,10 @@ class TestLocationGenerationEarlyStopping:
         )
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert mock_judge.call_count == 4
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert mock_judge.call_count == 3
         # Returns total iteration count and best scores (8.0)
-        assert iterations == 4
+        assert iterations == 3
         assert final_scores.average == 8.0
 
 
@@ -817,8 +817,8 @@ class TestRelationshipGenerationEarlyStopping:
         )
 
         # Score-plateau early-stop (#328) triggers after 2 consecutive identical scores
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert mock_judge.call_count == 3
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert mock_judge.call_count == 2
         assert rel["source"] == "Alice"
         assert final_scores.average == pytest.approx(0.1)
 
@@ -977,10 +977,10 @@ class TestItemGenerationEarlyStopping:
         )
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert mock_judge.call_count == 4
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert mock_judge.call_count == 3
         # Returns total iteration count and best scores (8.0)
-        assert iterations == 4
+        assert iterations == 3
         assert final_scores.average == 8.0
 
 
@@ -1086,10 +1086,10 @@ class TestConceptGenerationEarlyStopping:
         )
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert mock_judge.call_count == 4
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert mock_judge.call_count == 3
         # Returns total iteration count and best scores (8.0)
-        assert iterations == 4
+        assert iterations == 3
         assert final_scores.average == 8.0
 
 
@@ -1126,8 +1126,8 @@ class TestEventGenerationEarlyStopping:
         )
 
         # Score-plateau early-stop triggers after 2 consecutive identical scores
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert mock_judge.call_count == 3
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert mock_judge.call_count == 2
         assert event["description"] == "ZeroEvent"
         assert final_scores.average == pytest.approx(0.1)
 
@@ -1245,10 +1245,10 @@ class TestEventGenerationEarlyStopping:
         )
 
         # Should only run 3 iterations in loop (early stopping saves compute)
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert mock_judge.call_count == 4
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert mock_judge.call_count == 3
         # Returns total iteration count and best scores (8.0)
-        assert iterations == 4
+        assert iterations == 3
         assert final_scores.average == 8.0
 
 
