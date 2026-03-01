@@ -274,7 +274,11 @@ class BaseAgent:
                             },
                             stream=True,
                         )
-                        response = consume_stream(stream)
+                        response = consume_stream(
+                            stream,
+                            inter_chunk_timeout=self.settings.streaming_inter_chunk_timeout,
+                            wall_clock_timeout=self.settings.streaming_wall_clock_timeout,
+                        )
                         duration = time.time() - start_time
 
                         # Extract token counts from streamed response
@@ -501,7 +505,11 @@ class BaseAgent:
                             },
                             stream=True,
                         )
-                        response = consume_stream(stream)
+                        response = consume_stream(
+                            stream,
+                            inter_chunk_timeout=self.settings.streaming_inter_chunk_timeout,
+                            wall_clock_timeout=self.settings.streaming_wall_clock_timeout,
+                        )
                         duration = time.time() - start_time
 
                         content: str = response["message"]["content"]

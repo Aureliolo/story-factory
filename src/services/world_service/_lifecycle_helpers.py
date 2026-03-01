@@ -194,7 +194,7 @@ def _is_destruction_sentinel(value: Any) -> bool:
     Returns:
         True if the value is the integer 0 sentinel.
     """
-    return value == 0 and isinstance(value, int)
+    return isinstance(value, int) and not isinstance(value, bool) and value == 0
 
 
 def build_entity_lifecycle(

@@ -121,7 +121,7 @@ class TestPrepareModelResidencyCheck:
         _mock_vram: MagicMock,
         caplog,
     ) -> None:
-        """Unexpected exceptions in residency check are logged at WARNING."""
+        """Unexpected exceptions in residency check are logged at WARNING and model is NOT tracked."""
         svc = MagicMock()
         svc.settings = MagicMock(spec=Settings)
         svc.settings.vram_strategy = VramStrategy.SEQUENTIAL.value
@@ -131,7 +131,8 @@ class TestPrepareModelResidencyCheck:
         with caplog.at_level(logging.DEBUG, logger="src.services.model_mode_service._vram"):
             _vram.prepare_model(svc, "test-model:8b")
 
-        assert "test-model:8b" in svc._loaded_models
+        # Model should NOT be added to _loaded_models after unexpected error
+        assert "test-model:8b" not in svc._loaded_models
         assert any(
             "Unexpected error checking GPU residency" in r.message and r.levelno == logging.WARNING
             for r in caplog.records
@@ -158,6 +159,104 @@ class TestPrepareModelResidencyCheck:
 
         assert exc_info.value.model_id == "big-model:70b"
         assert "big-model:70b" not in svc._loaded_models
+
+
+class TestTwoSlotRoleCache:
+    """Tests for the two-slot role-based prepare cache (creator/judge)."""
+
+    def _make_service(self) -> MagicMock:
+        """Create a mock service with VRAM settings for testing."""
+        mock_settings = MagicMock(spec=Settings)
+        mock_settings.ollama_url = "http://localhost:11434"
+        mock_settings.vram_strategy = VramStrategy.SEQUENTIAL.value
+        svc = MagicMock()
+        svc.settings = mock_settings
+        svc._loaded_models = set()
+        svc._ollama_client = MagicMock()
+        return svc
+
+    def setup_method(self) -> None:
+        """Reset the module-level cache before each test."""
+        with _vram._last_prepared_model_lock:
+            _vram._last_prepared_models.clear()
+
+    @patch("src.settings.get_available_vram", return_value=24.0)
+    @patch(
+        "src.settings.get_installed_models_with_sizes",
+        return_value={"model-a:8b": 4.0, "model-b:8b": 5.0},
+    )
+    @patch("src.settings.get_model_info")
+    def test_role_specific_cache_entries(
+        self,
+        _mock_info: MagicMock,
+        _mock_installed: MagicMock,
+        _mock_vram: MagicMock,
+    ) -> None:
+        """Each role stores its cache entry under its own key (not a single slot)."""
+        svc = self._make_service()
+
+        _vram.prepare_model(svc, "model-a:8b", role="creator")
+
+        # After preparing creator, its cache entry exists
+        with _vram._last_prepared_model_lock:
+            assert _vram._last_prepared_models["creator"] == ("model-a:8b", "sequential")
+
+        # Preparing judge clears entire cache (sequential strategy calls unload_all_except)
+        # then re-caches only the judge entry
+        _vram.prepare_model(svc, "model-b:8b", role="judge")
+        with _vram._last_prepared_model_lock:
+            assert _vram._last_prepared_models["judge"] == ("model-b:8b", "sequential")
+
+    @patch("src.settings.get_available_vram", return_value=24.0)
+    @patch(
+        "src.settings.get_installed_models_with_sizes",
+        return_value={"model-a:8b": 4.0},
+    )
+    @patch("src.settings.get_model_info")
+    def test_same_role_same_model_short_circuits(
+        self,
+        _mock_info: MagicMock,
+        _mock_installed: MagicMock,
+        _mock_vram: MagicMock,
+    ) -> None:
+        """Consecutive prepare for the same role+model skips full preparation."""
+        svc = self._make_service()
+
+        # First call — full preparation
+        _vram.prepare_model(svc, "model-a:8b", role="creator")
+
+        # Second call to same role+model — should short-circuit
+        with patch.object(_vram, "unload_all_except") as mock_unload:
+            _vram.prepare_model(svc, "model-a:8b", role="creator")
+            mock_unload.assert_not_called()
+
+
+class TestUnloadPartialFailure:
+    """Tests for unload_all_except when some evictions fail."""
+
+    def test_partial_failure_keeps_failed_model(self) -> None:
+        """Models that fail to unload remain in _loaded_models."""
+        import ollama
+
+        svc = MagicMock()
+        svc._loaded_models = {"model-a:8b", "model-b:8b", "model-c:8b"}
+        svc._ollama_client = MagicMock()
+
+        def side_effect(model: str, keep_alive: int) -> None:
+            """Simulate model-b failing to unload."""
+            if model == "model-b:8b":
+                raise ollama.ResponseError("not found")
+
+        svc._ollama_client.generate.side_effect = side_effect
+
+        _vram.unload_all_except(svc, "model-c:8b")
+
+        # model-b failed to unload — must remain tracked
+        assert "model-b:8b" in svc._loaded_models
+        # model-a succeeded — must be removed
+        assert "model-a:8b" not in svc._loaded_models
+        # model-c was kept — must remain
+        assert "model-c:8b" in svc._loaded_models
 
 
 class TestUnloadClearsLastPreparedCache:

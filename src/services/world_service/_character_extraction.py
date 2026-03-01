@@ -93,15 +93,8 @@ def _extract_characters_to_world(state: StoryState, world_db: WorldDatabase) -> 
 def _get_calendar(world_db: WorldDatabase) -> WorldCalendar | None:
     """Retrieve the WorldCalendar from world settings, if available.
 
-    Args:
-        world_db: WorldDatabase to query for settings.
-
-    Returns:
-        WorldCalendar if one exists in world settings, None otherwise.
+    Delegates to :func:`get_calendar_from_world_db` in ``_build_utils``.
     """
-    world_settings = world_db.get_world_settings()
-    if world_settings is None or world_settings.calendar is None:
-        logger.debug("No calendar available in world settings for era resolution")
-        return None
-    logger.debug("Using calendar '%s' for era resolution", world_settings.calendar.current_era_name)
-    return world_settings.calendar
+    from src.services.world_service._build_utils import get_calendar_from_world_db
+
+    return get_calendar_from_world_db(world_db)

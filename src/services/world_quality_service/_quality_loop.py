@@ -186,11 +186,19 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     while iteration < config.max_iterations:
         # Fire iteration callback for sub-step progress tracking (H2)
         if iteration_callback:
-            iteration_callback(
-                iteration + 1,
-                config.max_iterations,
-                get_name(entity) if entity is not None else "",
-            )
+            try:
+                iteration_callback(
+                    iteration + 1,
+                    config.max_iterations,
+                    get_name(entity) if entity is not None else "",
+                )
+            except Exception:
+                logger.warning(
+                    "%s iteration callback failed on iteration %d; continuing refinement",
+                    entity_type.capitalize(),
+                    iteration + 1,
+                    exc_info=True,
+                )
 
         try:
             # Creation, refinement, or re-judge after previous judge error
@@ -459,16 +467,21 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                 if entity_reverted and history.best_iteration > 0:
                     best_rec = history.iterations[history.best_iteration - 1]
                     reverted_scores = score_cls(**best_rec.scores)
-                    logger.info(
-                        "%s '%s' best iteration %d scores violate dimension "
-                        "floor (min=%.1f < floor=%.1f), continuing refinement",
-                        entity_type.capitalize(),
-                        get_name(entity),
-                        history.best_iteration,
-                        reverted_scores.minimum_score_for_average,
-                        dimension_floor,
-                    )
-                    continue
+                    if (
+                        dimension_floor > 0.0
+                        and reverted_scores.minimum_score_for_average < dimension_floor
+                    ):
+                        logger.info(
+                            "%s '%s' best iteration %d scores violate dimension "
+                            "floor (min=%.1f < floor=%.1f), continuing refinement",
+                            entity_type.capitalize(),
+                            get_name(entity),
+                            history.best_iteration,
+                            reverted_scores.minimum_score_for_average,
+                            dimension_floor,
+                        )
+                        continue
+                    # Reverted scores meet the floor — fall through to return
                 else:
                     logger.info(
                         "%s '%s' met quality threshold (%.1f >= %.1f)",
@@ -784,9 +797,11 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                         "%s hail-mary returned empty entity, keeping original",
                         entity_type.capitalize(),
                     )
-            except (WorldGenerationError, ValueError) as e:
+            except (WorldGenerationError, ValueError, VRAMAllocationError) as e:
                 # VRAMAllocationError is non-retryable — propagate immediately
-                if isinstance(getattr(e, "__cause__", None), VRAMAllocationError):
+                if isinstance(e, VRAMAllocationError) or isinstance(
+                    e.__cause__, VRAMAllocationError
+                ):
                     raise
                 logger.warning(
                     "%s hail-mary failed (%s): %s. Keeping original best.",

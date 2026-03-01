@@ -505,11 +505,8 @@ class TestIsDestructionSentinel:
         assert _is_destruction_sentinel(0.0) is False
 
     def test_bool_false_not_sentinel(self):
-        """Boolean False is not a sentinel (bool is subclass of int but value != 0 check)."""
-        # bool is a subclass of int, False == 0 is True, isinstance(False, int) is True
-        # So _is_destruction_sentinel(False) would be True by current implementation
-        # This is acceptable since LLMs should never produce bool for destruction_year
-        assert _is_destruction_sentinel(False) is True
+        """Boolean False is not a sentinel; only integer year 0 is a sentinel."""
+        assert _is_destruction_sentinel(False) is False
 
 
 class TestBuildEntityLifecycleWithCalendar:

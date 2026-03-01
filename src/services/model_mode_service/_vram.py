@@ -136,6 +136,8 @@ def prepare_model(svc: ModelModeService, model_id: str, *, role: str = "default"
         logger.debug("Could not check GPU residency for %s: %s", model_id, e)
     except Exception as e:
         logger.warning("Unexpected error checking GPU residency for %s: %s", model_id, e)
+        # Do NOT mark as loaded — unexpected errors may leave VRAM in unknown state
+        return
 
     # Model will be loaded on first use by Ollama
     svc._loaded_models.add(model_id)

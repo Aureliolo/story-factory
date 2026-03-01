@@ -121,8 +121,18 @@ def resolve_model_pair(service: WorldQualityService, entity_type: str) -> tuple[
         Tuple of (creator_model, judge_model).
     """
     # Check if we already have a cached pair
-    creator_role = service.ENTITY_CREATOR_ROLES.get(entity_type, "writer")
-    judge_role = service.ENTITY_JUDGE_ROLES.get(entity_type, "judge")
+    if entity_type not in service.ENTITY_CREATOR_ROLES:
+        raise ValueError(
+            f"Unknown entity_type '{entity_type}'. "
+            f"Valid types: {sorted(service.ENTITY_CREATOR_ROLES.keys())}"
+        )
+    if entity_type not in service.ENTITY_JUDGE_ROLES:
+        raise ValueError(
+            f"Unknown entity_type '{entity_type}'. "
+            f"Valid types: {sorted(service.ENTITY_JUDGE_ROLES.keys())}"
+        )
+    creator_role = service.ENTITY_CREATOR_ROLES[entity_type]
+    judge_role = service.ENTITY_JUDGE_ROLES[entity_type]
 
     cached_creator = service._model_cache.get_creator_model(creator_role)
     cached_judge = service._model_cache.get_judge_model(judge_role, cached_creator)
@@ -155,15 +165,17 @@ def resolve_model_pair(service: WorldQualityService, entity_type: str) -> tuple[
                 )
                 judge = creator
         except Exception as e:
-            logger.debug(
-                "Could not check pair VRAM fit for %s: %s — proceeding with resolved models",
+            logger.warning(
+                "Could not check pair VRAM fit for %s (%s: %s) — "
+                "proceeding without pair validation, OOM risk may be elevated",
                 entity_type,
+                type(e).__name__,
                 e,
             )
 
-    # Store in cache via the standard path
-    service._model_cache.store_creator_model(creator_role, creator)
-    service._model_cache.store_judge_model(judge_role, judge, creator)
+    # Store in cache via the standard path (use return values for race-safety)
+    creator = service._model_cache.store_creator_model(creator_role, creator)
+    judge = service._model_cache.store_judge_model(judge_role, judge, creator)
 
     logger.info(
         "Resolved model pair for %s: creator=%s, judge=%s",

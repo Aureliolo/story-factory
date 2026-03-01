@@ -308,6 +308,18 @@ def _validate_timeouts(settings: Settings) -> None:
             f"small_model_timeout_cap must be positive, got {settings.small_model_timeout_cap}"
         )
 
+    if not 10 <= settings.streaming_inter_chunk_timeout <= 86400:
+        raise ValueError(
+            f"streaming_inter_chunk_timeout must be between 10 and 86400 seconds, "
+            f"got {settings.streaming_inter_chunk_timeout}"
+        )
+
+    if not 10 <= settings.streaming_wall_clock_timeout <= 86400:
+        raise ValueError(
+            f"streaming_wall_clock_timeout must be between 10 and 86400 seconds, "
+            f"got {settings.streaming_wall_clock_timeout}"
+        )
+
 
 def _validate_world_quality(settings: Settings) -> None:
     """Validate world quality settings."""

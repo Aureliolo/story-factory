@@ -247,8 +247,8 @@ def generate_structured[T: BaseModel](
             )
             response = consume_stream(
                 stream,
-                inter_chunk_timeout=getattr(settings, "streaming_inter_chunk_timeout", None),
-                wall_clock_timeout=getattr(settings, "streaming_wall_clock_timeout", None),
+                inter_chunk_timeout=settings.streaming_inter_chunk_timeout,
+                wall_clock_timeout=settings.streaming_wall_clock_timeout,
             )
             duration = time.time() - start_time
 

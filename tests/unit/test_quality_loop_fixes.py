@@ -16,7 +16,7 @@ import pytest
 
 from src.memory.world_quality import CharacterQualityScores, RefinementConfig
 from src.services.world_quality_service._quality_loop import quality_refinement_loop
-from src.utils.exceptions import StoryFactoryError
+from src.utils.exceptions import StoryFactoryError, VRAMAllocationError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -240,11 +240,13 @@ class TestM3HailMaryIdenticalOutputSkip:
         )
 
         judge_call_count = 0
+        judged_entities: list[dict] = []
 
         def counting_judge(e):
-            """Count judge invocations and return low scores."""
+            """Count judge invocations, record judged entities, and return low scores."""
             nonlocal judge_call_count
             judge_call_count += 1
+            judged_entities.append(e)
             return low_scores
 
         call_index = 0
@@ -279,6 +281,8 @@ class TestM3HailMaryIdenticalOutputSkip:
         # Judge called in main loop iterations + once for the hail-mary
         # The hail-mary entity is different so judge must be invoked for it
         assert judge_call_count >= 2
+        # Prove the fresh hail-mary entity (trait="wise") actually reached judge_fn
+        assert any(e.get("trait") == "wise" for e in judged_entities)
 
 
 # ---------------------------------------------------------------------------
@@ -604,6 +608,9 @@ class TestResolveModelPairVRAM:
         svc.ENTITY_JUDGE_ROLES = {"character": "judge"}
         svc._model_cache.get_creator_model.return_value = None
         svc._model_cache.get_judge_model.return_value = None
+        # store methods return the stored model (race-safety canonicalization)
+        svc._model_cache.store_creator_model.side_effect = lambda _role, model: model
+        svc._model_cache.store_judge_model.side_effect = lambda _role, model, _creator: model
         svc.settings.use_per_agent_models = False
         svc.settings.default_model = "auto"
         svc.mode_service.get_model_for_agent.side_effect = lambda role: {
@@ -659,3 +666,101 @@ class TestResolveModelPairVRAM:
 
         assert creator == "creator-model:8b"
         assert judge == "judge-model:8b"
+
+    @patch("src.services.world_quality_service._model_resolver.get_vram_snapshot")
+    def test_cached_pair_returned_without_vram_check(self, mock_snapshot):
+        """When both models are in cache, return immediately without VRAM check."""
+        from src.services.world_quality_service._model_resolver import resolve_model_pair
+
+        svc = self._make_service()
+        svc._model_cache.get_creator_model.return_value = "cached-creator:8b"
+        svc._model_cache.get_judge_model.return_value = "cached-judge:8b"
+
+        creator, judge = resolve_model_pair(svc, "character")
+
+        assert creator == "cached-creator:8b"
+        assert judge == "cached-judge:8b"
+        mock_snapshot.assert_not_called()
+
+    def test_unknown_entity_type_raises_value_error(self):
+        """resolve_model_pair rejects unknown entity types with ValueError."""
+        from src.services.world_quality_service._model_resolver import resolve_model_pair
+
+        svc = self._make_service()
+
+        with pytest.raises(ValueError, match="Unknown entity_type"):
+            resolve_model_pair(svc, "nonexistent_type")
+
+
+class TestMakeModelPreparers:
+    """Tests for make_model_preparers() factory function."""
+
+    def _make_service(self, *, same_model: bool = False):
+        """Build a mock WorldQualityService for make_model_preparers tests."""
+        svc = MagicMock()
+        svc.ENTITY_CREATOR_ROLES = {"character": "writer"}
+        svc.ENTITY_JUDGE_ROLES = {"character": "judge"}
+        svc._model_cache.get_creator_model.return_value = None
+        svc._model_cache.get_judge_model.return_value = None
+        svc._model_cache.store_creator_model.side_effect = lambda _role, model: model
+        svc._model_cache.store_judge_model.side_effect = lambda _role, model, _creator: model
+        svc.settings.use_per_agent_models = False
+        svc.settings.default_model = "auto"
+        if same_model:
+            svc.mode_service.get_model_for_agent.return_value = "same-model:8b"
+        else:
+            svc.mode_service.get_model_for_agent.side_effect = lambda role: {
+                "writer": "creator-model:8b",
+                "judge": "judge-model:8b",
+            }[role]
+        return svc
+
+    @patch("src.services.world_quality_service._model_resolver.pair_fits", return_value=True)
+    @patch("src.services.world_quality_service._model_resolver.get_vram_snapshot")
+    def test_same_model_returns_none_preparers(self, _snapshot, _pair_fits):
+        """When creator == judge, both preparers should be None."""
+        from src.services.world_quality_service._model_resolver import make_model_preparers
+
+        svc = self._make_service(same_model=True)
+        prep_creator, prep_judge = make_model_preparers(svc, "character")
+
+        assert prep_creator is None
+        assert prep_judge is None
+
+    @patch("src.services.world_quality_service._model_resolver.pair_fits", return_value=True)
+    @patch("src.services.world_quality_service._model_resolver.get_vram_snapshot")
+    def test_different_models_return_callable_preparers(self, _snapshot, _pair_fits):
+        """When creator != judge, both preparers should be callable."""
+        from src.services.world_quality_service._model_resolver import make_model_preparers
+
+        svc = self._make_service()
+        snapshot = MagicMock()
+        snapshot.installed_models = {"creator-model:8b": 5.0, "judge-model:8b": 4.0}
+        snapshot.available_vram_gb = 20.0
+        _snapshot.return_value = snapshot
+
+        prep_creator, prep_judge = make_model_preparers(svc, "character")
+
+        assert callable(prep_creator)
+        assert callable(prep_judge)
+
+    @patch("src.services.world_quality_service._model_resolver.prepare_model")
+    @patch("src.services.world_quality_service._model_resolver.pair_fits", return_value=True)
+    @patch("src.services.world_quality_service._model_resolver.get_vram_snapshot")
+    def test_vram_error_in_preparer_is_swallowed(self, _snapshot, _pair_fits, mock_prepare):
+        """VRAMAllocationError in a preparer closure is caught (non-fatal)."""
+        from src.services.world_quality_service._model_resolver import make_model_preparers
+
+        snapshot = MagicMock()
+        snapshot.installed_models = {"creator-model:8b": 5.0, "judge-model:8b": 4.0}
+        snapshot.available_vram_gb = 20.0
+        _snapshot.return_value = snapshot
+
+        mock_prepare.side_effect = VRAMAllocationError("oom", model_id="creator-model:8b")
+
+        svc = self._make_service()
+        prep_creator, _prep_judge = make_model_preparers(svc, "character")
+
+        # Must not raise — VRAMAllocationError is swallowed in the closure
+        assert prep_creator is not None
+        prep_creator()

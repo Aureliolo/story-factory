@@ -12,7 +12,7 @@ import logging
 import threading
 import time
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, Literal
 
 import httpcore
 
@@ -38,7 +38,7 @@ class StreamTimeoutError(TimeoutError):
         *,
         partial_content_length: int = 0,
         elapsed_seconds: float = 0.0,
-        timeout_type: str = "inter_chunk",
+        timeout_type: Literal["inter_chunk", "wall_clock"] = "inter_chunk",
     ):
         super().__init__(message)
         self.partial_content_length = partial_content_length
@@ -49,8 +49,8 @@ class StreamTimeoutError(TimeoutError):
 def consume_stream(
     stream: Iterator[Any],
     *,
-    inter_chunk_timeout: int | None = None,
-    wall_clock_timeout: int | None = None,
+    inter_chunk_timeout: float | None = None,
+    wall_clock_timeout: float | None = None,
 ) -> dict[str, Any]:
     """Consume a streaming Ollama chat response into a non-streaming-compatible dict.
 

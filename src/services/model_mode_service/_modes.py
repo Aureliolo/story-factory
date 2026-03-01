@@ -486,33 +486,44 @@ def select_model_pair(
         return creator_model, judge_model
 
     # Check if the pair fits in VRAM
-    snapshot = get_vram_snapshot()
-    creator_size = snapshot.installed_models.get(creator_model, 0.0)
-    judge_size = snapshot.installed_models.get(judge_model, 0.0)
+    try:
+        snapshot = get_vram_snapshot()
+        creator_size = snapshot.installed_models.get(creator_model, 0.0)
+        judge_size = snapshot.installed_models.get(judge_model, 0.0)
 
-    if pair_fits(creator_size, judge_size, snapshot.available_vram_gb):
-        logger.info(
-            "Model pair resolved: creator=%s (%.1fGB), judge=%s (%.1fGB), "
-            "available=%.1fGB — both fit",
+        if pair_fits(creator_size, judge_size, snapshot.available_vram_gb):
+            logger.info(
+                "Model pair resolved: creator=%s (%.1fGB), judge=%s (%.1fGB), "
+                "available=%.1fGB — both fit",
+                creator_model,
+                creator_size,
+                judge_model,
+                judge_size,
+                snapshot.available_vram_gb,
+            )
+            return creator_model, judge_model
+
+        # Pair doesn't fit — fall back to self-judging with the creator model
+        logger.warning(
+            "Model pair does not fit in VRAM: creator=%s (%.1fGB) + judge=%s (%.1fGB) "
+            "exceeds %.1fGB available. Falling back to self-judging with creator model.",
             creator_model,
             creator_size,
             judge_model,
             judge_size,
             snapshot.available_vram_gb,
         )
+        return creator_model, creator_model
+    except Exception as e:
+        logger.warning(
+            "Could not check model pair VRAM fit for creator=%s judge=%s (%s: %s) — "
+            "proceeding with resolved pair",
+            creator_model,
+            judge_model,
+            type(e).__name__,
+            e,
+        )
         return creator_model, judge_model
-
-    # Pair doesn't fit — fall back to self-judging with the creator model
-    logger.warning(
-        "Model pair does not fit in VRAM: creator=%s (%.1fGB) + judge=%s (%.1fGB) "
-        "exceeds %.1fGB available. Falling back to self-judging with creator model.",
-        creator_model,
-        creator_size,
-        judge_model,
-        judge_size,
-        snapshot.available_vram_gb,
-    )
-    return creator_model, creator_model
 
 
 def get_temperature_for_agent(svc: ModelModeService, agent_role: str) -> float:

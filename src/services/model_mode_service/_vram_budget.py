@@ -85,13 +85,16 @@ def get_vram_snapshot() -> VRAMSnapshot:
     try:
         available = float(get_available_vram())
     except (ConnectionError, TimeoutError, FileNotFoundError, OSError, ValueError) as e:
-        logger.debug("Could not query available VRAM: %s", e)
+        logger.warning("Could not query available VRAM — pair-fit check will be pessimistic: %s", e)
         available = 0.0
 
     try:
         installed = get_installed_models_with_sizes()
     except (ConnectionError, TimeoutError, FileNotFoundError, OSError, ValueError) as e:
-        logger.debug("Could not query installed models: %s", e)
+        logger.warning(
+            "Could not query installed models — pair-fit check will use optimistic defaults: %s",
+            e,
+        )
         installed = {}
 
     snapshot = VRAMSnapshot(
@@ -129,10 +132,14 @@ def pair_fits(
 ) -> bool:
     """Check whether both models fit in VRAM with MIN_GPU_RESIDENCY.
 
-    Each model must individually achieve at least ``MIN_GPU_RESIDENCY`` fraction
-    GPU-resident when the total VRAM is shared between them. For simplicity,
-    this checks that the combined size does not exceed available VRAM (i.e.
-    both models can be fully resident simultaneously).
+    Two checks are applied:
+
+    1. **Combined size**: the sum of both model sizes must not exceed available
+       VRAM.  Even in a sequential loading strategy (load creator → run → evict
+       → load judge), Ollama may keep both models resident simultaneously, so
+       the combined budget is the safe baseline.
+    2. **Individual residency**: each model must individually achieve at least
+       ``MIN_GPU_RESIDENCY`` fraction GPU-resident.
 
     Args:
         creator_size_gb: Creator model size in GB.
@@ -148,9 +155,19 @@ def pair_fits(
     if available_vram_gb <= 0:
         return False
 
-    # Each model needs MIN_GPU_RESIDENCY fraction to be useful.
-    # In sequential VRAM strategy (the common case), only one model is loaded
-    # at a time, so each just needs to fit individually.
+    # Combined check: both models must fit in total VRAM simultaneously.
+    combined_gb = creator_size_gb + judge_size_gb
+    if combined_gb > available_vram_gb:
+        logger.debug(
+            "Pair does not fit: combined=%.1fGB (creator=%.1fGB + judge=%.1fGB) > available=%.1fGB",
+            combined_gb,
+            creator_size_gb,
+            judge_size_gb,
+            available_vram_gb,
+        )
+        return False
+
+    # Individual residency check: each model needs MIN_GPU_RESIDENCY.
     creator_residency = min(available_vram_gb / creator_size_gb, 1.0)
     judge_residency = min(available_vram_gb / judge_size_gb, 1.0)
 

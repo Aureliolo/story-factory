@@ -5,7 +5,6 @@ from unittest.mock import patch
 
 import pytest
 
-from src.services.model_mode_service._vram import MIN_GPU_RESIDENCY
 from src.services.model_mode_service._vram_budget import (
     VRAMBudget,
     VRAMSnapshot,
@@ -63,15 +62,26 @@ class TestPairFits:
         """Zero available VRAM should return False."""
         assert pair_fits(8.0, 10.0, 0.0) is False
 
-    def test_exactly_at_residency_threshold(self):
-        """Models at exactly 80% residency should pass (>= comparison)."""
-        # 24GB VRAM / 30GB model = 0.8 exactly
-        assert MIN_GPU_RESIDENCY == 0.8
-        assert pair_fits(30.0, 30.0, 24.0) is True
+    def test_exactly_at_combined_boundary(self):
+        """Combined size exactly equal to available VRAM should pass."""
+        # 12 + 12 = 24 == 24 → at boundary, still fits
+        assert pair_fits(12.0, 12.0, 24.0) is True
+
+    def test_combined_size_exceeds_vram(self):
+        """Combined model size exceeding available VRAM should return False.
+
+        This is the original C1 scenario: 14GB creator + 18GB judge = 32GB on 24GB GPU.
+        """
+        assert pair_fits(14.0, 18.0, 24.0) is False
+
+    def test_combined_just_over(self):
+        """Combined size just over available should fail."""
+        assert pair_fits(12.1, 12.0, 24.0) is False
 
     def test_just_below_residency_threshold(self):
         """Models just below 80% residency should fail."""
         # 24GB VRAM / 30.1GB model ≈ 0.7973 < 0.8
+        # Also combined = 35.1 > 24, fails combined check first
         assert pair_fits(30.1, 5.0, 24.0) is False
 
     def test_both_negative_sizes_return_true(self):
