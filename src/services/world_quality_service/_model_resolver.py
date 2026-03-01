@@ -163,7 +163,12 @@ def resolve_model_pair(service: WorldQualityService, entity_type: str) -> tuple[
             creator_size = snapshot.installed_models.get(creator, 0.0)
             judge_size = snapshot.installed_models.get(judge, 0.0)
 
-            if not pair_fits(creator_size, judge_size, snapshot.available_vram_gb):
+            if not pair_fits(
+                creator_size,
+                judge_size,
+                snapshot.available_vram_gb,
+                evictable_vram_gb=snapshot.loaded_model_vram_gb,
+            ):
                 logger.warning(
                     "Model pair does not fit for %s: creator=%s (%.1fGB) + "
                     "judge=%s (%.1fGB), available=%.1fGB. "

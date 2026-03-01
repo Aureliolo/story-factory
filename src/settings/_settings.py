@@ -49,7 +49,9 @@ PER_ENTITY_QUALITY_DEFAULTS: dict[str, float] = {
     "event": 7.5,
     "relationship": 7.5,
     "plot": 7.5,
-    "chapter": 7.5,
+    # Chapter threshold is lower than other entities because LLM judges
+    # consistently score chapter outlines below 7.5 (model ceiling effect).
+    "chapter": 7.0,
 }
 
 # Dict fields with fixed expected sub-keys — merged on load so that

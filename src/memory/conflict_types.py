@@ -373,7 +373,7 @@ def normalize_relation_type(raw_type: str) -> str:
         )
         return best_type
 
-    logger.debug("No normalization match for '%s', returning as-is: '%s'", raw_type, normalized)
+    logger.info("No normalization match for '%s', returning as-is: '%s'", raw_type, normalized)
     return normalized
 
 

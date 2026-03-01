@@ -13,6 +13,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
+from typing import Any
 
 from src.services.model_mode_service._vram import MIN_GPU_RESIDENCY
 
@@ -59,6 +60,7 @@ class VRAMSnapshot:
     available_vram_gb: float  # Free VRAM from nvidia-smi in GiB (integer division of MiB/1024)
     installed_models: dict[str, float]  # model_id -> size_gb from ``ollama list``
     timestamp: float
+    loaded_model_vram_gb: float = 0.0  # Total VRAM used by currently loaded (evictable) models
 
 
 # Module-level snapshot cache
@@ -164,10 +166,37 @@ def get_vram_snapshot() -> VRAMSnapshot:
         )
         installed = {}
 
+    # Query currently loaded (running) models via ollama ps().
+    # These models occupy VRAM but can be evicted with keep_alive=0.
+    loaded_vram: float = 0.0
+    try:
+        import ollama as _ollama
+
+        from src.settings import Settings
+
+        instance = getattr(Settings, "_instance", None)
+        host = instance.ollama_url if instance else "http://localhost:11434"
+        client = _ollama.Client(host=host)
+        ps_response = client.ps()
+        running_models: list[Any] = getattr(ps_response, "models", None) or []
+        for model_info in running_models:
+            size_bytes: int = getattr(model_info, "size", 0) or 0
+            loaded_vram += size_bytes / (1024**3)
+        if loaded_vram > 0:
+            logger.debug(
+                "Loaded model VRAM from ollama ps(): %.1f GB (%d model(s))",
+                loaded_vram,
+                len(running_models or []),
+            )
+    except Exception as e:
+        logger.debug("Could not query loaded models via ollama ps(): %s", e)
+        loaded_vram = 0.0
+
     snapshot = VRAMSnapshot(
         available_vram_gb=available,
         installed_models=dict(installed),
         timestamp=time.monotonic(),
+        loaded_model_vram_gb=loaded_vram,
     )
 
     with _snapshot_lock:
@@ -196,15 +225,18 @@ def pair_fits(
     creator_size_gb: float,
     judge_size_gb: float,
     available_vram_gb: float,
+    *,
+    evictable_vram_gb: float = 0.0,
 ) -> bool:
     """Check whether both models fit in VRAM with MIN_GPU_RESIDENCY.
 
     Two checks are applied:
 
-    1. **Combined size**: the sum of both model sizes must not exceed available
-       VRAM.  Even in a sequential loading strategy (load creator → run → evict
-       → load judge), Ollama may keep both models resident simultaneously, so
-       the combined budget is the safe baseline.
+    1. **Combined size**: the sum of both model sizes must not exceed the
+       effective VRAM budget (available + evictable).  Even in a sequential
+       loading strategy (load creator -> run -> evict -> load judge), Ollama may
+       keep both models resident simultaneously, so the combined budget is the
+       safe baseline.
     2. **Individual residency**: each model must individually achieve at least
        ``MIN_GPU_RESIDENCY`` fraction GPU-resident.
 
@@ -212,42 +244,52 @@ def pair_fits(
         creator_size_gb: Creator model size in GB.
         judge_size_gb: Judge model size in GB.
         available_vram_gb: Available GPU VRAM in GB.
+        evictable_vram_gb: VRAM currently occupied by loaded models that can
+            be evicted (via ``keep_alive=0``).  Added to ``available_vram_gb``
+            to compute the effective budget.
 
     Returns:
         True if both models fit with adequate residency.
     """
+    effective_vram_gb = available_vram_gb + max(evictable_vram_gb, 0.0)
+
     if creator_size_gb <= 0 or judge_size_gb <= 0:
         return True  # Unknown sizes — optimistic
 
-    if available_vram_gb <= 0:
+    if effective_vram_gb <= 0:
         return False
 
     # Combined check: both models must fit in total VRAM simultaneously.
     combined_gb = creator_size_gb + judge_size_gb
-    if combined_gb > available_vram_gb:
+    if combined_gb > effective_vram_gb:
         logger.debug(
-            "Pair does not fit: combined=%.1fGB (creator=%.1fGB + judge=%.1fGB) > available=%.1fGB",
+            "Pair does not fit: combined=%.1fGB (creator=%.1fGB + judge=%.1fGB) "
+            "> effective=%.1fGB (available=%.1fGB + evictable=%.1fGB)",
             combined_gb,
             creator_size_gb,
             judge_size_gb,
+            effective_vram_gb,
             available_vram_gb,
+            evictable_vram_gb,
         )
         return False
 
     # Individual residency check: each model needs MIN_GPU_RESIDENCY.
-    creator_residency = min(available_vram_gb / creator_size_gb, 1.0)
-    judge_residency = min(available_vram_gb / judge_size_gb, 1.0)
+    creator_residency = min(effective_vram_gb / creator_size_gb, 1.0)
+    judge_residency = min(effective_vram_gb / judge_size_gb, 1.0)
 
     fits = creator_residency >= MIN_GPU_RESIDENCY and judge_residency >= MIN_GPU_RESIDENCY
     if not fits:  # pragma: no cover — defensive: combined check above catches this
         logger.debug(
             "Pair does not fit: creator=%.1fGB (%.0f%%), judge=%.1fGB (%.0f%%), "
-            "available=%.1fGB, min_residency=%.0f%%",
+            "effective=%.1fGB (available=%.1fGB + evictable=%.1fGB), min_residency=%.0f%%",
             creator_size_gb,
             creator_residency * 100,
             judge_size_gb,
             judge_residency * 100,
+            effective_vram_gb,
             available_vram_gb,
+            evictable_vram_gb,
             MIN_GPU_RESIDENCY * 100,
         )
     return fits

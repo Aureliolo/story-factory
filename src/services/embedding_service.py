@@ -214,6 +214,7 @@ class EmbeddingService:
                 first_time = dedup_key not in _truncation_warned
                 if first_time:
                     _truncation_warned.add(dedup_key)
+            truncation_pct = (1 - len(truncated) / len(text)) * 100
             log_fn = logger.warning if first_time else logger.debug
             log_fn(
                 "Truncating %s description for embedding (desc %d -> %d chars)%s",
@@ -222,6 +223,17 @@ class EmbeddingService:
                 len(truncated),
                 name_suffix,
             )
+            if first_time:
+                logger.info(
+                    "Embedding truncation detail: model=%s, context_limit=%d tokens, "
+                    "budget_chars=%d, actual_chars=%d, truncation=%.1f%%%s",
+                    model,
+                    context_limit,
+                    available_for_text,
+                    len(text),
+                    truncation_pct,
+                    name_suffix,
+                )
             return (truncated, False)
 
         return (text, False)

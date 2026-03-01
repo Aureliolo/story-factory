@@ -899,9 +899,13 @@ class TestHailMaryVRAMPropagation:
             """Return failing scores to trigger refinement loop exhaustion."""
             return BaseQualityScores(feedback="bad")
 
+        refine_count = 0
+
         def refine_fn(entity: dict, scores, iteration: int) -> dict:
-            """Return unchanged entity (still fails quality)."""
-            return entity
+            """Return slightly different entity each time to avoid identical-output skip."""
+            nonlocal refine_count
+            refine_count += 1
+            return {**entity, "iteration": refine_count}
 
         config = RefinementConfig(
             max_iterations=2,  # >1 required for hail-mary, low to exhaust quickly
@@ -918,7 +922,7 @@ class TestHailMaryVRAMPropagation:
                 judge_fn=judge_fn,
                 refine_fn=refine_fn,
                 get_name=lambda e: "test",
-                serialize=lambda e: {},
+                serialize=lambda e: dict(e),
                 is_empty=lambda e: False,
                 score_cls=BaseQualityScores,
                 config=config,

@@ -103,6 +103,39 @@ class TestEmbedEntityTruncation:
         assert embedded_text.startswith("Alice: ")
         assert any("Truncating entity description" in r.message for r in caplog.records)
 
+    def test_embed_entity_truncation_logs_info_detail(self, service, mock_db, caplog):
+        """First truncation per entity should emit INFO log with model/context detail."""
+        embedding_service_mod._truncation_warned.clear()
+        long_entity = Entity(
+            id="ent-info-log",
+            type="character",
+            name="Bob",
+            description="y" * 5000,
+        )
+        mock_client = MagicMock()
+        mock_embed_text = MagicMock(return_value=FAKE_EMBEDDING)
+        with (
+            patch.object(service, "_get_client", return_value=mock_client),
+            patch("src.services.embedding_service.get_model_context_size", return_value=128),
+            patch("src.services.embedding_service.get_embedding_prefix", return_value=""),
+            patch.object(service, "embed_text", mock_embed_text),
+            caplog.at_level(logging.INFO),
+        ):
+            service.embed_entity(mock_db, long_entity)
+
+        info_records = [
+            r
+            for r in caplog.records
+            if r.levelno == logging.INFO and "Embedding truncation detail" in r.message
+        ]
+        assert len(info_records) == 1
+        detail_msg = info_records[0].message
+        assert "model=test-embed:latest" in detail_msg
+        assert "context_limit=128" in detail_msg
+        assert "budget_chars=" in detail_msg
+        assert "actual_chars=5000" in detail_msg
+        assert "truncation=" in detail_msg
+
     def test_embed_entity_empty_description_when_header_meets_budget(
         self, service, mock_db, caplog
     ):

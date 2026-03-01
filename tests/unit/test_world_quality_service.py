@@ -1447,7 +1447,7 @@ class TestHailMaryFreshCreation:
             "entity_type": "test",
             "create_fn": create_fn,
             "judge_fn": judge_fn,
-            "refine_fn": lambda entity, scores, iteration: entity,
+            "refine_fn": lambda entity, scores, iteration: {**entity, "_iter": iteration},
             "get_name": lambda e: e.get("name", "Unknown") if isinstance(e, dict) else "Unknown",
             "serialize": lambda e: e if isinstance(e, dict) else {},
             "is_empty": lambda e: e is None or (isinstance(e, dict) and not e),

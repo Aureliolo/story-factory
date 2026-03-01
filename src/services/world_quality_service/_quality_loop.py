@@ -178,6 +178,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     last_error: str = ""
     creation_retries = 0
     early_stopped = False
+    stopped_identical_output = False  # True when early stop was due to identical refinement output
     needs_judging = False
     zero_score_discarded = False  # True when previous judge was discarded for zero-score anomaly
     scoring_rounds = 0
@@ -286,6 +287,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                                 iteration + 1,
                             )
                             early_stopped = True
+                            stopped_identical_output = True
                             break
 
                     needs_judging = True
@@ -397,6 +399,20 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                         current_iter,
                         scores.average,
                     )
+                    # Warn about potential self-judging bias when creator==judge
+                    try:
+                        creator_model = svc._get_creator_model(entity_type)
+                        judge_model = svc._get_judge_model(entity_type)
+                        if creator_model == judge_model:
+                            logger.warning(
+                                "%s '%s': identical scores with self-judging "
+                                "(creator==judge='%s') — scores may be unreliable",
+                                entity_type.capitalize(),
+                                get_name(entity),
+                                creator_model,
+                            )
+                    except Exception:
+                        pass  # Non-critical diagnostic — don't disrupt the loop
                     early_stopped = True
                     break
 
@@ -630,11 +646,19 @@ def quality_refinement_loop[T, S: BaseQualityScores](
     )
 
     if not threshold_met_pre_hail_mary and config.max_iterations > 1:
-        # Gate: skip hail-mary when failure is structural (temporal context deficit).
-        # After the judge prompt context gap is fixed, temporal_plausibility should
-        # rarely score below 4.0. But if it does (e.g., no calendar available),
-        # hail-mary is skipped rather than wasting tokens on the same problem.
+        # Gate: skip hail-mary when early stop was due to identical output.
+        # If refinement produces the same output as the previous iteration,
+        # a fresh creation is very likely to also produce identical output
+        # (the model is stuck), so hail-mary would waste tokens.
         skip_hail_mary = False
+        if stopped_identical_output:
+            skip_hail_mary = True
+            logger.warning(
+                "%s '%s': skipping hail-mary — model produced identical output "
+                "after refinement (model may be stuck)",
+                entity_type.capitalize(),
+                history.entity_name,
+            )
         if history.best_iteration:
             best_iter_scores = history.iterations[history.best_iteration - 1].scores
             weakest_dim, weakest_score = min(
@@ -708,9 +732,9 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                     and best_entity_data is not None
                     and serialize(fresh_entity) == best_entity_data
                 ):
-                    logger.info(
-                        "%s hail-mary produced identical output to best entity, "
-                        "skipping judge call",
+                    logger.warning(
+                        "%s hail-mary produced identical output to best entity "
+                        "— model may be stuck, skipping judge call",
                         entity_type.capitalize(),
                     )
                 elif fresh_entity is not None and not is_empty(fresh_entity):

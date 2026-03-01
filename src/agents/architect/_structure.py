@@ -413,7 +413,7 @@ def _parse_variation_response(
         id=str(uuid.uuid4()),
         name=f"Variation {variation_number}",
         world_description=world_description,
-        world_rules=rules[:10],
+        world_rules=[r for r in rules[:10] if r.strip()],
         characters=characters,
         plot_summary=plot_summary,
         plot_points=plot_points,

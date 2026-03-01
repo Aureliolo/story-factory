@@ -2136,6 +2136,8 @@ class TestMissingValidationCoverage:
         assert settings.world_quality_thresholds["character"] == 7.5
         assert settings.world_quality_thresholds["item"] == 7.5
         assert settings.world_quality_thresholds["calendar"] == 7.5
+        # Chapter threshold is lower due to model ceiling effect
+        assert settings.world_quality_thresholds["chapter"] == 7.0
         assert len(settings.world_quality_thresholds) == 10
 
     def test_validate_raises_on_per_entity_threshold_out_of_range(self):
@@ -2904,9 +2906,9 @@ class TestWP1WP2SettingsValidation:
     def test_dimension_minimum_equal_to_threshold_is_valid(self):
         """dimension_minimum == quality_threshold should pass validation."""
         settings = Settings()
-        settings.world_quality_dimension_minimum = 7.5
+        settings.world_quality_dimension_minimum = 7.0
         settings.world_quality_threshold = 7.5
-        # Should not raise — equal is allowed (only strict > is rejected)
+        # Should not raise — equal to the lowest per-entity threshold is allowed
         settings.validate()
 
     def test_dimension_minimum_exceeds_per_entity_threshold(self):

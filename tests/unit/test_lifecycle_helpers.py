@@ -186,6 +186,64 @@ class TestBuildCharacterLifecycle:
         result = build_character_lifecycle(char)
         assert result == {"lifecycle": {"birth": {"year": 300, "era_name": "Third Age"}}}
 
+    def test_death_before_birth_drops_death_data(self):
+        """Character with death_year < birth_year has death data dropped (L2 guard)."""
+        char = Character(
+            name="Paradox",
+            role="protagonist",
+            description="A paradoxical character",
+            birth_year=500,
+            death_year=100,
+        )
+        result = build_character_lifecycle(char)
+        assert result == {"lifecycle": {"birth": {"year": 500}}}
+        assert "death" not in result.get("lifecycle", {})
+
+    def test_death_before_birth_keeps_birth_and_notes(self):
+        """Character with death < birth preserves birth data and temporal notes."""
+        char = Character(
+            name="Paradox",
+            role="protagonist",
+            description="A paradoxical character",
+            birth_year=500,
+            death_year=100,
+            birth_era="Third Age",
+            temporal_notes="Something went wrong",
+        )
+        result = build_character_lifecycle(char)
+        lifecycle = result["lifecycle"]
+        assert lifecycle["birth"] == {"year": 500, "era_name": "Third Age"}
+        assert "death" not in lifecycle
+        assert lifecycle["temporal_notes"] == "Something went wrong"
+
+    def test_death_equal_to_birth_not_dropped(self):
+        """Character with death_year == birth_year is NOT dropped (zero lifespan is valid)."""
+        char = Character(
+            name="Ephemeral",
+            role="supporting",
+            description="A brief existence",
+            birth_year=200,
+            death_year=200,
+        )
+        result = build_character_lifecycle(char)
+        lifecycle = result["lifecycle"]
+        assert lifecycle["birth"] == {"year": 200}
+        assert lifecycle["death"] == {"year": 200}
+
+    def test_death_after_birth_not_dropped(self):
+        """Character with death_year > birth_year works normally."""
+        char = Character(
+            name="Normal",
+            role="protagonist",
+            description="A normal character",
+            birth_year=100,
+            death_year=200,
+        )
+        result = build_character_lifecycle(char)
+        lifecycle = result["lifecycle"]
+        assert lifecycle["birth"] == {"year": 100}
+        assert lifecycle["death"] == {"year": 200}
+
 
 class TestBuildEntityLifecycle:
     """Tests for build_entity_lifecycle()."""

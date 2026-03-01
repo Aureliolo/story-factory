@@ -216,6 +216,7 @@ def log_batch_summary(
     quality_threshold: float,
     elapsed: float,
     get_name: Callable[[Any], str] | None = None,
+    requested_count: int | None = None,
 ) -> None:
     """Log an aggregate summary at the end of a batch generation or review.
 
@@ -227,6 +228,9 @@ def log_batch_summary(
         get_name: Callable to extract display name from an entity. When provided,
             used for all entity types (chapters, relationships, etc.). Falls back
             to ``entity.get("name")`` / ``getattr(entity, "name")`` when ``None``.
+        requested_count: Original number of entities requested. When provided,
+            included in the summary to show how many were actually produced
+            vs. how many were requested.
     """
     if not results:
         logger.info(
@@ -254,8 +258,14 @@ def log_batch_summary(
                 name = getattr(entity, "name", "Unknown")
             failed_names.append(str(name) if name is not None else "Unknown")
 
+    # Show passed/produced and optionally the original requested count
+    if requested_count is not None and requested_count != total:
+        passed_str = f"passed={passed}/{total} (requested={requested_count})"
+    else:
+        passed_str = f"passed={passed}/{total}"
+
     summary_parts = [
-        f"passed={passed}/{total}",
+        passed_str,
         f"scores: min={min_score:.1f} max={max_score:.1f} avg={avg_score:.1f}",
         f"threshold={quality_threshold:.1f}",
         f"time={elapsed:.1f}s",
