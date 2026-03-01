@@ -6,7 +6,7 @@ from src.memory.conflict_types import normalize_relation_type
 
 
 class TestProseSentimentKeywordNormalization:
-    """Tests for normalize_relation_type prose sentiment keyword fallback."""
+    """Tests for normalize_relation_type with prose sentiment keywords merged into _WORD_TO_RELATION."""
 
     @pytest.fixture(autouse=True)
     def _clear_lru_cache(self):
@@ -30,16 +30,16 @@ class TestProseSentimentKeywordNormalization:
         result = normalize_relation_type("partnership")
         assert result == "allies_with"
 
-    def test_validate_prose_sentiment_keywords_raises_on_invalid(self, monkeypatch):
-        """_validate_prose_sentiment_keywords raises RuntimeError for unknown relation types."""
+    def test_validate_word_to_relation_raises_on_invalid(self, monkeypatch):
+        """_validate_word_to_relation raises RuntimeError for unknown relation types."""
         from src.memory import conflict_types
-        from src.memory.conflict_types import _validate_prose_sentiment_keywords
+        from src.memory.conflict_types import _validate_word_to_relation
 
-        original = conflict_types._PROSE_SENTIMENT_KEYWORDS.copy()
+        original = conflict_types._WORD_TO_RELATION.copy()
         monkeypatch.setattr(
             conflict_types,
-            "_PROSE_SENTIMENT_KEYWORDS",
+            "_WORD_TO_RELATION",
             {**original, "bogus_sentiment": "totally_fake_type"},
         )
         with pytest.raises(RuntimeError, match="unknown types"):
-            _validate_prose_sentiment_keywords()
+            _validate_word_to_relation()
