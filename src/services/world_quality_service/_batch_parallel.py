@@ -14,7 +14,12 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING
 
 from src.memory.world_quality import BaseQualityScores
-from src.utils.exceptions import DuplicateNameError, WorldGenerationError, summarize_llm_error
+from src.utils.exceptions import (
+    DuplicateNameError,
+    VRAMAllocationError,
+    WorldGenerationError,
+    summarize_llm_error,
+)
 
 if TYPE_CHECKING:
     from src.services.world_quality_service import EntityGenerationProgress, WorldQualityService
@@ -390,6 +395,9 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
                     )
 
                 except WorldGenerationError as e:
+                    # VRAMAllocationError is non-retryable — stop the entire batch
+                    if isinstance(e.__cause__, VRAMAllocationError):
+                        raise
                     error_msg = summarize_llm_error(e, max_length=200)
                     errors.append(error_msg)
                     consecutive_failures += 1
@@ -626,6 +634,9 @@ def _generate_batch_phased[T, S: BaseQualityScores](
                 errors.append(error_msg)
                 logger.warning("Phase 1: %s", error_msg)
         except (WorldGenerationError, ValueError) as e:
+            # VRAMAllocationError is non-retryable — stop the entire batch
+            if isinstance(getattr(e, "__cause__", None), VRAMAllocationError):
+                raise
             create_errors += 1
             error_msg = summarize_llm_error(e, max_length=200)
             errors.append(error_msg)
@@ -698,6 +709,9 @@ def _generate_batch_phased[T, S: BaseQualityScores](
                 judge_elapsed,
             )
         except (WorldGenerationError, ValueError) as e:
+            # VRAMAllocationError is non-retryable — stop the entire batch
+            if isinstance(getattr(e, "__cause__", None), VRAMAllocationError):
+                raise
             judge_errors += 1
             error_msg = summarize_llm_error(e, max_length=200)
             errors.append(error_msg)
@@ -774,6 +788,9 @@ def _generate_batch_phased[T, S: BaseQualityScores](
                 errors.append(dup_msg)
                 logger.warning("Phase 3: duplicate %s rejected: %s", entity_type, dup_msg)
             except WorldGenerationError as e:
+                # VRAMAllocationError is non-retryable — stop the entire batch
+                if isinstance(e.__cause__, VRAMAllocationError):
+                    raise
                 error_msg = summarize_llm_error(e, max_length=200)
                 errors.append(error_msg)
                 logger.error("Phase 3: on_success rejected %s: %s", entity_type, error_msg)
@@ -851,6 +868,9 @@ def _generate_batch_phased[T, S: BaseQualityScores](
                 dup_msg,
             )
         except WorldGenerationError as e:
+            # VRAMAllocationError is non-retryable — stop the entire batch
+            if isinstance(e.__cause__, VRAMAllocationError):
+                raise
             error_msg = summarize_llm_error(e, max_length=200)
             errors.append(error_msg)
             logger.error(

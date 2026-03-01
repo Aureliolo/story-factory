@@ -10,6 +10,8 @@ import time
 from typing import TYPE_CHECKING
 
 from src.services.llm_client import get_ollama_client
+from src.services.model_mode_service._vram import prepare_model
+from src.utils.exceptions import VRAMAllocationError
 
 if TYPE_CHECKING:
     from src.services import ServiceContainer
@@ -47,6 +49,9 @@ def _warm_models(services: ServiceContainer) -> None:
     for model in models_to_warm:
         t0 = time.perf_counter()
         try:
+            # Run through prepare_model() first so eviction, residency checks,
+            # and _loaded_models tracking all happen before the actual ping.
+            prepare_model(services.mode, model)
             client = get_ollama_client(wq.settings, model_id=model)
             client.chat(
                 model=model,
@@ -57,6 +62,12 @@ def _warm_models(services: ServiceContainer) -> None:
                 "Warmed model '%s' into VRAM in %.2fs",
                 model,
                 time.perf_counter() - t0,
+            )
+        except VRAMAllocationError as e:
+            logger.warning(
+                "Model '%s' rejected by VRAM residency check (non-fatal, build continues): %s",
+                model,
+                e,
             )
         except Exception as e:
             logger.warning(

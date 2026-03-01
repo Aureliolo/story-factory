@@ -18,7 +18,7 @@ from src.memory.world_quality import (
     RefinementConfig,
     RefinementHistory,
 )
-from src.utils.exceptions import WorldGenerationError
+from src.utils.exceptions import VRAMAllocationError, WorldGenerationError
 
 if TYPE_CHECKING:
     from src.services.world_quality_service import WorldQualityService
@@ -509,8 +509,15 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                 break
 
         except WorldGenerationError as e:
+            # VRAMAllocationError is non-retryable — re-raise immediately
+            # to avoid wasting time retrying OOM errors.
+            # VRAMAllocationError (LLMError branch) cannot be caught here directly —
+            # entity create/judge/refine functions wrap it in WorldGenerationError.
+            # Check __cause__ to detect wrapped OOM errors and re-raise immediately.
+            if isinstance(e.__cause__, VRAMAllocationError):
+                raise
             last_error = str(e)[:200]
-            logger.warning(
+            logger.debug(
                 "%s %s error on iteration %d (already logged upstream): %s",
                 entity_type.capitalize(),
                 stage,
@@ -745,6 +752,9 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                         entity_type.capitalize(),
                     )
             except (WorldGenerationError, ValueError) as e:
+                # VRAMAllocationError is non-retryable — propagate immediately
+                if isinstance(getattr(e, "__cause__", None), VRAMAllocationError):
+                    raise
                 logger.warning(
                     "%s hail-mary failed (%s): %s. Keeping original best.",
                     entity_type.capitalize(),

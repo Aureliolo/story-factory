@@ -473,13 +473,7 @@ class RefinementConfig(BaseModel):
                 f"No quality threshold configured for entity type '{entity_type}'. "
                 f"Available: {sorted(self.quality_thresholds)}"
             )
-        threshold = self.quality_thresholds[entity_type]
-        logger.debug(
-            "Using per-entity quality threshold for %s: %.1f",
-            entity_type,
-            threshold,
-        )
-        return threshold
+        return self.quality_thresholds[entity_type]
 
     def get_refinement_temperature(
         self, iteration: int, max_iterations: int | None = None

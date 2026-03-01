@@ -19,6 +19,7 @@ from src.services.world_service._warmup import _warm_models
 from src.utils.exceptions import (
     DatabaseClosedError,
     GenerationCancelledError,
+    VRAMAllocationError,
 )
 from src.utils.validation import validate_not_none, validate_type
 
@@ -196,7 +197,13 @@ def build_world(
                     calendar_iterations,
                     calendar_scores.average,
                 )
-            except GenerationCancelledError, DatabaseClosedError, MemoryError, RecursionError:
+            except (
+                GenerationCancelledError,
+                DatabaseClosedError,
+                VRAMAllocationError,
+                MemoryError,
+                RecursionError,
+            ):
                 raise
             except Exception as e:
                 logger.warning(
@@ -457,7 +464,13 @@ def _build_world_entities(
             )
             counts["events"] = event_count
             logger.info("Generated %d world events", event_count)
-        except GenerationCancelledError, DatabaseClosedError, MemoryError, RecursionError:
+        except (
+            GenerationCancelledError,
+            DatabaseClosedError,
+            VRAMAllocationError,
+            MemoryError,
+            RecursionError,
+        ):
             raise
         except Exception as e:
             logger.warning(
@@ -493,7 +506,13 @@ def _build_world_entities(
                     "Auto-corrected era names for %d entities after temporal validation",
                     corrected,
                 )
-        except GenerationCancelledError, DatabaseClosedError, MemoryError, RecursionError:
+        except (
+            GenerationCancelledError,
+            DatabaseClosedError,
+            VRAMAllocationError,
+            MemoryError,
+            RecursionError,
+        ):
             raise
         except Exception as e:
             logger.warning("Temporal validation failed (non-fatal): %s", e, exc_info=True)
@@ -509,7 +528,13 @@ def _build_world_entities(
             embed_counts,
             total_embedded,
         )
-    except GenerationCancelledError, DatabaseClosedError, MemoryError, RecursionError:
+    except (
+        GenerationCancelledError,
+        DatabaseClosedError,
+        VRAMAllocationError,
+        MemoryError,
+        RecursionError,
+    ):
         raise
     except Exception as e:
         logger.warning(

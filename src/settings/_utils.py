@@ -130,7 +130,10 @@ def get_installed_models_with_sizes(timeout: int | None = None) -> dict[str, flo
 
 
 def get_available_vram(timeout: int | None = None) -> int:
-    """Detect available VRAM in GB. Returns 8GB default if detection fails.
+    """Detect free VRAM in GB. Returns 8GB default if detection fails.
+
+    Queries ``nvidia-smi`` for **free** GPU memory so that the ADAPTIVE VRAM
+    strategy correctly accounts for memory already occupied by loaded models.
 
     Args:
         timeout: Timeout in seconds. If None, uses default (10s).
@@ -138,7 +141,7 @@ def get_available_vram(timeout: int | None = None) -> int:
     actual_timeout = timeout if timeout is not None else 10
     try:
         result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+            ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
             capture_output=True,
             text=True,
             timeout=actual_timeout,

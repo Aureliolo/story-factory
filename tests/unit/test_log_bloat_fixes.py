@@ -348,16 +348,17 @@ class TestQualityLoopErrorPropagation:
                 story_id="test-story",
             )
 
-        # The WorldGenerationError should be logged at WARNING (not ERROR) in quality loop
+        # The WorldGenerationError should be logged at DEBUG (not ERROR/WARNING)
+        # in the quality loop — the upstream caller already logged at the appropriate level
         loop_logger = "src.services.world_quality_service._quality_loop"
         loop_records = [r for r in caplog.records if r.name == loop_logger]
         error_records = [r for r in loop_records if r.levelno >= logging.ERROR]
-        warning_records = [
+        debug_records = [
             r
             for r in loop_records
-            if r.levelno == logging.WARNING and "already logged upstream" in r.message
+            if r.levelno == logging.DEBUG and "already logged upstream" in r.message
         ]
-        assert len(warning_records) >= 1, "Expected WARNING with 'already logged upstream'"
+        assert len(debug_records) >= 1, "Expected DEBUG with 'already logged upstream'"
         assert len(error_records) == 0, "Quality loop should not log ERROR for caught errors"
 
 

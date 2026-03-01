@@ -20,7 +20,12 @@ from src.memory.world_quality import (
 from src.services.world_quality_service._event import _EVENT_DESCRIPTION_PREFIX_LEN
 from src.services.world_quality_service._formatting import aggregate_errors as _aggregate_errors
 from src.services.world_quality_service._formatting import log_batch_summary as _log_batch_summary
-from src.utils.exceptions import DuplicateNameError, WorldGenerationError, summarize_llm_error
+from src.utils.exceptions import (
+    DuplicateNameError,
+    VRAMAllocationError,
+    WorldGenerationError,
+    summarize_llm_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +152,9 @@ def _generate_batch[T, S: BaseQualityScores](
             errors.append(duplicate_msg)
             logger.warning("Duplicate %s %d/%d: %s", entity_type, i + 1, count, duplicate_msg)
         except WorldGenerationError as e:
+            # VRAMAllocationError is non-retryable — stop the entire batch
+            if isinstance(e.__cause__, VRAMAllocationError):
+                raise
             error_msg = summarize_llm_error(e, max_length=200)
             errors.append(error_msg)
             consecutive_failures += 1
@@ -304,6 +312,9 @@ def _review_batch[T, S: BaseQualityScores](
                     )
                 )
         except WorldGenerationError as e:
+            # VRAMAllocationError is non-retryable — stop the entire batch
+            if isinstance(e.__cause__, VRAMAllocationError):
+                raise
             error_msg = summarize_llm_error(e, max_length=200)
             errors.append(error_msg)
             logger.error("Failed to review %s '%s': %s", entity_type, entity_name, error_msg)

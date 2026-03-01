@@ -357,3 +357,58 @@ class TestProjectListCache:
             result3 = state.get_cached_projects(fetch_projects)
             assert call_count == initial_call_count + 1  # Incremented, cache miss
             assert result3[0]["id"] == "2"
+
+
+class TestBuildProgress:
+    """Tests for build progress state fields."""
+
+    def test_build_in_progress_defaults_false(self):
+        """build_in_progress should default to False."""
+        state = AppState()
+        assert state.build_in_progress is False
+        assert state.build_step == 0
+        assert state.build_total_steps == 0
+        assert state.build_message == ""
+
+    def test_update_build_progress_sets_fields(self):
+        """update_build_progress should set all progress fields."""
+        state = AppState()
+        state.update_build_progress(3, 10, "[3/10] Generating locations...")
+
+        assert state.build_in_progress is True
+        assert state.build_step == 3
+        assert state.build_total_steps == 10
+        assert state.build_message == "[3/10] Generating locations..."
+
+    def test_clear_build_progress_resets_fields(self):
+        """clear_build_progress should reset all progress fields."""
+        state = AppState()
+        state.update_build_progress(5, 10, "Building...")
+
+        state.clear_build_progress()
+
+        assert state.build_in_progress is False
+        assert state.build_step == 0
+        assert state.build_total_steps == 0
+        assert state.build_message == ""
+
+    def test_update_build_progress_overwrites_previous(self):
+        """Calling update_build_progress again should overwrite previous values."""
+        state = AppState()
+        state.update_build_progress(1, 10, "Step 1")
+        state.update_build_progress(5, 10, "Step 5")
+
+        assert state.build_step == 5
+        assert state.build_message == "Step 5"
+
+    def test_update_build_progress_rejects_zero_total_steps(self):
+        """update_build_progress should reject total_steps=0."""
+        state = AppState()
+        with pytest.raises(ValueError, match="total_steps must be positive"):
+            state.update_build_progress(0, 0, "Bad")
+
+    def test_update_build_progress_rejects_negative_step(self):
+        """update_build_progress should reject negative step values."""
+        state = AppState()
+        with pytest.raises(ValueError, match="step must be non-negative"):
+            state.update_build_progress(-1, 10, "Bad")

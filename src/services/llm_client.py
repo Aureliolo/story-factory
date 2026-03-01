@@ -16,7 +16,7 @@ import ollama
 from pydantic import BaseModel, ValidationError
 
 from src.settings import Settings
-from src.utils.exceptions import LLMError
+from src.utils.exceptions import LLMError, VRAMAllocationError
 from src.utils.streaming import consume_stream
 
 logger = logging.getLogger(__name__)
@@ -301,7 +301,27 @@ def generate_structured[T: BaseModel](
                 continue
 
         except ollama.ResponseError as e:
-            logger.error("Ollama response error during structured generation: %s", e)
+            # Check for OOM patterns — raise non-retryable VRAMAllocationError
+            error_msg = str(e).lower()
+            if any(
+                pattern in error_msg
+                for pattern in (
+                    "out of memory",
+                    "memory layout cannot be allocated",
+                    "unable to allocate",
+                )
+            ):
+                logger.error(
+                    "Ollama OOM during structured generation for %s: %s",
+                    response_model.__name__,
+                    e,
+                )
+                raise VRAMAllocationError(
+                    f"Ollama ran out of memory generating {response_model.__name__}: {e}",
+                    model_id=model,
+                ) from e
+            # Non-OOM response errors: log at debug (caller logs at appropriate level)
+            logger.debug("Ollama response error during structured generation: %s", e)
             raise LLMError(
                 f"Structured generation failed for {response_model.__name__}: {e}"
             ) from e

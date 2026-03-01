@@ -3,9 +3,12 @@
 import logging
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.memory.mode_models import VramStrategy
 from src.services.model_mode_service import _vram
 from src.settings import Settings
+from src.utils.exceptions import VRAMAllocationError
 
 
 class TestPrepareModelShortCircuit:
@@ -137,27 +140,24 @@ class TestPrepareModelResidencyCheck:
     @patch("src.settings.get_available_vram", return_value=6.0)
     @patch("src.settings.get_installed_models_with_sizes", return_value={"big-model:70b": 20.0})
     @patch("src.settings.get_model_info")
-    def test_residency_below_threshold_warns(
+    def test_residency_below_threshold_raises_vram_error(
         self,
         _mock_info: MagicMock,
         _mock_installed: MagicMock,
         _mock_vram: MagicMock,
-        caplog,
     ) -> None:
-        """GPU residency below MIN_GPU_RESIDENCY emits a WARNING."""
+        """GPU residency below MIN_GPU_RESIDENCY raises VRAMAllocationError."""
         svc = MagicMock()
         svc.settings = MagicMock(spec=Settings)
         svc.settings.vram_strategy = VramStrategy.SEQUENTIAL.value
         svc._loaded_models = set()
         svc._ollama_client = MagicMock()
 
-        with caplog.at_level(logging.WARNING, logger="src.services.model_mode_service._vram"):
+        with pytest.raises(VRAMAllocationError) as exc_info:
             _vram.prepare_model(svc, "big-model:70b")
 
-        assert "big-model:70b" in svc._loaded_models
-        assert any(
-            "GPU residency" in r.message and "below minimum" in r.message for r in caplog.records
-        )
+        assert exc_info.value.model_id == "big-model:70b"
+        assert "big-model:70b" not in svc._loaded_models
 
 
 class TestUnloadClearsLastPreparedCache:
@@ -183,8 +183,8 @@ class TestUnloadClearsLastPreparedCache:
         with _vram._last_prepared_model_lock:
             assert _vram._last_prepared_model_key is None
 
-    def test_unload_does_not_clear_cache_for_kept_model(self) -> None:
-        """When the kept model matches the cached key, cache is preserved."""
+    def test_unload_clears_cache_unconditionally(self) -> None:
+        """Cache is always cleared when models are evicted, even for the kept model."""
         svc = MagicMock()
         svc._loaded_models = {"model-a:8b", "model-b:8b"}
         svc._ollama_client = MagicMock()
@@ -195,5 +195,6 @@ class TestUnloadClearsLastPreparedCache:
 
         _vram.unload_all_except(svc, "model-b:8b")
 
+        # Cache should be cleared unconditionally after eviction
         with _vram._last_prepared_model_lock:
-            assert _vram._last_prepared_model_key == ("model-b:8b", "sequential")
+            assert _vram._last_prepared_model_key is None
