@@ -69,7 +69,6 @@ def prepare_model(svc: ModelModeService, model_id: str) -> None:
             logger.debug("Model %s already prepared, skipping VRAM preparation", model_id)
             return
         logger.debug("Preparing model %s with VRAM strategy: %s", model_id, strategy.value)
-        _last_prepared_model_key = cache_key
 
     if strategy == VramStrategy.SEQUENTIAL:
         # Unload all other models
@@ -126,6 +125,11 @@ def prepare_model(svc: ModelModeService, model_id: str) -> None:
     # Model will be loaded on first use by Ollama
     svc._loaded_models.add(model_id)
 
+    # Cache key set AFTER residency guard passes — prevents rejected models from
+    # bypassing the VRAM check on subsequent calls.
+    with _last_prepared_model_lock:
+        _last_prepared_model_key = cache_key
+
 
 def unload_all_except(svc: ModelModeService, keep_model: str) -> None:
     """Unload all tracked models except the specified one via Ollama API.
@@ -161,15 +165,16 @@ def unload_all_except(svc: ModelModeService, keep_model: str) -> None:
     # Only remove successfully unloaded models from tracking
     svc._loaded_models = (svc._loaded_models - successfully_unloaded) | {keep_model}
 
-    # Clear last-prepared cache unconditionally when any models were evicted.
-    # The previous logic only cleared when the cached model was evicted, but
-    # eviction changes the VRAM landscape — the next prepare_model() must
-    # re-evaluate residency even for the kept model.
-    global _last_prepared_model_key
-    with _last_prepared_model_lock:
-        if _last_prepared_model_key:
-            logger.debug(
-                "Cleared last-prepared model cache after eviction (was %s)",
-                _last_prepared_model_key[0],
-            )
-            _last_prepared_model_key = None
+    # Clear last-prepared cache when at least one model was successfully evicted.
+    # Eviction changes the VRAM landscape — the next prepare_model() must
+    # re-evaluate residency even for the kept model.  Skip when no models were
+    # actually unloaded (failed eviction doesn't change VRAM).
+    if successfully_unloaded:
+        global _last_prepared_model_key
+        with _last_prepared_model_lock:
+            if _last_prepared_model_key:
+                logger.debug(
+                    "Cleared last-prepared model cache after successful eviction (was %s)",
+                    _last_prepared_model_key[0],
+                )
+                _last_prepared_model_key = None

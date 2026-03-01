@@ -150,7 +150,12 @@ class WorldPage:
     # ========== Build ==========
 
     def _build_in_progress_banner(self) -> None:
-        """Build a banner showing world build is in progress."""
+        """Build a live-updating banner showing world build is in progress.
+
+        Uses NiceGUI binding so the message and progress bar update
+        automatically as ``AppState.update_build_progress`` is called
+        from the background build thread.
+        """
         with (
             ui.card()
             .classes("w-full mb-4 border-l-4 border-blue-500 p-4")
@@ -160,13 +165,18 @@ class WorldPage:
                 ui.spinner("dots", size="lg", color="blue")
                 with ui.column().classes("gap-1"):
                     ui.label("World Build In Progress").classes("text-lg font-bold text-blue-200")
-                    ui.label(self.state.build_message or "Building...").classes(
-                        "text-sm text-blue-300"
-                    )
+                    ui.label().bind_text_from(
+                        self.state,
+                        "build_message",
+                        backward=lambda m: m or "Building...",
+                    ).classes("text-sm text-blue-300")
             if self.state.build_total_steps > 0:
-                ui.linear_progress(
-                    value=self.state.build_step / self.state.build_total_steps,
-                    show_value=False,
+                ui.linear_progress(show_value=False).bind_value_from(
+                    self.state,
+                    "build_step",
+                    backward=lambda s: (
+                        s / self.state.build_total_steps if self.state.build_total_steps > 0 else 0
+                    ),
                 ).classes("w-full mt-2")
 
     def build(self) -> None:

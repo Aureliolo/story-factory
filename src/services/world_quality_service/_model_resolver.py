@@ -40,8 +40,11 @@ def _model_fits_in_vram(model_id: str) -> bool:
             )
             return False
         return True
-    except Exception as e:
+    except (ConnectionError, TimeoutError, FileNotFoundError, OSError, ValueError) as e:
         logger.debug("VRAM check failed for %s, assuming fits: %s", model_id, e)
+        return True
+    except Exception as e:
+        logger.warning("Unexpected VRAM check failure for %s, assuming fits: %s", model_id, e)
         return True
 
 

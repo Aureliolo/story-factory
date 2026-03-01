@@ -490,14 +490,22 @@ class AppState:
         """Update build progress state (survives dialog destruction).
 
         Args:
-            step: Current build step number.
-            total_steps: Total number of build steps.
+            step: Current build step number (0-indexed or 1-indexed).
+            total_steps: Total number of build steps (must be > 0).
             message: Human-readable progress message.
+
+        Raises:
+            ValueError: If total_steps is not positive or step is out of range.
         """
+        if total_steps <= 0:
+            raise ValueError(f"total_steps must be positive, got {total_steps}")
+        if step < 0:
+            raise ValueError(f"step must be non-negative, got {step}")
         self.build_in_progress = True
         self.build_step = step
         self.build_total_steps = total_steps
         self.build_message = message
+        logger.debug("Build progress updated: step %d/%d — %s", step, total_steps, message)
 
     def clear_build_progress(self) -> None:
         """Reset build progress state after build completes or fails."""

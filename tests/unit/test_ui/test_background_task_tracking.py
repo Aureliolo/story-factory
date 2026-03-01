@@ -400,3 +400,15 @@ class TestBuildProgress:
 
         assert state.build_step == 5
         assert state.build_message == "Step 5"
+
+    def test_update_build_progress_rejects_zero_total_steps(self):
+        """update_build_progress should reject total_steps=0."""
+        state = AppState()
+        with pytest.raises(ValueError, match="total_steps must be positive"):
+            state.update_build_progress(0, 0, "Bad")
+
+    def test_update_build_progress_rejects_negative_step(self):
+        """update_build_progress should reject negative step values."""
+        state = AppState()
+        with pytest.raises(ValueError, match="step must be non-negative"):
+            state.update_build_progress(-1, 10, "Bad")

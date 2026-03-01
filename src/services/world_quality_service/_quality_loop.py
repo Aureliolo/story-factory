@@ -511,7 +511,10 @@ def quality_refinement_loop[T, S: BaseQualityScores](
         except WorldGenerationError as e:
             # VRAMAllocationError is non-retryable — re-raise immediately
             # to avoid wasting time retrying OOM errors.
-            if isinstance(e.__cause__, VRAMAllocationError) or isinstance(e, VRAMAllocationError):
+            # VRAMAllocationError (LLMError branch) cannot be caught here directly —
+            # entity create/judge/refine functions wrap it in WorldGenerationError.
+            # Check __cause__ to detect wrapped OOM errors and re-raise immediately.
+            if isinstance(e.__cause__, VRAMAllocationError):
                 raise
             last_error = str(e)[:200]
             logger.debug(
@@ -749,6 +752,9 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                         entity_type.capitalize(),
                     )
             except (WorldGenerationError, ValueError) as e:
+                # VRAMAllocationError is non-retryable — propagate immediately
+                if isinstance(getattr(e, "__cause__", None), VRAMAllocationError):
+                    raise
                 logger.warning(
                     "%s hail-mary failed (%s): %s. Keeping original best.",
                     entity_type.capitalize(),

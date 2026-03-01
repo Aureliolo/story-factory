@@ -1,7 +1,6 @@
 """Tests for VRAM safety: residency guard, OOM detection, and non-retryable errors."""
 
-import logging
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import ollama
 import pytest
@@ -19,9 +18,6 @@ from src.utils.exceptions import (
     VRAMAllocationError,
     WorldGenerationError,
 )
-
-logger = logging.getLogger(__name__)
-
 
 # ──── Fixtures ────
 
@@ -212,8 +208,8 @@ class TestWarmupRouting:
         _warm_models(mock_services)
 
         assert mock_prepare.call_count == 2
-        assert mock_prepare.call_args_list[0].args[1] == "creator:8b"
-        assert mock_prepare.call_args_list[1].args[1] == "judge:8b"
+        mock_prepare.assert_any_call(ANY, "creator:8b")
+        mock_prepare.assert_any_call(ANY, "judge:8b")
 
     @patch("src.services.world_service._warmup.get_ollama_client")
     @patch(
@@ -434,3 +430,203 @@ class TestModelFitsInVram:
         # Judge should skip big-alt:70b (fails VRAM) and warn about self-judging
         model = get_judge_model(svc, entity_type="character")
         assert model == "creator:8b"  # Falls back to creator since alt won't fit
+
+    @patch("src.services.world_quality_service._model_resolver.get_available_vram", return_value=20)
+    @patch(
+        "src.services.world_quality_service._model_resolver.get_installed_models_with_sizes",
+        return_value={"boundary:8b": 25.0},  # 20/25 = 0.8 exactly
+    )
+    def test_model_fits_at_exact_80_percent_boundary(self, _sizes, _vram):
+        """Model at exactly 80% residency should pass (uses strict < comparison)."""
+        from src.services.world_quality_service._model_resolver import _model_fits_in_vram
+
+        assert _model_fits_in_vram("boundary:8b") is True
+
+
+# ──── Phase 1H: Additional OOM patterns ────
+
+
+class TestOOMPatternCoverage:
+    """Tests for all three OOM detection patterns in generate_structured."""
+
+    @pytest.fixture
+    def _dummy_model(self):
+        """Provide a minimal Pydantic model for structured generation tests."""
+        from pydantic import BaseModel
+
+        class DummyModel(BaseModel):
+            """Minimal Pydantic model for structured generation test."""
+
+            value: str = ""
+
+        return DummyModel
+
+    @patch("src.services.llm_client.validate_context_size", return_value=4096)
+    @patch("src.services.llm_client.get_ollama_client")
+    def test_oom_memory_layout_pattern(self, mock_get_client, mock_ctx, _dummy_model):
+        """'memory layout cannot be allocated' should trigger VRAMAllocationError."""
+        from src.services.llm_client import generate_structured
+
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+        mock_client.chat.side_effect = ollama.ResponseError("memory layout cannot be allocated")
+
+        settings = MagicMock(spec=Settings)
+        settings.context_size = 4096
+
+        with pytest.raises(VRAMAllocationError):
+            generate_structured(
+                settings=settings, model="test:8b", prompt="test", response_model=_dummy_model
+            )
+
+    @patch("src.services.llm_client.validate_context_size", return_value=4096)
+    @patch("src.services.llm_client.get_ollama_client")
+    def test_oom_unable_to_allocate_pattern(self, mock_get_client, mock_ctx, _dummy_model):
+        """'unable to allocate' should trigger VRAMAllocationError."""
+        from src.services.llm_client import generate_structured
+
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+        mock_client.chat.side_effect = ollama.ResponseError("unable to allocate 4GB buffer")
+
+        settings = MagicMock(spec=Settings)
+        settings.context_size = 4096
+
+        with pytest.raises(VRAMAllocationError):
+            generate_structured(
+                settings=settings, model="test:8b", prompt="test", response_model=_dummy_model
+            )
+
+
+# ──── Phase 1I: prepare_model model-not-installed path ────
+
+
+class TestPrepareModelNotInstalled:
+    """Tests for prepare_model when model is not in the installed models list."""
+
+    def setup_method(self):
+        """Reset module cache before each test."""
+        _reset_prepare_model_cache()
+
+    @patch("src.settings.get_available_vram", return_value=20)
+    @patch(
+        "src.settings.get_installed_models_with_sizes",
+        return_value={},  # model NOT in installed list
+    )
+    @patch(
+        "src.settings.get_model_info",
+        return_value={"vram_required": 6},
+    )
+    def test_prepare_model_skips_residency_when_not_installed(self, _info, _sizes, _vram, mock_svc):
+        """prepare_model should succeed when model is not in installed list (no residency check)."""
+        mock_svc.settings.vram_strategy = VramStrategy.SEQUENTIAL.value
+
+        prepare_model(mock_svc, "unknown-model:8b")
+
+        assert "unknown-model:8b" in mock_svc._loaded_models
+
+
+# ──── Phase 1J: quality loop no-retry assertion ────
+
+
+class TestQualityLoopNoRetry:
+    """Tests that VRAMAllocationError stops the loop after exactly 1 call."""
+
+    def test_create_fn_called_exactly_once_on_vram_error(self):
+        """create_fn should be called exactly once when VRAMAllocationError occurs."""
+        from src.memory.world_quality import BaseQualityScores, RefinementConfig
+        from src.services.world_quality_service._quality_loop import quality_refinement_loop
+
+        call_count = 0
+
+        def create_fn(retries: int) -> dict:
+            """Track call count and raise VRAMAllocationError."""
+            nonlocal call_count
+            call_count += 1
+            cause = VRAMAllocationError("oom", model_id="test:8b")
+            raise WorldGenerationError("generation failed") from cause
+
+        config = MagicMock(spec=RefinementConfig)
+        config.max_iterations = 5  # Allow many iterations
+        config.get_threshold.return_value = 7.0
+        config.dimension_minimum = 0.0
+
+        with pytest.raises(WorldGenerationError):
+            quality_refinement_loop(
+                entity_type="test_entity",
+                create_fn=create_fn,
+                judge_fn=lambda e: BaseQualityScores(),  # Never called; create_fn raises first
+                refine_fn=lambda e, s, i: e,
+                get_name=lambda e: "test",
+                serialize=lambda e: {},
+                is_empty=lambda e: False,
+                score_cls=BaseQualityScores,
+                config=config,
+                svc=MagicMock(),
+                story_id="test-story",
+            )
+
+        assert call_count == 1, f"create_fn called {call_count} times, expected 1"
+
+
+# ──── Phase 1K: warmup mock argument style fix ────
+
+
+class TestWarmupArgumentMatching:
+    """Tests for warmup prepare_model call argument matching."""
+
+    @patch("src.services.world_service._warmup.get_ollama_client")
+    @patch("src.services.world_service._warmup.prepare_model")
+    def test_warmup_calls_prepare_model_with_correct_args(self, mock_prepare, mock_client):
+        """Verify prepare_model is called with correct model IDs using keyword matching."""
+        from src.services.world_service._warmup import _warm_models
+
+        mock_services = MagicMock()
+        mock_services.world_quality._get_creator_model.return_value = "creator:8b"
+        mock_services.world_quality._get_judge_model.return_value = "judge:8b"
+        mock_services.world_quality.settings = MagicMock(spec=Settings)
+
+        _warm_models(mock_services)
+
+        assert mock_prepare.call_count == 2
+        mock_prepare.assert_any_call(ANY, "creator:8b")
+        mock_prepare.assert_any_call(ANY, "judge:8b")
+
+
+# ──── Phase 1L: build_world VRAMAllocationError propagation ────
+
+
+class TestBuildWorldVRAMPropagation:
+    """Tests for VRAMAllocationError propagation through build_world except blocks."""
+
+    @patch("src.services.world_service._build._warm_models")
+    @patch("src.services.world_service._build.validate_type")
+    def test_calendar_vram_error_propagates(self, _mock_validate, mock_warmup):
+        """VRAMAllocationError during calendar generation should propagate, not be swallowed."""
+        from src.services.world_service import WorldBuildOptions
+        from src.services.world_service._build import build_world
+
+        mock_svc = MagicMock()  # WorldService
+        mock_services = MagicMock()  # ServiceContainer
+        mock_services.settings.generate_calendar_on_world_build = True
+        mock_services.world_quality.generate_calendar_with_quality.side_effect = (
+            VRAMAllocationError("oom", model_id="test:8b")
+        )
+        mock_services.world_quality.get_config.return_value = MagicMock(
+            max_iterations=3,
+            quality_threshold=7.0,
+            creator_temperature=0.9,
+            judge_temperature=0.3,
+            early_stopping_patience=1,
+            quality_thresholds=None,
+        )
+
+        mock_story = MagicMock()
+        mock_story.brief = MagicMock()
+        mock_story.chapters = []
+        mock_story.id = "test-story"
+
+        options = WorldBuildOptions.full()
+
+        with pytest.raises(VRAMAllocationError):
+            build_world(mock_svc, mock_story, MagicMock(), mock_services, options)

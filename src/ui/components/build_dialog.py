@@ -12,9 +12,9 @@ from nicegui import run, ui
 
 from src.memory.templates import WorldTemplate
 from src.services import ServiceContainer
-from src.services.world_service import WorldBuildOptions
+from src.services.world_service import WorldBuildOptions, WorldBuildProgress
 from src.ui.state import AppState
-from src.utils.exceptions import GenerationCancelledError, WorldGenerationError
+from src.utils.exceptions import GenerationCancelledError, VRAMAllocationError, WorldGenerationError
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +120,7 @@ async def show_build_structure_dialog(
         state.begin_background_task(f"build_structure_{mode}")
         try:
             # Progress callback to update dialog
-            def on_progress(progress) -> None:
+            def on_progress(progress: WorldBuildProgress) -> None:
                 """Update the dialog label and progress bar with current build progress."""
                 # Write to AppState FIRST — state survives dialog destruction
                 state.update_build_progress(progress.step, progress.total_steps, progress.message)
@@ -186,6 +186,17 @@ async def show_build_structure_dialog(
                 type="negative",
                 close_button=True,
                 timeout=10,
+            )
+            dialog.close()
+        except VRAMAllocationError as e:
+            model_hint = f" (model: {e.model_id})" if e.model_id else ""
+            logger.error(f"Structure {mode} failed: VRAM insufficient{model_hint}: {e}")
+            ui.notify(
+                f"Not enough GPU memory{model_hint}. "
+                f"Try a smaller model or free GPU memory by closing other applications.",
+                type="negative",
+                close_button=True,
+                timeout=15,
             )
             dialog.close()
         except Exception as e:

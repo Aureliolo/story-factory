@@ -602,8 +602,8 @@ class ModelService:
         """Log whether target model is already loaded in Ollama's VRAM.
 
         Queries /api/ps and logs which models are resident. If a target model
-        is specified and not loaded, logs a warning that the first call will
-        incur a cold-start penalty.
+        is specified and not loaded, logs a cold-start notice (WARNING when
+        no models are loaded at all, INFO when a different model is loaded).
 
         Args:
             target_model: Optional model ID to check for. If None, just logs
