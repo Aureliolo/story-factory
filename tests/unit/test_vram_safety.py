@@ -1,5 +1,6 @@
 """Tests for VRAM safety: residency guard, OOM detection, and non-retryable errors."""
 
+import logging
 from unittest.mock import ANY, MagicMock, patch
 
 import ollama
@@ -630,3 +631,315 @@ class TestBuildWorldVRAMPropagation:
 
         with pytest.raises(VRAMAllocationError):
             build_world(mock_svc, mock_story, MagicMock(), mock_services, options)
+
+
+# ──── Phase 1M: _generate_batch VRAMAllocationError propagation ────
+
+
+class TestGenerateBatchVRAMPropagation:
+    """Tests for VRAMAllocationError propagation through _generate_batch."""
+
+    def test_generate_batch_propagates_vram_error(self):
+        """VRAMAllocationError wrapped in WorldGenerationError should propagate from _generate_batch."""
+        from src.services.world_quality_service._batch import _generate_batch
+
+        mock_svc = MagicMock()
+
+        def gen_fn(retries: int) -> tuple[dict, MagicMock, int]:
+            """Raise WorldGenerationError wrapping VRAMAllocationError."""
+            raise WorldGenerationError("gen failed") from VRAMAllocationError(
+                "oom", model_id="test:8b"
+            )
+
+        with pytest.raises(WorldGenerationError, match="gen failed"):
+            _generate_batch(
+                mock_svc,
+                count=1,
+                entity_type="location",
+                generate_fn=gen_fn,
+                get_name=lambda e: e.get("name", ""),
+            )
+
+    def test_review_batch_propagates_vram_error(self):
+        """VRAMAllocationError wrapped in WorldGenerationError should propagate from _review_batch."""
+        from src.services.world_quality_service._batch import _review_batch
+
+        mock_svc = MagicMock()
+
+        def review_fn(entity: dict) -> tuple[dict, MagicMock, int]:
+            """Raise WorldGenerationError wrapping VRAMAllocationError."""
+            raise WorldGenerationError("review failed") from VRAMAllocationError(
+                "oom", model_id="test:8b"
+            )
+
+        with pytest.raises(WorldGenerationError, match="review failed"):
+            _review_batch(
+                mock_svc,
+                entities=[{"name": "Test Location"}],
+                entity_type="location",
+                review_fn=review_fn,
+                get_name=lambda e: e.get("name", ""),
+                zero_scores_fn=lambda msg: MagicMock(),
+            )
+
+
+# ──── Phase 1N: _generate_batch_parallel VRAMAllocationError propagation ────
+
+
+class TestBatchParallelVRAMPropagation:
+    """Tests for VRAMAllocationError propagation through _generate_batch_parallel."""
+
+    def test_rolling_window_propagates_vram_error(self):
+        """VRAMAllocationError in rolling-window path should propagate."""
+        from src.services.world_quality_service._batch_parallel import (
+            _generate_batch_parallel,
+        )
+
+        mock_svc = MagicMock()
+        config = MagicMock()
+        config.quality_threshold = 7.5
+        config.get_threshold = MagicMock(return_value=7.5)
+        mock_svc.get_config = MagicMock(return_value=config)
+
+        def gen_fn(retries: int) -> tuple[dict, MagicMock, int]:
+            """Raise WorldGenerationError wrapping VRAMAllocationError."""
+            raise WorldGenerationError("create failed") from VRAMAllocationError(
+                "oom", model_id="test:8b"
+            )
+
+        with pytest.raises(WorldGenerationError, match="create failed"):
+            _generate_batch_parallel(
+                mock_svc,
+                count=1,
+                entity_type="location",
+                generate_fn=gen_fn,
+                get_name=lambda e: e.get("name", ""),
+                max_workers=1,
+            )
+
+    def _make_phased_svc(self):
+        """Create a mock service that enters phased pipeline."""
+        mock_svc = MagicMock()
+        config = MagicMock()
+        config.quality_threshold = 7.5
+        config.get_threshold = MagicMock(return_value=7.5)
+        mock_svc.get_config = MagicMock(return_value=config)
+        # Different creator/judge models → triggers phased pipeline
+        mock_svc._get_creator_model = MagicMock(return_value="creator:8b")
+        mock_svc._get_judge_model = MagicMock(return_value="judge:8b")
+        return mock_svc
+
+    def test_phased_create_propagates_vram_error(self):
+        """VRAMAllocationError in phased phase-1 create should propagate."""
+        from src.services.world_quality_service._batch_parallel import (
+            _generate_batch_parallel,
+        )
+
+        mock_svc = self._make_phased_svc()
+
+        def create_only(retries: int):
+            """Raise VRAMAllocationError wrapped in WorldGenerationError."""
+            raise WorldGenerationError("create failed") from VRAMAllocationError(
+                "oom", model_id="test:8b"
+            )
+
+        with pytest.raises(WorldGenerationError, match="create failed"):
+            _generate_batch_parallel(
+                mock_svc,
+                count=1,
+                entity_type="location",
+                generate_fn=lambda r: ({"name": "X"}, MagicMock(average=8.0), 1),
+                get_name=lambda e: e.get("name", ""),
+                max_workers=2,
+                create_only_fn=create_only,
+                judge_only_fn=lambda e: MagicMock(average=8.0),
+                is_empty_fn=lambda e: False,
+                refine_with_initial_fn=lambda e: (e, MagicMock(average=8.0), 1),
+            )
+
+    def test_phased_judge_propagates_vram_error(self):
+        """VRAMAllocationError in phased phase-2 judge should propagate."""
+        from src.services.world_quality_service._batch_parallel import (
+            _generate_batch_parallel,
+        )
+
+        mock_svc = self._make_phased_svc()
+
+        def judge_only(e):
+            """Raise VRAMAllocationError wrapped in WorldGenerationError."""
+            raise WorldGenerationError("judge failed") from VRAMAllocationError(
+                "oom", model_id="test:8b"
+            )
+
+        with pytest.raises(WorldGenerationError, match="judge failed"):
+            _generate_batch_parallel(
+                mock_svc,
+                count=1,
+                entity_type="location",
+                generate_fn=lambda r: ({"name": "X"}, MagicMock(average=8.0), 1),
+                get_name=lambda e: e.get("name", ""),
+                max_workers=2,
+                create_only_fn=lambda r: {"name": "X"},
+                judge_only_fn=judge_only,
+                is_empty_fn=lambda e: False,
+                refine_with_initial_fn=lambda e: (e, MagicMock(average=8.0), 1),
+            )
+
+    def test_phased_on_success_propagates_vram_error(self):
+        """VRAMAllocationError in phased phase-3 on_success should propagate."""
+        from src.memory.world_quality import CharacterQualityScores
+        from src.services.world_quality_service._batch_parallel import (
+            _generate_batch_parallel,
+        )
+
+        mock_svc = self._make_phased_svc()
+        mock_svc.get_config().get_threshold.return_value = 7.0
+
+        scores = CharacterQualityScores(
+            depth=8.0,
+            goals=8.0,
+            flaws=8.0,
+            uniqueness=8.0,
+            arc_potential=8.0,
+            temporal_plausibility=8.0,
+            feedback="Good",
+        )
+
+        def on_success(e):
+            """Raise WorldGenerationError wrapping VRAMAllocationError."""
+            raise WorldGenerationError("save failed") from VRAMAllocationError(
+                "oom", model_id="test:8b"
+            )
+
+        with pytest.raises(WorldGenerationError, match="save failed"):
+            _generate_batch_parallel(
+                mock_svc,
+                count=1,
+                entity_type="character",
+                generate_fn=lambda r: ({"name": "Hero"}, scores, 1),
+                get_name=lambda e: e.get("name", ""),
+                on_success=on_success,
+                max_workers=2,
+                create_only_fn=lambda r: {"name": "Hero"},
+                judge_only_fn=lambda e: scores,
+                is_empty_fn=lambda e: False,
+                refine_with_initial_fn=lambda e: (e, scores, 1),
+            )
+
+    def test_phased_refine_propagates_vram_error(self):
+        """VRAMAllocationError in phased phase-3b refine should propagate."""
+        from src.memory.world_quality import CharacterQualityScores
+        from src.services.world_quality_service._batch_parallel import (
+            _generate_batch_parallel,
+        )
+
+        mock_svc = self._make_phased_svc()
+        mock_svc.get_config().get_threshold.return_value = 9.0  # High → always fails
+
+        low_scores = CharacterQualityScores(
+            depth=5.0,
+            goals=5.0,
+            flaws=5.0,
+            uniqueness=5.0,
+            arc_potential=5.0,
+            temporal_plausibility=5.0,
+            feedback="Needs work",
+        )
+
+        def refine_fn(e) -> tuple[dict, CharacterQualityScores, int]:
+            """Raise WorldGenerationError wrapping VRAMAllocationError."""
+            raise WorldGenerationError("refine failed") from VRAMAllocationError(
+                "oom", model_id="test:8b"
+            )
+
+        with pytest.raises(WorldGenerationError, match="refine failed"):
+            _generate_batch_parallel(
+                mock_svc,
+                count=1,
+                entity_type="character",
+                generate_fn=lambda r: ({"name": "X"}, low_scores, 1),
+                get_name=lambda e: e.get("name", ""),
+                max_workers=2,
+                create_only_fn=lambda r: {"name": "X"},
+                judge_only_fn=lambda e: low_scores,
+                is_empty_fn=lambda e: False,
+                refine_with_initial_fn=refine_fn,
+            )
+
+
+# ──── Phase 1O: quality_refinement_loop hail-mary VRAMAllocationError ────
+
+
+class TestHailMaryVRAMPropagation:
+    """Tests for VRAMAllocationError propagation through hail-mary retry."""
+
+    def test_hail_mary_propagates_vram_error(self):
+        """VRAMAllocationError in hail-mary create should propagate."""
+        from src.memory.world_quality import BaseQualityScores, RefinementConfig
+        from src.services.world_quality_service._quality_loop import quality_refinement_loop
+
+        call_count = 0
+
+        def create_fn(retries: int) -> dict:
+            """First call succeeds, second (hail-mary) raises VRAM error."""
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {"name": "Test"}
+            raise WorldGenerationError("hail-mary oom") from VRAMAllocationError(
+                "oom", model_id="test:8b"
+            )
+
+        def judge_fn(entity: dict) -> BaseQualityScores:
+            """Return failing scores to trigger refinement loop exhaustion."""
+            return BaseQualityScores(feedback="bad")
+
+        def refine_fn(entity: dict, scores, iteration: int) -> dict:
+            """Return unchanged entity (still fails quality)."""
+            return entity
+
+        config = RefinementConfig(
+            max_iterations=2,  # >1 required for hail-mary, low to exhaust quickly
+            quality_threshold=9.0,  # High threshold — always fails
+            quality_thresholds={"test_entity": 9.0},
+            dimension_minimum=0.0,
+            early_stopping_patience=10,
+        )
+
+        with pytest.raises(WorldGenerationError, match="hail-mary oom"):
+            quality_refinement_loop(
+                entity_type="test_entity",
+                create_fn=create_fn,
+                judge_fn=judge_fn,
+                refine_fn=refine_fn,
+                get_name=lambda e: "test",
+                serialize=lambda e: {},
+                is_empty=lambda e: False,
+                score_cls=BaseQualityScores,
+                config=config,
+                svc=MagicMock(),
+                story_id="test-story",
+            )
+
+
+# ──── Phase 1P: _model_fits_in_vram unexpected exception path ────
+
+
+class TestModelFitsUnexpectedException:
+    """Tests for unexpected exception path in _model_fits_in_vram."""
+
+    @patch("src.services.world_quality_service._model_resolver.get_available_vram")
+    @patch("src.services.world_quality_service._model_resolver.get_installed_models_with_sizes")
+    def test_unexpected_exception_logs_warning_and_returns_true(
+        self, mock_installed, mock_vram, caplog
+    ):
+        """Unexpected exception should log a warning and return True (optimistic)."""
+        from src.services.world_quality_service._model_resolver import _model_fits_in_vram
+
+        mock_installed.side_effect = RuntimeError("unexpected GPU driver error")
+
+        with caplog.at_level(logging.WARNING):
+            result = _model_fits_in_vram("test-model:8b")
+
+        assert result is True
+        assert "Unexpected VRAM check failure" in caplog.text
