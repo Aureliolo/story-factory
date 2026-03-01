@@ -23,6 +23,12 @@ def mock_services():
 class TestWarmModels:
     """Tests for _warm_models helper function."""
 
+    @pytest.fixture(autouse=True)
+    def _patch_prepare_model(self):
+        """Bypass VRAM preparation in warmup tests — tested separately."""
+        with patch("src.services.world_service._warmup.prepare_model"):
+            yield
+
     def test_warms_both_models(self, mock_services):
         """Test that both creator and judge models get warmed."""
         with patch("src.services.world_service._warmup.get_ollama_client") as mock_get_client:

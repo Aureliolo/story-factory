@@ -176,6 +176,7 @@ class TestWorldPageCaching:
         state.entity_quality_filter = "all"
         state.entity_sort_by = "name"
         state.entity_sort_descending = False
+        state.build_in_progress = False
 
         services = MagicMock()
 
