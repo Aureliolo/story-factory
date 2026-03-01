@@ -28,7 +28,9 @@ _VRAM_SNAPSHOT_TTL = 30.0
 # retrying avoids a pessimistic cascade into self-judging mode.
 _VRAM_ZERO_RETRY_COUNT = 3
 _VRAM_ZERO_RETRY_DELAY_S = 0.5
-_VRAM_ZERO_FALLBACK_MAX_AGE_S = 2 * _VRAM_SNAPSHOT_TTL  # Max age for stale fallback
+_VRAM_ZERO_FALLBACK_MAX_AGE_S = (
+    2 * _VRAM_SNAPSHOT_TTL
+)  # Use previous snapshot only if younger than this
 
 
 @dataclass(frozen=True)
@@ -54,7 +56,7 @@ class VRAMSnapshot:
     Cached for ``_VRAM_SNAPSHOT_TTL`` seconds to avoid repeated subprocess calls.
     """
 
-    available_vram_gb: float  # Free VRAM from nvidia-smi (GiB converted to GB)
+    available_vram_gb: float  # Free VRAM from nvidia-smi in GiB (integer division of MiB/1024)
     installed_models: dict[str, float]  # model_id -> size_gb from ``ollama list``
     timestamp: float
 

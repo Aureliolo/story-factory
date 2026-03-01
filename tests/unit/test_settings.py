@@ -3360,6 +3360,19 @@ class TestGetScaledTimeout:
 
         assert timeout == 120.0
 
+    def test_unexpected_exception_propagates_from_get_model_info(self):
+        """AttributeError (not in narrowed catch list) propagates from get_model_info."""
+        from unittest.mock import patch
+
+        with patch(
+            "src.settings._utils.get_model_info",
+            side_effect=AttributeError("broken get_model_info"),
+        ):
+            settings = Settings()
+            settings.ollama_timeout = 120
+            with pytest.raises(AttributeError, match="broken get_model_info"):
+                settings.get_scaled_timeout("bad-model:xyz")
+
     def test_zero_size_returns_base_timeout(self):
         """Model with zero size should return base timeout."""
         from unittest.mock import patch

@@ -12,7 +12,12 @@ from collections.abc import Callable
 from concurrent.futures import Future
 
 from src.memory.world_quality import BaseQualityScores
-from src.utils.exceptions import VRAMAllocationError, summarize_llm_error
+from src.utils.exceptions import (
+    DatabaseClosedError,
+    GenerationCancelledError,
+    VRAMAllocationError,
+    summarize_llm_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -109,10 +114,14 @@ def _collect_late_results[T, S: BaseQualityScores](
                 entity_type,
                 entity_name,
             )
+        except MemoryError, RecursionError:
+            raise
         except Exception as late_err:
-            if isinstance(late_err, (MemoryError, RecursionError)):
+            if isinstance(late_err, VRAMAllocationError) or isinstance(
+                getattr(late_err, "__cause__", None), VRAMAllocationError
+            ):
                 raise
-            if isinstance(getattr(late_err, "__cause__", None), VRAMAllocationError):
+            if isinstance(late_err, (GenerationCancelledError, DatabaseClosedError)):
                 raise
             late_msg = summarize_llm_error(late_err, max_length=200)
             errors.append(late_msg)

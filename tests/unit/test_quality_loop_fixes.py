@@ -682,6 +682,18 @@ class TestResolveModelPairVRAM:
         assert creator == "creator-model:8b"
         assert judge == "judge-model:8b"
 
+    @patch(
+        "src.services.world_quality_service._model_resolver.get_vram_snapshot",
+        side_effect=TypeError("unexpected type from broken VRAM logic"),
+    )
+    def test_unexpected_exception_propagates_from_vram_check(self, mock_snapshot):
+        """TypeError (not in narrowed catch list) propagates instead of being swallowed."""
+        from src.services.world_quality_service._model_resolver import resolve_model_pair
+
+        svc = self._make_service()
+        with pytest.raises(TypeError, match="unexpected type"):
+            resolve_model_pair(svc, "character")
+
     @patch("src.services.world_quality_service._model_resolver.pair_fits", return_value=True)
     @patch("src.services.world_quality_service._model_resolver.get_vram_snapshot")
     def test_pair_fits_returns_both_models(self, mock_snapshot, mock_pair_fits):

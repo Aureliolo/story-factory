@@ -17,6 +17,7 @@ from src.memory.world_calendar import CalendarMonth, HistoricalEra, WorldCalenda
 from src.services.temporal_validation_service import (
     TemporalErrorSeverity,
     TemporalErrorType,
+    TemporalValidationIssue,
     TemporalValidationResult,
     TemporalValidationService,
 )
@@ -2151,6 +2152,36 @@ class TestValidateWorldCache:
         assert result1 is not result2
         # list_relationships should only be called once (skipped on cache hit)
         world_db.list_relationships.assert_called_once()
+
+    def test_validate_world_cache_mutation_isolation(self):
+        """Mutating a cached result should not corrupt subsequent cache hits."""
+        from src.settings import Settings
+
+        settings = Settings()
+        settings.validate_temporal_consistency = True
+        service = TemporalValidationService(settings)
+
+        world_db = self._make_world_db_mock()
+
+        result1 = service.validate_world(world_db)
+        original_error_count = len(result1.errors)
+
+        # Mutate the returned result — should NOT affect cached copy
+        result1.errors.append(
+            TemporalValidationIssue(
+                entity_id="injected",
+                entity_name="Injected",
+                entity_type="character",
+                error_type=TemporalErrorType.MISSING_TEMPORAL_DATA,
+                severity=TemporalErrorSeverity.ERROR,
+                message="Injected error",
+            )
+        )
+        assert len(result1.errors) == original_error_count + 1
+
+        # Get another copy from cache — should be unaffected by mutation
+        result2 = service.validate_world(world_db)
+        assert len(result2.errors) == original_error_count
 
     def test_validate_world_cache_expires(self):
         """After the cache TTL expires, validate_world re-validates."""

@@ -40,6 +40,18 @@ class TestSanitizeEventText:
         """Strip markdown-wrapped title prefix like '**Event Title:** The Storm'."""
         assert _sanitize_event_text("**Event Title:** The Storm") == "The Storm"
 
+    def test_sanitize_bold_wrapping_entire_title_prefix(self):
+        """Strip bold wrapping entire string including title prefix."""
+        assert _sanitize_event_text("**Event Title: The Storm**") == "The Storm"
+
+    def test_sanitize_italic_wrapped_title_prefix(self):
+        """Strip italic-wrapped title prefix like '*Event Title:* The Storm'."""
+        assert _sanitize_event_text("*Event Title:* The Storm") == "The Storm"
+
+    def test_sanitize_leading_whitespace_after_markdown_strip(self):
+        """Leading whitespace after markdown strip should not prevent title prefix removal."""
+        assert _sanitize_event_text("** Event Title: ** The Storm") == "The Storm"
+
 
 class TestBuildEventTimestampH2:
     """Tests for build_event_timestamp H2 changes (era resolution + warning)."""

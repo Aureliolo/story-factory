@@ -43,7 +43,7 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
     """Configure logging for the application.
 
     Args:
-        level: Log level (DEBUG, INFO, WARNING, ERROR)
+        level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         log_file: File path for logs. "default" uses logs/story_factory.log,
                   None disables file logging.
     """

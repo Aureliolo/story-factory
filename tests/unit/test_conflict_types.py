@@ -34,12 +34,16 @@ class TestProseSentimentKeywordNormalization:
         """_reset_warned_types clears the warned-types dedup set."""
         from src.memory.conflict_types import _warned_types
 
-        # Add a sentinel to the dedup set
-        _warned_types.add("__test_sentinel__")
-        assert "__test_sentinel__" in _warned_types
+        try:
+            # Add a sentinel to the dedup set
+            _warned_types.add("__test_sentinel__")
+            assert "__test_sentinel__" in _warned_types
 
-        _reset_warned_types()
-        assert "__test_sentinel__" not in _warned_types
+            _reset_warned_types()
+            assert "__test_sentinel__" not in _warned_types
+        finally:
+            # Ensure cleanup even if assertions fail
+            _warned_types.discard("__test_sentinel__")
 
     def test_validate_word_to_relation_raises_on_invalid(self, monkeypatch):
         """_validate_word_to_relation raises RuntimeError for unknown relation types."""

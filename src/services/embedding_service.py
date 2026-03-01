@@ -48,7 +48,7 @@ _truncation_warned_lock = threading.Lock()
 
 
 def _reset_truncation_warnings() -> None:
-    """Reset truncation dedup so re-embedding logs fresh warnings."""
+    """Reset truncation dedup so re-embedding and callback-driven embedding log fresh warnings."""
     with _truncation_warned_lock:
         cleared_count = len(_truncation_warned)
         _truncation_warned.clear()

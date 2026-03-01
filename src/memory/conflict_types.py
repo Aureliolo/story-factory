@@ -404,7 +404,9 @@ _warned_types_lock = threading.Lock()
 def _reset_warned_types() -> None:
     """Reset the warned-types dedup set (for test teardown)."""
     with _warned_types_lock:
+        cleared_count = len(_warned_types)
         _warned_types.clear()
+    logger.debug("Reset warned-types dedup set (cleared=%d)", cleared_count)
 
 
 @functools.lru_cache(maxsize=256)

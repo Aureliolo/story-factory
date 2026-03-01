@@ -867,7 +867,7 @@ class TestCollectLateResults:
             completed_times: list[float] = []
             errors: list[str] = []
 
-            with pytest.raises(WorldGenerationError):
+            with pytest.raises(WorldGenerationError) as exc_info:
                 _collect_late_results(
                     pending,
                     results,
@@ -877,6 +877,7 @@ class TestCollectLateResults:
                     lambda e: e["name"],
                     None,
                 )
+            assert isinstance(exc_info.value.__cause__, VRAMAllocationError)
 
     def test_on_success_called_for_late_results(self):
         """on_success hook is invoked for each successful late result."""
@@ -2353,6 +2354,14 @@ class TestGenerateBatchPhased:
             """Refinement raises WorldGenerationError without VRAM cause."""
             raise WorldGenerationError("LLM returned garbage")
 
+        refine_call_count = 0
+
+        def refine_fn_world_err_counted(entity):
+            """Refinement raises WorldGenerationError (counted)."""
+            nonlocal refine_call_count
+            refine_call_count += 1
+            raise WorldGenerationError("LLM returned garbage")
+
         with caplog.at_level(logging.WARNING):
             _generate_batch_parallel(
                 svc=phased_svc,
@@ -2366,12 +2375,14 @@ class TestGenerateBatchPhased:
                 create_only_fn=create_fn,
                 judge_only_fn=lambda e: scores,
                 is_empty_fn=lambda e: not e.get("name"),
-                refine_with_initial_fn=refine_fn_world_err,
+                refine_with_initial_fn=refine_fn_world_err_counted,
                 prepare_creator_fn=lambda: None,
                 prepare_judge_fn=lambda: None,
             )
 
         assert any("duplicate retry failed" in msg for msg in caplog.messages)
+        # WorldGenerationError should break the retry loop after first attempt
+        assert refine_call_count == 1
 
     def test_phased_duplicate_retry_fails_with_exception(self, phased_svc, caplog):
         """Phase 3 duplicate retry fails with non-DuplicateNameError exception."""
@@ -2477,7 +2488,7 @@ class TestGenerateBatchPhased:
             gen_err.__cause__ = vram_err
             raise gen_err
 
-        with pytest.raises(WorldGenerationError, match="VRAM exhausted"):
+        with pytest.raises(WorldGenerationError, match="VRAM exhausted") as exc_info:
             _generate_batch_parallel(
                 svc=phased_svc,
                 count=2,
@@ -2494,6 +2505,7 @@ class TestGenerateBatchPhased:
                 prepare_creator_fn=lambda: None,
                 prepare_judge_fn=lambda: None,
             )
+        assert isinstance(exc_info.value.__cause__, VRAMAllocationError)
 
 
 # ---------------------------------------------------------------------------

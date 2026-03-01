@@ -875,7 +875,7 @@ class Settings:
         base_timeout = float(self.ollama_timeout)
         try:
             info = get_model_info(model_id)
-            size_gb = info["size_gb"]
+            size_gb = float(info["size_gb"])
         except (KeyError, ValueError, TypeError) as e:
             logger.debug(
                 "Could not get model info for %r (%s: %s), using base timeout",

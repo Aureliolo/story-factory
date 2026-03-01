@@ -1,6 +1,5 @@
 """Temporal validation service - validates temporal consistency of world entities."""
 
-import copy
 import logging
 import sqlite3
 import time
@@ -226,7 +225,7 @@ class TemporalValidationService:
                     "Returning cached temporal validation result (age=%.1fs)",
                     now - cached_time,
                 )
-                return copy.deepcopy(cached_result)
+                return cached_result.model_copy(deep=True)
 
         # Get all relationships
         all_relationships = [
@@ -260,7 +259,7 @@ class TemporalValidationService:
         )
 
         # L2: populate cache (deep copy so callers can't mutate cached state)
-        self._result_cache = (cache_key, time.monotonic(), copy.deepcopy(result))
+        self._result_cache = (cache_key, time.monotonic(), result.model_copy(deep=True))
 
         return result
 

@@ -18,7 +18,9 @@ from src.services.world_quality_service._batch_helpers import (
     _ThreadSafeRelsList,
 )
 from src.utils.exceptions import (
+    DatabaseClosedError,
     DuplicateNameError,
+    GenerationCancelledError,
     VRAMAllocationError,
     WorldGenerationError,
     summarize_llm_error,
@@ -549,6 +551,14 @@ def _generate_batch_phased[T, S: BaseQualityScores](
                 if register_created_fn:
                     try:
                         register_created_fn(entity)
+                    except (
+                        GenerationCancelledError,
+                        DatabaseClosedError,
+                        VRAMAllocationError,
+                        MemoryError,
+                        RecursionError,
+                    ):
+                        raise
                     except Exception as reg_err:
                         logger.warning(
                             "Phase 1: register_created_fn failed for %s %d/%d '%s': %s",
@@ -730,28 +740,38 @@ def _generate_batch_phased[T, S: BaseQualityScores](
                             retry_entity, retry_scores, _iters = refine_with_initial_fn(entity)
                             if on_success:
                                 on_success(retry_entity)
+                            retry_name = get_name(retry_entity)
                             results.append((retry_entity, retry_scores))
                             completed_times.append(time.time() - entity_start)
+                            _dup_recovered = True
                             if progress_callback:
-                                progress_callback(
-                                    EntityGenerationProgress(
-                                        current=min(len(results), count),
-                                        total=count,
-                                        entity_type=entity_type,
-                                        entity_name=get_name(retry_entity),
-                                        phase="complete",
-                                        elapsed_seconds=time.time() - batch_start_time,
-                                        estimated_remaining_seconds=svc._calculate_eta(
-                                            completed_times, max(count - len(results), 0)
-                                        ),
+                                try:
+                                    progress_callback(
+                                        EntityGenerationProgress(
+                                            current=min(len(results), count),
+                                            total=count,
+                                            entity_type=entity_type,
+                                            entity_name=retry_name,
+                                            phase="complete",
+                                            elapsed_seconds=time.time() - batch_start_time,
+                                            estimated_remaining_seconds=svc._calculate_eta(
+                                                completed_times,
+                                                max(count - len(results), 0),
+                                            ),
+                                        )
                                     )
-                                )
+                                except Exception as callback_err:
+                                    logger.warning(
+                                        "Phase 3: progress_callback failed after duplicate "
+                                        "recovery for %s: %s",
+                                        entity_type,
+                                        callback_err,
+                                    )
                             logger.info(
                                 "Phase 3: recovered duplicate %s via retry %d",
                                 entity_type,
                                 _retry + 1,
                             )
-                            _dup_recovered = True
                             break
                         except DuplicateNameError as inner_dup:
                             logger.debug(
@@ -763,6 +783,8 @@ def _generate_batch_phased[T, S: BaseQualityScores](
                             continue
                         except MemoryError, RecursionError, KeyboardInterrupt, SystemExit:
                             raise
+                        except VRAMAllocationError:
+                            raise  # Non-retryable — must propagate to stop the batch
                         except WorldGenerationError as retry_err:
                             if isinstance(
                                 getattr(retry_err, "__cause__", None), VRAMAllocationError
