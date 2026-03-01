@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.memory.conflict_types import normalize_relation_type
+from src.memory.conflict_types import _reset_warned_types, normalize_relation_type
 
 
 class TestProseSentimentKeywordNormalization:
@@ -29,6 +29,17 @@ class TestProseSentimentKeywordNormalization:
         """normalize_relation_type('partnership') should map to 'allies_with'."""
         result = normalize_relation_type("partnership")
         assert result == "allies_with"
+
+    def test_reset_warned_types_clears_dedup_set(self):
+        """_reset_warned_types clears the warned-types dedup set."""
+        from src.memory.conflict_types import _warned_types
+
+        # Add a sentinel to the dedup set
+        _warned_types.add("__test_sentinel__")
+        assert "__test_sentinel__" in _warned_types
+
+        _reset_warned_types()
+        assert "__test_sentinel__" not in _warned_types
 
     def test_validate_word_to_relation_raises_on_invalid(self, monkeypatch):
         """_validate_word_to_relation raises RuntimeError for unknown relation types."""
