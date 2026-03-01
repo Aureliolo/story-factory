@@ -39,6 +39,11 @@ _MIN_CONTENT_LENGTH = 10  # Minimum content length to be worth embedding
 _warned_context_models: set[str] = set()
 _warned_context_models_lock = threading.Lock()
 
+# M7: Track entity labels for which a truncation warning has already fired.
+# Second+ truncations for the same label log at DEBUG instead of WARNING.
+_truncation_warned: set[str] = set()
+_truncation_warned_lock = threading.Lock()
+
 
 class EmbeddingService:
     """Generates and manages vector embeddings for world content.
@@ -192,7 +197,15 @@ class EmbeddingService:
                     sentence_end_pos = m.start()
             if sentence_end_pos > 0:
                 truncated = truncated[: sentence_end_pos + 1]  # Include the terminator
-            logger.warning(
+            # M7: dedup truncation warnings — first per entity_name at WARNING,
+            # subsequent at DEBUG to reduce log noise during batch embedding.
+            dedup_key = entity_name or label
+            with _truncation_warned_lock:
+                first_time = dedup_key not in _truncation_warned
+                if first_time:
+                    _truncation_warned.add(dedup_key)
+            log_fn = logger.warning if first_time else logger.debug
+            log_fn(
                 "Truncating %s description for embedding (desc %d -> %d chars)%s",
                 label.lower(),
                 len(text),

@@ -506,6 +506,9 @@ class Settings:
         self.validate()
         _create_settings_backup(SETTINGS_FILE)
         _atomic_write_json(SETTINGS_FILE, asdict(self))
+        # M2: populate cache so the next load(use_cache=True) returns
+        # this already-validated instance without re-reading from disk.
+        Settings._cached_instance = self
 
     def validate(self) -> bool:
         """Validate all settings fields. Delegates to _validation module.

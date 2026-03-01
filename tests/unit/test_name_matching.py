@@ -211,6 +211,18 @@ class TestNormalizeName:
         """Articles in the middle of the name should be preserved."""
         assert _normalize_name("Bridge of the Ancients") == "bridge of the ancients"
 
+    def test_normalize_strips_brackets(self):
+        """Surrounding square brackets are stripped before lowercasing."""
+        assert _normalize_name("[Captain Waddleton]") == "captain waddleton"
+
+    def test_normalize_nested_brackets(self):
+        """Only the outer layer of brackets is stripped."""
+        assert _normalize_name("[[Some Name]]") == "[some name]"
+
+    def test_normalize_clean_name_noop(self):
+        """A name without brackets is only lowercased and whitespace-collapsed."""
+        assert _normalize_name("Captain Waddleton") == "captain waddleton"
+
 
 # =========================================================================
 # _find_entity_by_name: existing behavior preserved

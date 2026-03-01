@@ -1,8 +1,7 @@
 """Parallel batch generation for entity pipelines.
 
-Extracted from ``_batch.py`` to keep both modules under the 1000-line limit.
-Provides :class:`_ThreadSafeRelsList` and :func:`_generate_batch_parallel`,
-which are used exclusively by ``generate_relationships_with_quality``.
+Provides :class:`_ThreadSafeRelsList`, :func:`_generate_batch_parallel`,
+and :func:`_generate_batch_phased`.
 """
 
 import concurrent.futures as cf
@@ -378,12 +377,8 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
                     )
 
                 except DuplicateNameError as e:
-                    # Don't count duplicates as consecutive failures —
-                    # they're expected race outcomes in parallel generation.
-                    # Extend the submission bound so a replacement task
-                    # is submitted, keeping the final result count on target.
-                    # Record in errors so all-duplicate runs raise instead
-                    # of silently returning [].
+                    # Expected race outcome — extend submission bound for replacement;
+                    # record in errors so all-duplicate runs raise instead of returning [].
                     duplicate_msg = summarize_llm_error(e, max_length=200)
                     duplicates_found += 1
                     errors.append(duplicate_msg)
@@ -721,8 +716,7 @@ def _generate_batch_phased[T, S: BaseQualityScores](
                 entity_name,
                 error_msg,
             )
-            # Entity created successfully but judge failed — still worth
-            # attempting refinement (which includes its own judge call).
+            # Judge failed — still worth attempting refinement (includes its own judge).
             judged.append((idx, entity, None, False))  # type: ignore[arg-type]
         except MemoryError, RecursionError, KeyboardInterrupt, SystemExit:
             raise
@@ -784,9 +778,36 @@ def _generate_batch_phased[T, S: BaseQualityScores](
                         )
                     )
             except DuplicateNameError as e:
+                # H4: retry via refine to recover the slot (up to 2 attempts)
                 dup_msg = summarize_llm_error(e, max_length=200)
-                errors.append(dup_msg)
-                logger.warning("Phase 3: duplicate %s rejected: %s", entity_type, dup_msg)
+                _dup_recovered = False
+                if refine_with_initial_fn is not None:
+                    for _retry in range(2):
+                        try:
+                            retry_entity, retry_scores, _iters = refine_with_initial_fn(entity)
+                            if on_success:
+                                on_success(retry_entity)
+                            results.append((retry_entity, retry_scores))
+                            completed_times.append(time.time() - entity_start)
+                            logger.info(
+                                "Phase 3: recovered duplicate %s via retry %d",
+                                entity_type,
+                                _retry + 1,
+                            )
+                            _dup_recovered = True
+                            break
+                        except DuplicateNameError:
+                            continue
+                        except MemoryError, RecursionError, KeyboardInterrupt, SystemExit:
+                            raise
+                        except Exception as retry_err:
+                            logger.warning(
+                                "Phase 3: duplicate retry failed for %s: %s", entity_type, retry_err
+                            )
+                            break
+                if not _dup_recovered:
+                    errors.append(dup_msg)
+                    logger.warning("Phase 3: duplicate %s rejected: %s", entity_type, dup_msg)
             except WorldGenerationError as e:
                 # VRAMAllocationError is non-retryable — stop the entire batch
                 if isinstance(e.__cause__, VRAMAllocationError):

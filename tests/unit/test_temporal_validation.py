@@ -1,7 +1,7 @@
 """Tests for temporal validation service."""
 
 import logging
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -2114,3 +2114,72 @@ class TestCheckLifespanPlausibility:
 
         assert len(result.warnings) == 1
         assert "400 years" in result.warnings[0].message
+
+
+class TestValidateWorldCache:
+    """Tests for validate_world result cache (L2)."""
+
+    def _make_world_db_mock(self):
+        """Create a minimal WorldDatabase mock for cache tests."""
+        world_db = MagicMock()
+        world_db.list_entities.return_value = []
+        world_db.list_relationships.return_value = []
+        world_db.get_world_settings.return_value = None
+        return world_db
+
+    def test_validate_world_cache_hit(self):
+        """Two calls to validate_world with same world_db return cached result (no re-query).
+
+        Note: list_entities() is called on every invocation to compute the cache key
+        (db identity + entity count). The cache prevents list_relationships() and
+        entity validation from running again.
+        """
+        from src.settings import Settings
+
+        settings = Settings()
+        settings.validate_temporal_consistency = True
+        service = TemporalValidationService(settings)
+
+        world_db = self._make_world_db_mock()
+
+        result1 = service.validate_world(world_db)
+        result2 = service.validate_world(world_db)
+
+        # Second call should return the cached result
+        assert result1 is result2
+        # list_relationships should only be called once (skipped on cache hit)
+        world_db.list_relationships.assert_called_once()
+
+    def test_validate_world_cache_expires(self):
+        """After the cache TTL expires, validate_world re-validates."""
+        from src.services.temporal_validation_service import _VALIDATION_CACHE_TTL
+        from src.settings import Settings
+
+        settings = Settings()
+        settings.validate_temporal_consistency = True
+        service = TemporalValidationService(settings)
+
+        world_db = self._make_world_db_mock()
+
+        # Use monotonic time mocking to simulate TTL expiration
+        base_time = 1000.0
+        monotonic_values = iter(
+            [
+                base_time,  # validate_world call 1: now
+                base_time,  # validate_world call 1: cache store
+                base_time + _VALIDATION_CACHE_TTL + 1.0,  # call 2: now (past TTL)
+                base_time + _VALIDATION_CACHE_TTL + 1.0,  # call 2: cache store
+            ]
+        )
+
+        with patch(
+            "src.services.temporal_validation_service.time.monotonic",
+            side_effect=lambda: next(monotonic_values),
+        ):
+            result1 = service.validate_world(world_db)
+            result2 = service.validate_world(world_db)
+
+        # After TTL expiration, list_entities should be called again
+        assert world_db.list_entities.call_count == 2
+        # Results should be different objects (re-validated)
+        assert result1 is not result2

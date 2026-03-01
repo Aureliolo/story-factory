@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from src.services.model_mode_service._vram import MIN_GPU_RESIDENCY, prepare_model
 from src.services.model_mode_service._vram_budget import get_vram_snapshot, pair_fits
-from src.settings import get_available_vram, get_installed_models_with_sizes
+from src.settings import RECOMMENDED_MODELS, get_available_vram, get_installed_models_with_sizes
 from src.utils.exceptions import VRAMAllocationError
 
 if TYPE_CHECKING:
@@ -304,6 +304,23 @@ def get_judge_model(service: WorldQualityService, entity_type: str | None = None
             conflict_key = f"{entity_type}:{model}"
             if not service._model_cache.has_warned_conflict(conflict_key):
                 service._model_cache.mark_conflict_warned(conflict_key)
+                # Check quality score to flag unreliable self-judging
+                model_quality = 5.0
+                if model in RECOMMENDED_MODELS:
+                    model_quality = RECOMMENDED_MODELS[model]["quality"]
+                else:
+                    for rec_id, info in RECOMMENDED_MODELS.items():
+                        if model.startswith(rec_id.split(":")[0]):
+                            model_quality = info["quality"]
+                            break
+                if model_quality < 7.0:
+                    logger.warning(
+                        "Self-judging with sub-threshold model '%s' (quality=%.1f) "
+                        "for %s. Quality scores are likely inflated.",
+                        model,
+                        model_quality,
+                        entity_type,
+                    )
                 logger.warning(
                     "Judge model '%s' is the same as creator model for entity_type=%s "
                     "and no alternative model is available across judge/architect/continuity "

@@ -23,6 +23,12 @@ logger = logging.getLogger(__name__)
 # the same quality loop iteration.
 _VRAM_SNAPSHOT_TTL = 30.0
 
+# Retry parameters for transient 0 GB VRAM readings during model eviction.
+# nvidia-smi may report 0 GB available while Ollama is evicting a model;
+# retrying avoids a pessimistic cascade into self-judging mode.
+_VRAM_ZERO_RETRY_COUNT = 3
+_VRAM_ZERO_RETRY_DELAY_S = 0.5
+
 
 @dataclass(frozen=True)
 class VRAMBudget:
@@ -79,6 +85,10 @@ def get_vram_snapshot() -> VRAMSnapshot:
             )
             return _cached_snapshot
 
+    # Read previous snapshot under lock before starting (used for zero-retry fallback)
+    with _snapshot_lock:
+        previous_snapshot = _cached_snapshot
+
     # Build fresh snapshot outside the lock (subprocess calls are slow)
     from src.settings import get_available_vram, get_installed_models_with_sizes
 
@@ -87,6 +97,43 @@ def get_vram_snapshot() -> VRAMSnapshot:
     except (ConnectionError, TimeoutError, FileNotFoundError, OSError, ValueError) as e:
         logger.warning("Could not query available VRAM — pair-fit check will be pessimistic: %s", e)
         available = 0.0
+
+    # Retry when nvidia-smi reports 0 GB but a previous snapshot had VRAM.
+    # This happens transiently during model eviction.
+    if (
+        available == 0.0
+        and previous_snapshot is not None
+        and previous_snapshot.available_vram_gb > 0
+    ):
+        for attempt in range(1, _VRAM_ZERO_RETRY_COUNT + 1):
+            logger.warning(
+                "VRAM snapshot returned 0 GB (previous was %.1f GB) — retry %d/%d after %.1fs",
+                previous_snapshot.available_vram_gb,
+                attempt,
+                _VRAM_ZERO_RETRY_COUNT,
+                _VRAM_ZERO_RETRY_DELAY_S,
+            )
+            time.sleep(_VRAM_ZERO_RETRY_DELAY_S)
+            try:
+                available = float(get_available_vram())
+            except ConnectionError, TimeoutError, FileNotFoundError, OSError, ValueError:
+                continue
+            if available > 0:
+                logger.info(
+                    "VRAM snapshot recovered to %.1f GB on retry %d",
+                    available,
+                    attempt,
+                )
+                break
+        else:
+            # All retries exhausted — use previous snapshot value with warning
+            logger.warning(
+                "VRAM snapshot still 0 GB after %d retries — "
+                "using previous value %.1f GB to avoid self-judging cascade",
+                _VRAM_ZERO_RETRY_COUNT,
+                previous_snapshot.available_vram_gb,
+            )
+            available = previous_snapshot.available_vram_gb
 
     try:
         installed = get_installed_models_with_sizes()

@@ -1240,6 +1240,7 @@ class TestModelServiceStateChangeLogging:
 
             model_service.list_installed_with_sizes()
             caplog.clear()
+            model_service._installed_with_sizes_cache.invalidate()
 
             model_service.list_installed_with_sizes()
 
@@ -1737,3 +1738,30 @@ class TestColdStartDedup:
                     result = model_service.check_health()
 
         assert result.cold_start_models.count(shared_model) == 1
+
+
+class TestListInstalledWithSizesCache:
+    """Tests for list_installed_with_sizes TTL cache (H7)."""
+
+    def test_list_installed_with_sizes_uses_cache(self, model_service):
+        """Second call within TTL returns cached result without calling _fetch_model_list."""
+        mock_model = MagicMock(model="test-model:8b", size=8 * 1024**3)
+        model_service._fetch_model_list = MagicMock(return_value=[mock_model])
+
+        result1 = model_service.list_installed_with_sizes()
+        result2 = model_service.list_installed_with_sizes()
+
+        assert model_service._fetch_model_list.call_count == 1
+        assert result1 == result2
+        assert result1["test-model:8b"] == 8.0
+
+    def test_list_installed_with_sizes_cache_invalidation(self, model_service):
+        """After invalidate_caches(), next call should fetch again."""
+        mock_model = MagicMock(model="test-model:8b", size=8 * 1024**3)
+        model_service._fetch_model_list = MagicMock(return_value=[mock_model])
+
+        model_service.list_installed_with_sizes()
+        model_service.invalidate_caches()
+        model_service.list_installed_with_sizes()
+
+        assert model_service._fetch_model_list.call_count == 2

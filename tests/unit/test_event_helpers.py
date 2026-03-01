@@ -7,17 +7,87 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import ValidationError
 
-from src.memory.entities import WorldEvent
+from src.memory.entities import Entity, WorldEvent
 from src.memory.story_state import EventParticipantEntry, WorldEventCreation
 from src.services.world_service._event_helpers import (
     _extract_lifecycle_temporal,
     _generate_events,
     _parse_lifecycle_sub,
+    _sanitize_event_text,
     build_event_entity_context,
     build_event_timestamp,
     resolve_event_participants,
 )
 from src.utils.exceptions import GenerationCancelledError
+
+
+class TestSanitizeEventText:
+    """Tests for _sanitize_event_text (H1)."""
+
+    def test_sanitize_bold(self):
+        """Strip **bold** markdown from event text."""
+        assert _sanitize_event_text("**The Fall**") == "The Fall"
+
+    def test_sanitize_italic(self):
+        """Strip *italic* markdown from event text."""
+        assert _sanitize_event_text("*The Rise*") == "The Rise"
+
+    def test_sanitize_title_prefix(self):
+        """Strip 'Event Title:' prefix from event text."""
+        assert _sanitize_event_text("Event Title: The Storm") == "The Storm"
+
+
+class TestBuildEventTimestampH2:
+    """Tests for build_event_timestamp H2 changes (era resolution + warning)."""
+
+    def test_build_event_timestamp_empty_logs_warning(self, caplog):
+        """Event with no year/month/era returns empty string and logs WARNING."""
+        event: dict[str, object] = {}
+
+        with caplog.at_level(logging.WARNING, logger="src.services.world_service._event_helpers"):
+            result = build_event_timestamp(event)
+
+        assert result == ""
+        assert "no temporal fields" in caplog.text
+
+    def test_build_event_timestamp_era_resolution(self):
+        """Year present + no era + calendar provided -> auto-resolves era."""
+        mock_era = MagicMock()
+        mock_era.name = "Dark Age"
+
+        mock_calendar = MagicMock()
+        mock_calendar.get_era_for_year.return_value = mock_era
+
+        event: dict[str, object] = {"year": 1200}
+
+        result = build_event_timestamp(event, calendar=mock_calendar)
+
+        assert result == "Year 1200, Dark Age"
+        mock_calendar.get_era_for_year.assert_called_once_with(1200)
+
+
+class TestResolveParticipantsStripsBrackets:
+    """Tests for resolve_event_participants M6 bracket-stripping."""
+
+    def test_resolve_participants_strips_brackets(self):
+        """Participant name '[Captain Waddleton]' gets brackets stripped and matched."""
+        entity = Entity(
+            id="e-cap",
+            type="character",
+            name="Captain Waddleton",
+            description="A brave captain",
+        )
+
+        event: dict[str, object] = {
+            "participants": [
+                {"entity_name": "[Captain Waddleton]", "role": "instigator"},
+            ],
+        }
+
+        resolved, dropped = resolve_event_participants(event, [entity], threshold=0.8)
+
+        assert resolved == [("e-cap", "instigator")]
+        assert dropped == []
 
 
 class TestParseLifecycleSub:

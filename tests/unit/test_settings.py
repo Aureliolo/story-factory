@@ -873,6 +873,28 @@ class TestSettingsSaveLoad:
 
         assert settings1 is not settings2
 
+    def test_save_then_cached_load_skips_validate(self, tmp_path, monkeypatch):
+        """After save(), load(use_cache=True) returns cached instance without re-validating.
+
+        M2: save() populates _cached_instance so the next load() returns it directly
+        without calling validate() again.
+        """
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+        Settings.clear_cache()
+
+        settings = Settings()
+        settings.save()
+
+        # Patch validate to track calls — it should NOT be called during load
+        with patch.object(Settings, "validate", wraps=settings.validate) as mock_validate:
+            loaded = Settings.load(use_cache=True)
+
+        # load() should return the same instance that save() cached
+        assert loaded is settings
+        # validate() should NOT have been called by load()
+        mock_validate.assert_not_called()
+
     def test_load_with_old_agent_models_preserves_settings(self, tmp_path, monkeypatch):
         """Loading settings with missing agent roles doesn't nuke everything."""
         settings_file = tmp_path / "settings.json"

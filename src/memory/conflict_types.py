@@ -354,6 +354,40 @@ def normalize_relation_type(raw_type: str) -> str:
         )
         return best_type
 
+    # L1: Prose sentiment keyword fallback — catch descriptive phrases like
+    # "admiration", "hostility", "partnership" that don't match word-level lookup.
+    _PROSE_SENTIMENT_KEYWORDS: dict[str, str] = {
+        "admiration": "trusts",
+        "admire": "admires",
+        "hostility": "enemy_of",
+        "partnership": "allies_with",
+        "cooperation": "allies_with",
+        "friendship": "friends",
+        "animosity": "enemy_of",
+        "antagonism": "rivals",
+        "camaraderie": "friends",
+        "enmity": "enemy_of",
+        "affection": "cares_for",
+        "devotion": "devoted_to",
+        "respect": "respects",
+        "distrust": "distrusts",
+        "suspicion": "suspects",
+        "reverence": "admires",
+        "rivalry": "rivals",
+        "alliance": "allies_with",
+        "loyalty": "loyal_to",
+        "tension": "conflicts_with",
+    }
+    for keyword, mapped_type in _PROSE_SENTIMENT_KEYWORDS.items():
+        if keyword in normalized:
+            logger.debug(
+                "Normalized prose sentiment '%s' -> '%s' (keyword '%s')",
+                raw_type,
+                mapped_type,
+                keyword,
+            )
+            return mapped_type
+
     logger.debug("No normalization match for '%s', returning as-is: '%s'", raw_type, normalized)
     return normalized
 

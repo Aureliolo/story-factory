@@ -7,8 +7,10 @@ import pytest
 from src.utils.logging_config import (
     ContextFilter,
     _context_filter,
+    _suppress_noisy_loggers,
     log_context,
     log_performance,
+    reset_logger_suppression,
     set_log_level,
     setup_logging,
 )
@@ -347,3 +349,40 @@ class TestSetLogLevel:
         assert logging.getLogger("httpx").level == logging.WARNING
         assert logging.getLogger("httpcore").level == logging.WARNING
         assert logging.getLogger("nicegui").level == logging.WARNING
+
+
+class TestSuppressNoisyLoggersIdempotent:
+    """Tests for _suppress_noisy_loggers idempotency (L4)."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_suppression(self):
+        """Reset the suppression flag before and after each test."""
+        reset_logger_suppression()
+        yield
+        reset_logger_suppression()
+
+    def test_suppress_noisy_loggers_only_runs_once(self):
+        """_suppress_noisy_loggers only sets levels on first invocation.
+
+        The second call should be a no-op (early return via the
+        _loggers_suppressed flag), so the setLevel call count stays at 1.
+        """
+        httpx_logger = logging.getLogger("httpx")
+        original_level = httpx_logger.level
+
+        try:
+            # Reset to a known state
+            httpx_logger.setLevel(logging.DEBUG)
+
+            # First call: should set to WARNING
+            _suppress_noisy_loggers()
+            assert httpx_logger.level == logging.WARNING
+
+            # Temporarily reset httpx to DEBUG to detect if second call changes it
+            httpx_logger.setLevel(logging.DEBUG)
+
+            # Second call: should be a no-op (flag is already set)
+            _suppress_noisy_loggers()
+            assert httpx_logger.level == logging.DEBUG  # unchanged by second call
+        finally:
+            httpx_logger.setLevel(original_level)
