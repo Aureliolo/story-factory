@@ -503,3 +503,142 @@ class TestCharacterPhasedCallables:
         call_kwargs = mock_parallel.call_args[1]
         assert "create_only_fn" not in call_kwargs
         assert any("Falling back to sequential" in msg for msg in caplog.messages)
+
+    def test_phased_create_only_reraises_on_error(self):
+        """_create_only re-raises WorldGenerationError from _create_character."""
+        from unittest.mock import patch
+
+        from src.services.world_quality_service._batch import (
+            generate_characters_with_quality,
+        )
+
+        mock_svc = MagicMock()
+        mock_svc.settings.llm_max_concurrent_requests = 2
+        mock_svc.get_config.return_value = MagicMock(
+            creator_temperature=0.9,
+            judge_temperature=0.3,
+        )
+        mock_svc._make_model_preparers.return_value = (MagicMock(), MagicMock())
+        mock_svc._create_character.side_effect = WorldGenerationError("LLM timeout")
+
+        story_state = MagicMock()
+        captured_create_fn = None
+
+        def capture_parallel(*args, **kwargs):
+            """Capture create_only_fn and invoke it."""
+            nonlocal captured_create_fn
+            captured_create_fn = kwargs.get("create_only_fn")
+            return []
+
+        with patch(
+            "src.services.world_quality_service._batch_parallel._generate_batch_parallel",
+            side_effect=capture_parallel,
+        ):
+            generate_characters_with_quality(
+                mock_svc,
+                story_state,
+                name_provider=lambda: [],
+                count=2,
+            )
+
+        assert captured_create_fn is not None
+        with pytest.raises(WorldGenerationError, match="LLM timeout"):
+            captured_create_fn(0)
+
+    def test_phased_is_empty_char(self):
+        """_is_empty_char returns True for characters with empty name."""
+        from unittest.mock import patch
+
+        from src.services.world_quality_service._batch import (
+            generate_characters_with_quality,
+        )
+
+        mock_svc = MagicMock()
+        mock_svc.settings.llm_max_concurrent_requests = 2
+        mock_svc.get_config.return_value = MagicMock(
+            creator_temperature=0.9,
+            judge_temperature=0.3,
+        )
+        mock_svc._make_model_preparers.return_value = (MagicMock(), MagicMock())
+
+        story_state = MagicMock()
+        captured_is_empty = None
+
+        def capture_parallel(*args, **kwargs):
+            """Capture is_empty_fn."""
+            nonlocal captured_is_empty
+            captured_is_empty = kwargs.get("is_empty_fn")
+            return []
+
+        with patch(
+            "src.services.world_quality_service._batch_parallel._generate_batch_parallel",
+            side_effect=capture_parallel,
+        ):
+            generate_characters_with_quality(
+                mock_svc,
+                story_state,
+                name_provider=lambda: [],
+                count=2,
+            )
+
+        assert captured_is_empty is not None
+        empty_char = MagicMock()
+        empty_char.name = ""
+        assert captured_is_empty(empty_char) is True
+        named_char = MagicMock()
+        named_char.name = "Hero"
+        assert captured_is_empty(named_char) is False
+
+    def test_phased_refine_with_initial_calls_loop(self):
+        """_refine_with_initial calls quality_refinement_loop with initial_entity."""
+        from unittest.mock import patch
+
+        from src.services.world_quality_service._batch import (
+            generate_characters_with_quality,
+        )
+
+        mock_svc = MagicMock()
+        mock_svc.settings.llm_max_concurrent_requests = 2
+        config_mock = MagicMock(
+            creator_temperature=0.9,
+            judge_temperature=0.3,
+        )
+        mock_svc.get_config.return_value = config_mock
+        mock_svc._make_model_preparers.return_value = (MagicMock(), MagicMock())
+
+        story_state = MagicMock()
+        story_state.id = "test-story"
+        captured_refine_fn = None
+
+        def capture_parallel(*args, **kwargs):
+            """Capture refine_with_initial_fn."""
+            nonlocal captured_refine_fn
+            captured_refine_fn = kwargs.get("refine_with_initial_fn")
+            return []
+
+        with patch(
+            "src.services.world_quality_service._batch_parallel._generate_batch_parallel",
+            side_effect=capture_parallel,
+        ):
+            generate_characters_with_quality(
+                mock_svc,
+                story_state,
+                name_provider=lambda: [],
+                count=2,
+            )
+
+        assert captured_refine_fn is not None
+        mock_char = MagicMock()
+        mock_result = (mock_char, MagicMock(), 1)
+
+        with patch(
+            "src.services.world_quality_service._quality_loop.quality_refinement_loop",
+            return_value=mock_result,
+        ) as mock_loop:
+            result = captured_refine_fn(mock_char)
+
+        assert result == mock_result
+        mock_loop.assert_called_once()
+        call_kwargs = mock_loop.call_args[1]
+        assert call_kwargs["initial_entity"] == mock_char
+        assert call_kwargs["entity_type"] == "character"
