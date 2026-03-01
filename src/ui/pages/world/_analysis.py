@@ -69,7 +69,7 @@ def refresh_health_dashboard(page, notify: bool = True) -> None:
                     metrics.total_entities,
                     metrics.orphan_count,
                     metrics.circular_count,
-                    metrics.low_quality_count,
+                    len(metrics.low_quality_entities),
                 )
             ).encode()
         ).hexdigest()
