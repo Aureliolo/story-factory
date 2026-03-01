@@ -348,3 +348,89 @@ class TestQualityLoopVRAMHandling:
 
         # Should have VRAMAllocationError as the cause
         assert isinstance(exc_info.value.__cause__, VRAMAllocationError)
+
+
+# ──── Phase 1G: _model_fits_in_vram helper ────
+
+
+class TestModelFitsInVram:
+    """Tests for the VRAM-aware judge alternative selection helper."""
+
+    @patch("src.services.world_quality_service._model_resolver.get_available_vram", return_value=20)
+    @patch(
+        "src.services.world_quality_service._model_resolver.get_installed_models_with_sizes",
+        return_value={"good:8b": 5.0},
+    )
+    def test_model_fits_when_residency_ok(self, _sizes, _vram):
+        """Model should fit when residency is above threshold."""
+        from src.services.world_quality_service._model_resolver import _model_fits_in_vram
+
+        assert _model_fits_in_vram("good:8b") is True
+
+    @patch("src.services.world_quality_service._model_resolver.get_available_vram", return_value=5)
+    @patch(
+        "src.services.world_quality_service._model_resolver.get_installed_models_with_sizes",
+        return_value={"huge:70b": 40.0},
+    )
+    def test_model_does_not_fit_when_residency_below_threshold(self, _sizes, _vram):
+        """Model should not fit when residency is below threshold."""
+        from src.services.world_quality_service._model_resolver import _model_fits_in_vram
+
+        assert _model_fits_in_vram("huge:70b") is False
+
+    @patch(
+        "src.services.world_quality_service._model_resolver.get_installed_models_with_sizes",
+        return_value={},
+    )
+    def test_unknown_model_assumed_to_fit(self, _sizes):
+        """Unknown models (not in installed list) should be assumed to fit."""
+        from src.services.world_quality_service._model_resolver import _model_fits_in_vram
+
+        assert _model_fits_in_vram("unknown:8b") is True
+
+    @patch(
+        "src.services.world_quality_service._model_resolver.get_installed_models_with_sizes",
+        return_value={"zero:8b": 0.0},
+    )
+    def test_zero_size_model_assumed_to_fit(self, _sizes):
+        """Models with zero size should be assumed to fit."""
+        from src.services.world_quality_service._model_resolver import _model_fits_in_vram
+
+        assert _model_fits_in_vram("zero:8b") is True
+
+    @patch(
+        "src.services.world_quality_service._model_resolver.get_installed_models_with_sizes",
+        side_effect=RuntimeError("nvidia-smi failed"),
+    )
+    def test_exception_assumes_fit(self, _sizes):
+        """On exception, model should be assumed to fit (optimistic fallback)."""
+        from src.services.world_quality_service._model_resolver import _model_fits_in_vram
+
+        assert _model_fits_in_vram("any:8b") is True
+
+    @patch("src.services.world_quality_service._model_resolver.get_available_vram", return_value=5)
+    @patch(
+        "src.services.world_quality_service._model_resolver.get_installed_models_with_sizes",
+        return_value={"big-alt:70b": 40.0, "creator:8b": 5.0},
+    )
+    def test_judge_skips_vram_violating_alternative(self, _sizes, _vram):
+        """get_judge_model should skip alternatives that fail VRAM residency check."""
+        from src.services.world_quality_service._model_resolver import get_judge_model
+
+        svc = MagicMock()
+        svc.settings.use_per_agent_models = False
+        svc.settings.default_model = "creator:8b"
+        svc.ENTITY_CREATOR_ROLES = {"character": "writer"}
+        svc.ENTITY_JUDGE_ROLES = {"character": "judge"}
+        # get_models_for_role returns alternatives: big-alt (won't fit)
+        svc.settings.get_models_for_role.return_value = ["big-alt:70b"]
+        svc._model_cache.get_creator_model.return_value = "creator:8b"
+        svc._model_cache.store_creator_model.side_effect = lambda r, m: m
+        svc._model_cache.get_judge_model.return_value = None
+        svc._model_cache.store_judge_model.side_effect = lambda r, m, c: m
+        svc._model_cache.has_warned_conflict.return_value = False
+        svc._model_cache.mark_conflict_warned = MagicMock()
+
+        # Judge should skip big-alt:70b (fails VRAM) and warn about self-judging
+        model = get_judge_model(svc, entity_type="character")
+        assert model == "creator:8b"  # Falls back to creator since alt won't fit
