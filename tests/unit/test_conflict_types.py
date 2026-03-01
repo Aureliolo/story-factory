@@ -29,3 +29,17 @@ class TestProseSentimentKeywordNormalization:
         """normalize_relation_type('partnership') should map to 'allies_with'."""
         result = normalize_relation_type("partnership")
         assert result == "allies_with"
+
+    def test_validate_prose_sentiment_keywords_raises_on_invalid(self, monkeypatch):
+        """_validate_prose_sentiment_keywords raises RuntimeError for unknown relation types."""
+        from src.memory import conflict_types
+        from src.memory.conflict_types import _validate_prose_sentiment_keywords
+
+        original = conflict_types._PROSE_SENTIMENT_KEYWORDS.copy()
+        monkeypatch.setattr(
+            conflict_types,
+            "_PROSE_SENTIMENT_KEYWORDS",
+            {**original, "bogus_sentiment": "totally_fake_type"},
+        )
+        with pytest.raises(RuntimeError, match="unknown types"):
+            _validate_prose_sentiment_keywords()
