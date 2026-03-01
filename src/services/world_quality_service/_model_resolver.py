@@ -305,7 +305,7 @@ def get_judge_model(service: WorldQualityService, entity_type: str | None = None
             if not service._model_cache.has_warned_conflict(conflict_key):
                 service._model_cache.mark_conflict_warned(conflict_key)
                 # Check quality score to flag unreliable self-judging
-                model_quality = 5.0
+                model_quality: float | None = None
                 if model in RECOMMENDED_MODELS:
                     model_quality = RECOMMENDED_MODELS[model]["quality"]
                 else:
@@ -313,12 +313,19 @@ def get_judge_model(service: WorldQualityService, entity_type: str | None = None
                         if model.startswith(rec_id.split(":")[0]):
                             model_quality = info["quality"]
                             break
-                if model_quality < 7.0:
+                if model_quality is not None and model_quality < 7.0:
                     logger.warning(
                         "Self-judging with sub-threshold model '%s' (quality=%.1f) "
                         "for %s. Quality scores are likely inflated.",
                         model,
                         model_quality,
+                        entity_type,
+                    )
+                elif model_quality is None:
+                    logger.warning(
+                        "Self-judging with unknown-quality model '%s' for %s. "
+                        "Cannot assess score reliability.",
+                        model,
                         entity_type,
                     )
                 logger.warning(

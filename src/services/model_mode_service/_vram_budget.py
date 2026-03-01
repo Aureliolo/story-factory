@@ -116,7 +116,14 @@ def get_vram_snapshot() -> VRAMSnapshot:
             time.sleep(_VRAM_ZERO_RETRY_DELAY_S)
             try:
                 available = float(get_available_vram())
-            except ConnectionError, TimeoutError, FileNotFoundError, OSError, ValueError:
+            except (ConnectionError, TimeoutError, FileNotFoundError, OSError, ValueError) as e:
+                logger.debug(
+                    "VRAM retry %d/%d failed: %s: %s",
+                    attempt,
+                    _VRAM_ZERO_RETRY_COUNT,
+                    type(e).__name__,
+                    e,
+                )
                 continue
             if available > 0:
                 logger.info(

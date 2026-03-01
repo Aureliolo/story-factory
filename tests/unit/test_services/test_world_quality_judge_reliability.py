@@ -1537,6 +1537,34 @@ class TestSubThresholdSelfJudgingWarning:
             for record in caplog.records
         ), "Expected sub-threshold warning with quality=6.0 from prefix match"
 
+    def test_unknown_quality_model_warns_cannot_assess(
+        self, settings, mock_mode_service, caplog, monkeypatch
+    ):
+        """When model is not in RECOMMENDED_MODELS at all, warn about unknown quality."""
+        import logging
+        from unittest.mock import patch
+
+        from src.services.world_quality_service import _model_resolver
+
+        # Empty registry — model won't be found
+        monkeypatch.setattr(_model_resolver, "RECOMMENDED_MODELS", {})
+
+        settings.use_per_agent_models = True
+        settings.agent_models = {"writer": "mystery-model:7b", "judge": "mystery-model:7b"}
+
+        service = WorldQualityService(settings, mock_mode_service)
+
+        with (
+            patch.object(settings, "get_models_for_role", return_value=["mystery-model:7b"]),
+            caplog.at_level(logging.WARNING),
+        ):
+            service._get_judge_model(entity_type="character")
+
+        assert any(
+            "unknown-quality" in record.message and "Cannot assess" in record.message
+            for record in caplog.records
+        ), "Expected unknown-quality warning for model not in RECOMMENDED_MODELS"
+
 
 class TestJudgePromptOutputFormatParametric:
     """Test that all entity judge prompts use parametric placeholders in OUTPUT FORMAT.

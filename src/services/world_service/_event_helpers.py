@@ -19,6 +19,7 @@ from src.services.world_service._name_matching import _find_entity_by_name
 from src.utils.exceptions import DatabaseClosedError, GenerationCancelledError
 
 if TYPE_CHECKING:
+    from src.memory.world_calendar import WorldCalendar
     from src.services import ServiceContainer
     from src.services.world_service import WorldService
 
@@ -173,7 +174,7 @@ def build_event_entity_context(world_db: WorldDatabase) -> str:
 def build_event_timestamp(
     event: dict[str, Any],
     *,
-    calendar: Any | None = None,
+    calendar: WorldCalendar | None = None,
 ) -> str:
     """Build a human-readable timestamp string from an event's temporal fields.
 

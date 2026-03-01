@@ -25,6 +25,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_MAX_DUPLICATE_RECOVERY_RETRIES = 2
+
 
 class _ThreadSafeRelsList:
     """Thread-safe wrapper for the shared relationship deduplication list.
@@ -500,22 +502,11 @@ def _generate_batch_phased[T, S: BaseQualityScores](
     quality_threshold: float | None = None,
     register_created_fn: Callable[[T], None] | None = None,
 ) -> list[tuple[T, S]]:
-    """Two-phase batch pipeline: batch creates, then batch judges.
+    """Three-phase batch pipeline: batch creates → batch judges → handle results.
 
-    Reduces GPU model swaps from ~2N (per-entity create+judge interleaving)
-    to ~4 (one bulk create swap, one bulk judge swap, plus refinement swaps
-    for entities that fail the threshold).
-
-    Phase 1 — Batch creates: Load creator model once, run all N create calls
-    sequentially.  Collect valid entities.
-
-    Phase 2 — Batch judges: Load judge model once, run all N judge calls
-    sequentially.  Collect scores.
-
-    Phase 3 — Handle results: Entities that pass the quality threshold are
-    emitted directly.  Entities that fail are refined via the existing
-    per-entity ``quality_refinement_loop`` (with ``initial_entity``), which
-    handles all early-stopping, hail-mary, and analytics logic.
+    Reduces GPU model swaps from ~2N to ~4 (bulk create, bulk judge, refinement).
+    Phase 3 emits passing entities directly and refines failing ones via
+    ``quality_refinement_loop(initial_entity=...)``.
 
     Args:
         svc: WorldQualityService instance.
@@ -778,11 +769,10 @@ def _generate_batch_phased[T, S: BaseQualityScores](
                         )
                     )
             except DuplicateNameError as e:
-                # H4: retry via refine to recover the slot (up to 2 attempts)
                 dup_msg = summarize_llm_error(e, max_length=200)
                 _dup_recovered = False
                 if refine_with_initial_fn is not None:
-                    for _retry in range(2):
+                    for _retry in range(_MAX_DUPLICATE_RECOVERY_RETRIES):
                         try:
                             retry_entity, retry_scores, _iters = refine_with_initial_fn(entity)
                             if on_success:
@@ -796,7 +786,13 @@ def _generate_batch_phased[T, S: BaseQualityScores](
                             )
                             _dup_recovered = True
                             break
-                        except DuplicateNameError:
+                        except DuplicateNameError as inner_dup:
+                            logger.debug(
+                                "Phase 3: retry %d duplicate %s: %s",
+                                _retry + 1,
+                                entity_type,
+                                inner_dup,
+                            )
                             continue
                         except MemoryError, RecursionError, KeyboardInterrupt, SystemExit:
                             raise

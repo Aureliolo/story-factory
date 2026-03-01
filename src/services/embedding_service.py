@@ -41,8 +41,15 @@ _warned_context_models_lock = threading.Lock()
 
 # M7: Track entity labels for which a truncation warning has already fired.
 # Second+ truncations for the same label log at DEBUG instead of WARNING.
+# Reset at the start of each full embedding pass so re-embedding shows fresh warnings.
 _truncation_warned: set[str] = set()
 _truncation_warned_lock = threading.Lock()
+
+
+def _reset_truncation_warnings() -> None:
+    """Reset truncation dedup so re-embedding logs fresh warnings."""
+    with _truncation_warned_lock:
+        _truncation_warned.clear()
 
 
 class EmbeddingService:
@@ -678,6 +685,7 @@ class EmbeddingService:
         Returns:
             Dict mapping content_type to count of items embedded.
         """
+        _reset_truncation_warnings()
         model = self._get_model()
         counts: dict[str, int] = {}
         skipped = 0

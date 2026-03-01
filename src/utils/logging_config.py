@@ -115,7 +115,7 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
     _suppress_noisy_loggers()
 
 
-_loggers_suppressed: bool = False
+_suppression_logged: bool = False
 
 
 def _suppress_noisy_loggers() -> None:
@@ -123,22 +123,22 @@ def _suppress_noisy_loggers() -> None:
 
     Called by both setup_logging() and set_log_level() to keep httpx, httpcore,
     and nicegui loggers at WARNING regardless of the application log level.
-    Idempotent: only logs the suppression message on first invocation (L4).
+    The suppression is always applied (so set_log_level can re-suppress if
+    something resets a logger), but the debug message only fires once (L4).
     """
-    global _loggers_suppressed
-    if _loggers_suppressed:
-        return
-    logger.debug("Suppressing noisy third-party loggers (httpx/httpcore/nicegui)")
+    global _suppression_logged
+    if not _suppression_logged:
+        logger.debug("Suppressing noisy third-party loggers (httpx/httpcore/nicegui)")
+        _suppression_logged = True
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("nicegui").setLevel(logging.WARNING)
-    _loggers_suppressed = True
 
 
 def reset_logger_suppression() -> None:
     """Reset the suppression flag (for test teardown)."""
-    global _loggers_suppressed
-    _loggers_suppressed = False
+    global _suppression_logged
+    _suppression_logged = False
 
 
 def set_log_level(level: str) -> None:

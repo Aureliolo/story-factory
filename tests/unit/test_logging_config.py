@@ -361,28 +361,34 @@ class TestSuppressNoisyLoggersIdempotent:
         yield
         reset_logger_suppression()
 
-    def test_suppress_noisy_loggers_only_runs_once(self):
-        """_suppress_noisy_loggers only sets levels on first invocation.
+    def test_suppress_noisy_loggers_always_reapplies_but_logs_once(self, caplog):
+        """_suppress_noisy_loggers always re-applies WARNING levels (safety net).
 
-        The second call should be a no-op (early return via the
-        _loggers_suppressed flag), so the setLevel call count stays at 1.
+        The suppression is always applied so set_log_level() can fix levels
+        reset by third-party code, but the debug log message only fires once.
         """
         httpx_logger = logging.getLogger("httpx")
         original_level = httpx_logger.level
 
         try:
-            # Reset to a known state
             httpx_logger.setLevel(logging.DEBUG)
 
-            # First call: should set to WARNING
-            _suppress_noisy_loggers()
+            # First call: should set to WARNING and log the debug message
+            with caplog.at_level(logging.DEBUG, logger="src.utils.logging_config"):
+                _suppress_noisy_loggers()
             assert httpx_logger.level == logging.WARNING
+            first_messages = [r.message for r in caplog.records]
+            assert any("Suppressing noisy" in m for m in first_messages)
 
-            # Temporarily reset httpx to DEBUG to detect if second call changes it
+            # Temporarily reset httpx to DEBUG
             httpx_logger.setLevel(logging.DEBUG)
+            caplog.clear()
 
-            # Second call: should be a no-op (flag is already set)
-            _suppress_noisy_loggers()
-            assert httpx_logger.level == logging.DEBUG  # unchanged by second call
+            # Second call: should re-apply WARNING but NOT log the message again
+            with caplog.at_level(logging.DEBUG, logger="src.utils.logging_config"):
+                _suppress_noisy_loggers()
+            assert httpx_logger.level == logging.WARNING  # re-suppressed
+            second_messages = [r.message for r in caplog.records]
+            assert not any("Suppressing noisy" in m for m in second_messages)
         finally:
             httpx_logger.setLevel(original_level)

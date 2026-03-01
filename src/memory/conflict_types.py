@@ -356,28 +356,6 @@ def normalize_relation_type(raw_type: str) -> str:
 
     # L1: Prose sentiment keyword fallback — catch descriptive phrases like
     # "admiration", "hostility", "partnership" that don't match word-level lookup.
-    _PROSE_SENTIMENT_KEYWORDS: dict[str, str] = {
-        "admiration": "trusts",
-        "admire": "admires",
-        "hostility": "enemy_of",
-        "partnership": "allies_with",
-        "cooperation": "allies_with",
-        "friendship": "friends",
-        "animosity": "enemy_of",
-        "antagonism": "rivals",
-        "camaraderie": "friends",
-        "enmity": "enemy_of",
-        "affection": "cares_for",
-        "devotion": "devoted_to",
-        "respect": "respects",
-        "distrust": "distrusts",
-        "suspicion": "suspects",
-        "reverence": "admires",
-        "rivalry": "rivals",
-        "alliance": "allies_with",
-        "loyalty": "loyal_to",
-        "tension": "conflicts_with",
-    }
     for keyword, mapped_type in _PROSE_SENTIMENT_KEYWORDS.items():
         if keyword in normalized:
             logger.debug(
@@ -401,6 +379,43 @@ def _validate_word_to_relation() -> None:
 
 
 _validate_word_to_relation()
+
+
+# L1: Prose sentiment keyword fallback for normalize_relation_type().
+# Catches descriptive phrases ("admiration", "hostility") that don't match
+# the word-level _WORD_TO_RELATION lookup.  Matched via substring search.
+_PROSE_SENTIMENT_KEYWORDS: dict[str, str] = {
+    "admiration": "trusts",
+    "admire": "admires",
+    "hostility": "enemy_of",
+    "partnership": "allies_with",
+    "cooperation": "allies_with",
+    "friendship": "friends",
+    "animosity": "enemy_of",
+    "antagonism": "rivals",
+    "camaraderie": "friends",
+    "enmity": "enemy_of",
+    "affection": "cares_for",
+    "devotion": "devoted_to",
+    "respect": "respects",
+    "distrust": "distrusts",
+    "suspicion": "suspects",
+    "reverence": "admires",
+    "rivalry": "rivals",
+    "alliance": "allies_with",
+    "loyalty": "loyal_to",
+    "tension": "conflicts_with",
+}
+
+
+def _validate_prose_sentiment_keywords() -> None:
+    """Validate that every _PROSE_SENTIMENT_KEYWORDS value is a key in RELATION_CONFLICT_MAPPING."""
+    invalid = set(_PROSE_SENTIMENT_KEYWORDS.values()) - set(RELATION_CONFLICT_MAPPING)
+    if invalid:
+        raise RuntimeError(f"_PROSE_SENTIMENT_KEYWORDS references unknown types: {invalid}")
+
+
+_validate_prose_sentiment_keywords()
 
 
 # Colors for conflict visualization (consistent with theme.py patterns)
