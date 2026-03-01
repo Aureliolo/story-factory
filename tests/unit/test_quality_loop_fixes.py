@@ -5,13 +5,18 @@ Covers:
 - M3: Hail-mary skip on identical output
 - H2: iteration_callback parameter
 - H3: Per-dimension regression logging
+- minimum_score_for_average error when all dimensions excluded
+- resolve_model_pair VRAM pair fit and exception fallbacks
 """
 
 import logging
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from src.memory.world_quality import CharacterQualityScores, RefinementConfig
 from src.services.world_quality_service._quality_loop import quality_refinement_loop
+from src.utils.exceptions import StoryFactoryError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -554,3 +559,103 @@ class TestH3PerDimensionRegressionLogging:
             f"Expected no 'dimension changes vs best' log messages when scores improve, "
             f"got: {dim_change_messages}"
         )
+
+
+# ---------------------------------------------------------------------------
+# minimum_score_for_average: all dimensions excluded
+# ---------------------------------------------------------------------------
+
+
+class TestMinimumScoreForAverageAllExcluded:
+    """Test minimum_score_for_average when all dimensions are excluded."""
+
+    def test_raises_when_all_dimensions_excluded(self):
+        """Should raise StoryFactoryError when every dimension is in _EXCLUDED_FROM_AVERAGE."""
+        scores = CharacterQualityScores(
+            depth=8.0,
+            goals=8.0,
+            flaws=8.0,
+            uniqueness=8.0,
+            arc_potential=8.0,
+            temporal_plausibility=8.0,
+        )
+        all_fields = frozenset(
+            name
+            for name, _field in CharacterQualityScores.model_fields.items()
+            if name != "feedback"
+        )
+        with patch.object(type(scores), "_EXCLUDED_FROM_AVERAGE", all_fields):
+            with pytest.raises(StoryFactoryError, match="no dimensions remain"):
+                _ = scores.minimum_score_for_average
+
+
+# ---------------------------------------------------------------------------
+# resolve_model_pair: VRAM pair fit and exception fallbacks
+# ---------------------------------------------------------------------------
+
+
+class TestResolveModelPairVRAM:
+    """Tests for resolve_model_pair VRAM pair fit and exception handling."""
+
+    def _make_service(self):
+        """Build a mock WorldQualityService for resolve_model_pair tests."""
+        svc = MagicMock()
+        svc.ENTITY_CREATOR_ROLES = {"character": "writer"}
+        svc.ENTITY_JUDGE_ROLES = {"character": "judge"}
+        svc._model_cache.get_creator_model.return_value = None
+        svc._model_cache.get_judge_model.return_value = None
+        svc.settings.use_per_agent_models = False
+        svc.settings.default_model = "auto"
+        svc.mode_service.get_model_for_agent.side_effect = lambda role: {
+            "writer": "creator-model:8b",
+            "judge": "judge-model:8b",
+        }[role]
+        return svc
+
+    @patch("src.services.world_quality_service._model_resolver.pair_fits", return_value=False)
+    @patch("src.services.world_quality_service._model_resolver.get_vram_snapshot")
+    def test_pair_does_not_fit_falls_back_to_self_judging(self, mock_snapshot, mock_pair_fits):
+        """When pair doesn't fit in VRAM, judge falls back to creator model."""
+        from src.services.world_quality_service._model_resolver import resolve_model_pair
+
+        snapshot = MagicMock()
+        snapshot.installed_models = {"creator-model:8b": 14.0, "judge-model:8b": 18.0}
+        snapshot.available_vram_gb = 24.0
+        mock_snapshot.return_value = snapshot
+
+        svc = self._make_service()
+        creator, judge = resolve_model_pair(svc, "character")
+
+        assert creator == "creator-model:8b"
+        assert judge == "creator-model:8b"
+
+    @patch(
+        "src.services.world_quality_service._model_resolver.get_vram_snapshot",
+        side_effect=RuntimeError("nvidia-smi not found"),
+    )
+    def test_exception_during_vram_check_proceeds_with_both_models(self, mock_snapshot):
+        """When VRAM snapshot raises, proceed with both resolved models (optimistic)."""
+        from src.services.world_quality_service._model_resolver import resolve_model_pair
+
+        svc = self._make_service()
+        creator, judge = resolve_model_pair(svc, "character")
+
+        assert creator == "creator-model:8b"
+        assert judge == "judge-model:8b"
+
+    @patch("src.services.world_quality_service._model_resolver.pair_fits", return_value=True)
+    @patch("src.services.world_quality_service._model_resolver.get_vram_snapshot")
+    def test_pair_fits_returns_both_models(self, mock_snapshot, mock_pair_fits):
+        """When pair fits in VRAM, return both distinct models."""
+        from src.services.world_quality_service._model_resolver import resolve_model_pair
+
+        snapshot = MagicMock()
+        snapshot.installed_models = {"creator-model:8b": 5.0, "judge-model:8b": 4.0}
+        snapshot.available_vram_gb = 20.0
+        mock_snapshot.return_value = snapshot
+
+        svc = self._make_service()
+        creator, judge = resolve_model_pair(svc, "character")
+
+        assert creator == "creator-model:8b"
+        assert judge == "judge-model:8b"

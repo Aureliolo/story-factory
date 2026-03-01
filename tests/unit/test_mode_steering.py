@@ -954,3 +954,61 @@ class TestVramStrategyIntegration:
         # Should raise error for invalid strategy
         with pytest.raises(ValueError, match="Invalid vram_strategy 'invalid_strategy'"):
             service.prepare_model("huihui_ai/dolphin3-abliterated:8b")
+
+
+class TestSelectModelPair:
+    """Tests for select_model_pair() VRAM-aware model pair resolution."""
+
+    @patch("src.services.model_mode_service._modes.get_model_for_agent")
+    def test_same_model_returns_same_pair(self, mock_get_model):
+        """When creator and judge resolve to the same model, return that model for both."""
+        mock_get_model.return_value = "test-model:8b"
+        svc = MagicMock()
+
+        from src.services.model_mode_service._modes import select_model_pair
+
+        creator, judge = select_model_pair(svc, "writer", "judge")
+
+        assert creator == "test-model:8b"
+        assert judge == "test-model:8b"
+        assert mock_get_model.call_count == 2
+
+    @patch("src.services.model_mode_service._vram_budget.pair_fits", return_value=True)
+    @patch("src.services.model_mode_service._vram_budget.get_vram_snapshot")
+    @patch("src.services.model_mode_service._modes.get_model_for_agent")
+    def test_different_models_both_fit(self, mock_get_model, mock_snapshot, mock_pair_fits):
+        """When both models fit in VRAM, return the distinct pair."""
+        mock_get_model.side_effect = ["creator-model:8b", "judge-model:8b"]
+        snapshot = MagicMock()
+        snapshot.installed_models = {"creator-model:8b": 5.0, "judge-model:8b": 4.0}
+        snapshot.available_vram_gb = 20.0
+        mock_snapshot.return_value = snapshot
+
+        from src.services.model_mode_service._modes import select_model_pair
+
+        creator, judge = select_model_pair(MagicMock(), "writer", "judge")
+
+        assert creator == "creator-model:8b"
+        assert judge == "judge-model:8b"
+        mock_pair_fits.assert_called_once_with(5.0, 4.0, 20.0)
+
+    @patch("src.services.model_mode_service._vram_budget.pair_fits", return_value=False)
+    @patch("src.services.model_mode_service._vram_budget.get_vram_snapshot")
+    @patch("src.services.model_mode_service._modes.get_model_for_agent")
+    def test_pair_does_not_fit_falls_back_to_self_judging(
+        self, mock_get_model, mock_snapshot, mock_pair_fits
+    ):
+        """When models don't fit together, fall back to creator model for both roles."""
+        mock_get_model.side_effect = ["creator-model:8b", "judge-model:8b"]
+        snapshot = MagicMock()
+        snapshot.installed_models = {"creator-model:8b": 14.0, "judge-model:8b": 18.0}
+        snapshot.available_vram_gb = 24.0
+        mock_snapshot.return_value = snapshot
+
+        from src.services.model_mode_service._modes import select_model_pair
+
+        creator, judge = select_model_pair(MagicMock(), "writer", "judge")
+
+        assert creator == "creator-model:8b"
+        assert judge == "creator-model:8b"
+        mock_pair_fits.assert_called_once_with(14.0, 18.0, 24.0)

@@ -3730,6 +3730,68 @@ class TestPrepareModelCallbacks:
             # prepare_judge + judge skipped: hail-mary produced identical output (M3)
         ]
 
+    def test_prepare_judge_called_in_hail_mary_different_output(self, mock_svc, config):
+        """prepare_judge is called during hail-mary when fresh entity differs from best."""
+        config.max_iterations = 2
+        config.early_stopping_patience = 1
+        call_order: list[str] = []
+        create_call_count = 0
+
+        # Mock analytics_db for hail-mary
+        mock_svc.analytics_db = MagicMock()
+        mock_svc.analytics_db.get_hail_mary_win_rate.return_value = 0.5
+        mock_svc.analytics_db.record_hail_mary_attempt = MagicMock()
+
+        def prep_creator():
+            """Record prepare_creator call."""
+            call_order.append("prepare_creator")
+
+        def prep_judge():
+            """Record prepare_judge call."""
+            call_order.append("prepare_judge")
+
+        def create_fn(retries):
+            """Return different entity on hail-mary (3rd call)."""
+            nonlocal create_call_count
+            create_call_count += 1
+            call_order.append("create")
+            # First create returns "Hero"; hail-mary returns "Hero v2" (different)
+            if create_call_count >= 2:
+                return {"name": "Hero v2"}
+            return {"name": "Hero"}
+
+        def judge_fn(e):
+            """Record judge call and return low scores."""
+            call_order.append("judge")
+            return _make_scores(6.0)
+
+        quality_refinement_loop(
+            entity_type="character",
+            create_fn=create_fn,
+            judge_fn=judge_fn,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+            prepare_creator=prep_creator,
+            prepare_judge=prep_judge,
+        )
+
+        # Hail-mary produces different output, so prepare_judge and judge ARE called
+        assert "prepare_judge" in call_order
+        # Specifically check the tail of call_order for the hail-mary sequence
+        hail_mary_start = len(call_order) - 4  # last 4: prep_creator, create, prep_judge, judge
+        assert call_order[hail_mary_start:] == [
+            "prepare_creator",
+            "create",
+            "prepare_judge",
+            "judge",
+        ]
+
     def test_prepare_creator_called_in_auto_pass(self, mock_svc, config):
         """Auto-pass path calls prepare_creator before create_fn when entity is None."""
         call_order: list[str] = []

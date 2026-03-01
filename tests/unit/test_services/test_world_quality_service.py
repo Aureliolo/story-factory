@@ -6013,3 +6013,39 @@ class TestMakeModelPreparers:
             _, prep_j = service._make_model_preparers("character")
             # Should not raise — degrades gracefully with a warning
             prep_j()
+
+    def test_prepare_creator_graceful_on_vram_allocation_error(self, service):
+        """prepare_creator logs warning and continues when VRAMAllocationError is raised."""
+        from src.utils.exceptions import VRAMAllocationError
+
+        with (
+            patch(
+                "src.services.world_quality_service._model_resolver.resolve_model_pair",
+                return_value=("creator-model:8b", "judge-model:8b"),
+            ),
+            patch(
+                "src.services.world_quality_service._model_resolver.prepare_model",
+                side_effect=VRAMAllocationError("Not enough VRAM for creator"),
+            ),
+        ):
+            prep_c, _ = service._make_model_preparers("character")
+            # Should not raise — degrades gracefully with a warning
+            prep_c()
+
+    def test_prepare_judge_graceful_on_vram_allocation_error(self, service):
+        """prepare_judge logs warning and continues when VRAMAllocationError is raised."""
+        from src.utils.exceptions import VRAMAllocationError
+
+        with (
+            patch(
+                "src.services.world_quality_service._model_resolver.resolve_model_pair",
+                return_value=("creator-model:8b", "judge-model:8b"),
+            ),
+            patch(
+                "src.services.world_quality_service._model_resolver.prepare_model",
+                side_effect=VRAMAllocationError("Not enough VRAM for judge"),
+            ),
+        ):
+            _, prep_j = service._make_model_preparers("character")
+            # Should not raise — degrades gracefully with a warning
+            prep_j()
