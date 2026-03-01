@@ -15,9 +15,11 @@ from src.memory.mode_models import VramStrategy
 from src.utils.exceptions import VRAMAllocationError
 from src.utils.validation import validate_not_empty
 
-# Track last prepared model+strategy to suppress repeated log messages
+# Two-slot dedup cache keyed by role ("creator" / "judge") so alternating
+# creator/judge prepare calls both hit cache instead of thrashing.
+# Each slot stores (model_id, strategy) to suppress repeated log messages.
 _last_prepared_model_lock = threading.Lock()
-_last_prepared_model_key: tuple[str, str] | None = None  # (model_id, strategy)
+_last_prepared_models: dict[str, tuple[str, str]] = {}  # role -> (model_id, strategy)
 
 if TYPE_CHECKING:
     from src.services.model_mode_service import ModelModeService
@@ -30,7 +32,7 @@ logger = logging.getLogger(__name__)
 MIN_GPU_RESIDENCY = 0.8
 
 
-def prepare_model(svc: ModelModeService, model_id: str) -> None:
+def prepare_model(svc: ModelModeService, model_id: str, *, role: str = "default") -> None:
     """Prepare a model for use according to the configured VRAM strategy.
 
     Reads the VRAM strategy from ``settings.vram_strategy`` (user-configurable)
@@ -42,9 +44,14 @@ def prepare_model(svc: ModelModeService, model_id: str) -> None:
 
     The given model is then marked as loaded in the service's internal tracker.
 
+    Uses a two-slot dedup cache keyed by ``role`` (e.g. "creator", "judge") so
+    alternating creator/judge calls both hit cache instead of thrashing the
+    single-slot cache.
+
     Args:
         svc: The ModelModeService instance.
         model_id: Identifier of the model to prepare.
+        role: Role tag for dedup caching (e.g. "creator", "judge", "default").
     """
     from src.settings import get_installed_models_with_sizes, get_model_info
 
@@ -62,13 +69,21 @@ def prepare_model(svc: ModelModeService, model_id: str) -> None:
         logger.error(error_msg)
         raise ValueError(error_msg) from e
 
-    global _last_prepared_model_key
     cache_key = (model_id, strategy.value)
     with _last_prepared_model_lock:
-        if cache_key == _last_prepared_model_key:
-            logger.debug("Model %s already prepared, skipping VRAM preparation", model_id)
+        if _last_prepared_models.get(role) == cache_key:
+            logger.debug(
+                "Model %s already prepared for role %s, skipping VRAM preparation",
+                model_id,
+                role,
+            )
             return
-        logger.debug("Preparing model %s with VRAM strategy: %s", model_id, strategy.value)
+        logger.debug(
+            "Preparing model %s for role %s with VRAM strategy: %s",
+            model_id,
+            role,
+            strategy.value,
+        )
 
     if strategy == VramStrategy.SEQUENTIAL:
         # Unload all other models
@@ -121,6 +136,8 @@ def prepare_model(svc: ModelModeService, model_id: str) -> None:
         logger.debug("Could not check GPU residency for %s: %s", model_id, e)
     except Exception as e:
         logger.warning("Unexpected error checking GPU residency for %s: %s", model_id, e)
+        # Do NOT mark as loaded — unexpected errors may leave VRAM in unknown state
+        return
 
     # Model will be loaded on first use by Ollama
     svc._loaded_models.add(model_id)
@@ -128,7 +145,7 @@ def prepare_model(svc: ModelModeService, model_id: str) -> None:
     # Cache key set AFTER residency guard passes — prevents rejected models from
     # bypassing the VRAM check on subsequent calls.
     with _last_prepared_model_lock:
-        _last_prepared_model_key = cache_key
+        _last_prepared_models[role] = cache_key
 
 
 def unload_all_except(svc: ModelModeService, keep_model: str) -> None:
@@ -170,11 +187,15 @@ def unload_all_except(svc: ModelModeService, keep_model: str) -> None:
     # re-evaluate residency even for the kept model.  Skip when no models were
     # actually unloaded (failed eviction doesn't change VRAM).
     if successfully_unloaded:
-        global _last_prepared_model_key
         with _last_prepared_model_lock:
-            if _last_prepared_model_key:
+            if _last_prepared_models:
                 logger.debug(
-                    "Cleared last-prepared model cache after successful eviction (was %s)",
-                    _last_prepared_model_key[0],
+                    "Cleared last-prepared model cache after successful eviction (had %d slots)",
+                    len(_last_prepared_models),
                 )
-                _last_prepared_model_key = None
+                _last_prepared_models.clear()
+        # Also invalidate the VRAM snapshot cache since eviction changes
+        # the VRAM landscape.
+        from src.services.model_mode_service._vram_budget import invalidate_vram_snapshot
+
+        invalidate_vram_snapshot()

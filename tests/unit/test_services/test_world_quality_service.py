@@ -1343,9 +1343,9 @@ class TestGenerateCharacterWithQuality:
 
         assert char.name == "Low Quality"
         assert scores.average < 7.0
-        # Returns best iteration (1) since all scores are equal
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert iterations == 2
+        # mock_refine returns same entity → unchanged detection breaks loop;
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert iterations == 1
 
     @patch.object(WorldQualityService, "_create_character")
     def test_generate_character_raises_error_when_creation_fails(
@@ -3548,9 +3548,9 @@ class TestEdgeCases:
 
         assert loc["name"] == "Basic"
         assert scores.average < 7.0
-        # Returns best iteration (1) since all scores are equal
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert iterations == 2
+        # mock_refine returns same entity → unchanged detection breaks loop;
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert iterations == 1
 
     def test_empty_description_mini_description(self, service):
         """Test mini description with empty full description."""
@@ -4399,9 +4399,9 @@ class TestRefinementLoopEdgeCases:
 
         assert rel["source"] == "Alice"
         assert scores.average < 7.0
-        # Returns best iteration (iteration 1 since all scores are equal)
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert iterations == 2
+        # mock_refine returns same entity → unchanged detection breaks loop;
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert iterations == 1
 
     # ========== Faction Loop Edge Cases ==========
 
@@ -4503,10 +4503,9 @@ class TestRefinementLoopEdgeCases:
 
         assert faction["name"] == "Test Guild"
         assert scores.average < 7.0
-        # Returns scoring rounds count (only 1 successful judge call, refinement
-        # errors don't trigger redundant re-judging of unchanged entities #266)
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert iterations == 2
+        # mock_refine returns same entity → unchanged detection breaks loop;
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert iterations == 1
 
     # ========== Item Loop Edge Cases ==========
 
@@ -4613,9 +4612,9 @@ class TestRefinementLoopEdgeCases:
 
         assert item["name"] == "Test Item"
         assert scores.average < 7.0
-        # Returns best iteration (1) since all scores are equal
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert iterations == 2
+        # mock_refine returns same entity → unchanged detection breaks loop;
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert iterations == 1
 
     # ========== Concept Loop Edge Cases ==========
 
@@ -4722,9 +4721,9 @@ class TestRefinementLoopEdgeCases:
 
         assert concept["name"] == "Test Concept"
         assert scores.average < 7.0
-        # Returns best iteration (1) since all scores are equal
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert iterations == 2
+        # mock_refine returns same entity → unchanged detection breaks loop;
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert iterations == 1
 
 
 class TestBatchOperationsPartialFailure:
@@ -5939,10 +5938,9 @@ class TestMakeModelPreparers:
     def test_same_model_returns_none_pair(self, service):
         """When creator and judge resolve to the same model, return (None, None)."""
         service._model_cache.invalidate()
-        # Both roles resolve to the same test-model via mock
-        with (
-            patch.object(service, "_get_creator_model", return_value="test-model:8b"),
-            patch.object(service, "_get_judge_model", return_value="test-model:8b"),
+        with patch(
+            "src.services.world_quality_service._model_resolver.resolve_model_pair",
+            return_value=("test-model:8b", "test-model:8b"),
         ):
             prep_c, prep_j = service._make_model_preparers("character")
 
@@ -5951,9 +5949,9 @@ class TestMakeModelPreparers:
 
     def test_different_models_returns_callables(self, service):
         """When creator and judge differ, return callable preparers."""
-        with (
-            patch.object(service, "_get_creator_model", return_value="creator-model:8b"),
-            patch.object(service, "_get_judge_model", return_value="judge-model:8b"),
+        with patch(
+            "src.services.world_quality_service._model_resolver.resolve_model_pair",
+            return_value=("creator-model:8b", "judge-model:8b"),
         ):
             prep_c, prep_j = service._make_model_preparers("character")
 
@@ -5963,26 +5961,36 @@ class TestMakeModelPreparers:
     def test_preparers_call_prepare_model(self, service):
         """Returned preparers delegate to prepare_model with correct model IDs."""
         with (
-            patch.object(service, "_get_creator_model", return_value="creator-model:8b"),
-            patch.object(service, "_get_judge_model", return_value="judge-model:8b"),
-            patch("src.services.world_quality_service._prepare_model") as mock_prepare,
+            patch(
+                "src.services.world_quality_service._model_resolver.resolve_model_pair",
+                return_value=("creator-model:8b", "judge-model:8b"),
+            ),
+            patch(
+                "src.services.world_quality_service._model_resolver.prepare_model",
+            ) as mock_prepare,
         ):
             prep_c, prep_j = service._make_model_preparers("location")
 
             prep_c()
-            mock_prepare.assert_called_once_with(service.mode_service, "creator-model:8b")
+            mock_prepare.assert_called_once_with(
+                service.mode_service, "creator-model:8b", role="creator"
+            )
 
             mock_prepare.reset_mock()
             prep_j()
-            mock_prepare.assert_called_once_with(service.mode_service, "judge-model:8b")
+            mock_prepare.assert_called_once_with(
+                service.mode_service, "judge-model:8b", role="judge"
+            )
 
     def test_prepare_creator_graceful_on_failure(self, service):
-        """prepare_creator logs warning and continues when _prepare_model raises."""
+        """prepare_creator logs warning and continues when prepare_model raises."""
         with (
-            patch.object(service, "_get_creator_model", return_value="creator-model:8b"),
-            patch.object(service, "_get_judge_model", return_value="judge-model:8b"),
             patch(
-                "src.services.world_quality_service._prepare_model",
+                "src.services.world_quality_service._model_resolver.resolve_model_pair",
+                return_value=("creator-model:8b", "judge-model:8b"),
+            ),
+            patch(
+                "src.services.world_quality_service._model_resolver.prepare_model",
                 side_effect=ConnectionError("Ollama unreachable"),
             ),
         ):
@@ -5991,13 +5999,51 @@ class TestMakeModelPreparers:
             prep_c()
 
     def test_prepare_judge_graceful_on_failure(self, service):
-        """prepare_judge logs warning and continues when _prepare_model raises."""
+        """prepare_judge logs warning and continues when prepare_model raises."""
         with (
-            patch.object(service, "_get_creator_model", return_value="creator-model:8b"),
-            patch.object(service, "_get_judge_model", return_value="judge-model:8b"),
             patch(
-                "src.services.world_quality_service._prepare_model",
+                "src.services.world_quality_service._model_resolver.resolve_model_pair",
+                return_value=("creator-model:8b", "judge-model:8b"),
+            ),
+            patch(
+                "src.services.world_quality_service._model_resolver.prepare_model",
                 side_effect=ValueError("Invalid vram_strategy"),
+            ),
+        ):
+            _, prep_j = service._make_model_preparers("character")
+            # Should not raise — degrades gracefully with a warning
+            prep_j()
+
+    def test_prepare_creator_graceful_on_vram_allocation_error(self, service):
+        """prepare_creator logs warning and continues when VRAMAllocationError is raised."""
+        from src.utils.exceptions import VRAMAllocationError
+
+        with (
+            patch(
+                "src.services.world_quality_service._model_resolver.resolve_model_pair",
+                return_value=("creator-model:8b", "judge-model:8b"),
+            ),
+            patch(
+                "src.services.world_quality_service._model_resolver.prepare_model",
+                side_effect=VRAMAllocationError("Not enough VRAM for creator"),
+            ),
+        ):
+            prep_c, _ = service._make_model_preparers("character")
+            # Should not raise — degrades gracefully with a warning
+            prep_c()
+
+    def test_prepare_judge_graceful_on_vram_allocation_error(self, service):
+        """prepare_judge logs warning and continues when VRAMAllocationError is raised."""
+        from src.utils.exceptions import VRAMAllocationError
+
+        with (
+            patch(
+                "src.services.world_quality_service._model_resolver.resolve_model_pair",
+                return_value=("creator-model:8b", "judge-model:8b"),
+            ),
+            patch(
+                "src.services.world_quality_service._model_resolver.prepare_model",
+                side_effect=VRAMAllocationError("Not enough VRAM for judge"),
             ),
         ):
             _, prep_j = service._make_model_preparers("character")

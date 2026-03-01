@@ -2,6 +2,7 @@
 
 import logging
 import threading
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from src.memory.mode_models import (
@@ -417,8 +418,12 @@ def select_model_with_size_preference(
     return str(best["model_id"])
 
 
+@lru_cache(maxsize=64)
 def calculate_tier_score(size_gb: float, size_pref: SizePreference) -> float:
     """Score how well a model size matches the given SizePreference on a 0-10 scale.
+
+    Cached with ``@lru_cache`` — this pure function is called 28+ times per
+    model selection with identical inputs during quality loops.
 
     Args:
         size_gb: Model size in gigabytes.
@@ -442,6 +447,83 @@ def calculate_tier_score(size_gb: float, size_pref: SizePreference) -> float:
         tier_scores = {"large": 5, "medium": 10, "small": 7, "tiny": 2}
 
     return tier_scores.get(tier.value, 5)
+
+
+def select_model_pair(
+    svc: ModelModeService,
+    creator_role: str,
+    judge_role: str,
+) -> tuple[str, str]:
+    """Resolve creator and judge models together, ensuring the pair fits in VRAM.
+
+    Instead of resolving each model independently (which can produce a pair that
+    exceeds GPU capacity), this function resolves the creator first, then checks
+    whether the candidate judge model fits alongside it. If the initial pair
+    doesn't fit, it falls back to using the same model for both roles (self-judging)
+    to guarantee the pair fits.
+
+    Args:
+        svc: The ModelModeService instance.
+        creator_role: Agent role for the creator (e.g. "writer", "architect").
+        judge_role: Agent role for the judge (e.g. "judge").
+
+    Returns:
+        Tuple of (creator_model_id, judge_model_id).
+    """
+    from src.services.model_mode_service._vram_budget import get_vram_snapshot, pair_fits
+
+    creator_model = get_model_for_agent(svc, creator_role)
+    judge_model = get_model_for_agent(svc, judge_role)
+
+    # If same model, no VRAM conflict possible
+    if creator_model == judge_model:
+        logger.debug(
+            "Model pair resolved: same model %s for creator (%s) and judge (%s)",
+            creator_model,
+            creator_role,
+            judge_role,
+        )
+        return creator_model, judge_model
+
+    # Check if the pair fits in VRAM
+    try:
+        snapshot = get_vram_snapshot()
+        creator_size = snapshot.installed_models.get(creator_model, 0.0)
+        judge_size = snapshot.installed_models.get(judge_model, 0.0)
+
+        if pair_fits(creator_size, judge_size, snapshot.available_vram_gb):
+            logger.info(
+                "Model pair resolved: creator=%s (%.1fGB), judge=%s (%.1fGB), "
+                "available=%.1fGB — both fit",
+                creator_model,
+                creator_size,
+                judge_model,
+                judge_size,
+                snapshot.available_vram_gb,
+            )
+            return creator_model, judge_model
+
+        # Pair doesn't fit — fall back to self-judging with the creator model
+        logger.warning(
+            "Model pair does not fit in VRAM: creator=%s (%.1fGB) + judge=%s (%.1fGB) "
+            "exceeds %.1fGB available. Falling back to self-judging with creator model.",
+            creator_model,
+            creator_size,
+            judge_model,
+            judge_size,
+            snapshot.available_vram_gb,
+        )
+        return creator_model, creator_model
+    except Exception as e:
+        logger.warning(
+            "Could not check model pair VRAM fit for creator=%s judge=%s (%s: %s) — "
+            "proceeding with resolved pair",
+            creator_model,
+            judge_model,
+            type(e).__name__,
+            e,
+        )
+        return creator_model, judge_model
 
 
 def get_temperature_for_agent(svc: ModelModeService, agent_role: str) -> float:

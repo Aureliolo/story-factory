@@ -409,6 +409,36 @@ def build_circuit_breaker_section(page: SettingsPage) -> None:
                 )
 
         ui.separator().classes("my-3")
+        _subsection_header("Streaming Timeouts", "stream")
+
+        ui.label("Guard against stalled Ollama inference during long generations.").classes(
+            "text-xs text-gray-500 mb-1"
+        )
+
+        with ui.row().classes("items-center gap-3 flex-wrap"):
+            with ui.column().classes("gap-1"):
+                ui.label("Inter-Chunk (s)").classes("text-xs text-gray-500")
+                page._streaming_inter_chunk_timeout_input = page._build_number_input(
+                    value=page.settings.streaming_inter_chunk_timeout,
+                    min_val=30,
+                    max_val=600,
+                    step=10,
+                    tooltip_text="Max seconds between stream chunks before timeout (30-600)",
+                    width="w-16",
+                )
+
+            with ui.column().classes("gap-1"):
+                ui.label("Wall Clock (s)").classes("text-xs text-gray-500")
+                page._streaming_wall_clock_timeout_input = page._build_number_input(
+                    value=page.settings.streaming_wall_clock_timeout,
+                    min_val=120,
+                    max_val=3600,
+                    step=60,
+                    tooltip_text="Max total seconds for entire generation (120-3600)",
+                    width="w-16",
+                )
+
+        ui.separator().classes("my-3")
         _subsection_header("Model Service Cache TTLs", "cached")
 
         ui.label(

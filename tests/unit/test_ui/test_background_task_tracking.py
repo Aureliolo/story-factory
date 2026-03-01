@@ -412,3 +412,28 @@ class TestBuildProgress:
         state = AppState()
         with pytest.raises(ValueError, match="step must be non-negative"):
             state.update_build_progress(-1, 10, "Bad")
+
+    def test_update_build_progress_sub_step_fields(self):
+        """update_build_progress should set sub-step fields when provided."""
+        state = AppState()
+        state.update_build_progress(3, 10, "Generating...", sub_current=2, sub_total=4)
+
+        assert state.build_sub_current == 2
+        assert state.build_sub_total == 4
+
+    def test_update_build_progress_sub_step_defaults_to_none(self):
+        """Sub-step fields default to None when not provided."""
+        state = AppState()
+        state.update_build_progress(3, 10, "Generating...")
+
+        assert state.build_sub_current is None
+        assert state.build_sub_total is None
+
+    def test_clear_build_progress_resets_sub_step_fields(self):
+        """clear_build_progress should reset sub-step fields to None."""
+        state = AppState()
+        state.update_build_progress(3, 10, "Generating...", sub_current=2, sub_total=4)
+        state.clear_build_progress()
+
+        assert state.build_sub_current is None
+        assert state.build_sub_total is None

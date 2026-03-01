@@ -35,6 +35,8 @@ def mock_settings():
     settings.ollama_url = "http://localhost:11434"
     settings.ollama_timeout = 120
     settings.context_size = 32768
+    settings.streaming_inter_chunk_timeout = 120
+    settings.streaming_wall_clock_timeout = 600
     return settings
 
 
@@ -470,6 +472,51 @@ class TestGenerateStructured:
 
         assert result.name == "test"
         assert mock_client.chat.call_count == 2
+
+    @patch("src.services.llm_client.consume_stream")
+    @patch("src.services.llm_client.get_ollama_client")
+    def test_retries_on_stream_timeout_error(
+        self, mock_get_client, mock_consume, mock_settings, caplog
+    ):
+        """Test that StreamTimeoutError from consume_stream triggers retry with specific logging."""
+        from src.utils.streaming import StreamTimeoutError
+
+        mock_client = MagicMock()
+        mock_client.chat.return_value = iter([])  # Dummy stream
+        mock_get_client.return_value = mock_client
+
+        timeout_err = StreamTimeoutError(
+            "Stream timed out",
+            partial_content_length=1234,
+            elapsed_seconds=120.0,
+            timeout_type="inter_chunk",
+        )
+        mock_consume.side_effect = [
+            timeout_err,
+            {
+                "message": {"content": '{"name": "test", "value": 42}'},
+                "prompt_eval_count": 100,
+                "eval_count": 50,
+            },
+        ]
+
+        with caplog.at_level(logging.WARNING, logger="src.services.llm_client"):
+            result = generate_structured(
+                settings=mock_settings,
+                model="test-model:8b",
+                prompt="User prompt",
+                response_model=SampleModel,
+                max_retries=2,
+            )
+
+        assert result.name == "test"
+        assert result.value == 42
+        assert mock_consume.call_count == 2
+
+        stream_timeout_warnings = [
+            r.message for r in caplog.records if "Stream timeout in structured output" in r.message
+        ]
+        assert len(stream_timeout_warnings) == 1
 
     @patch("src.services.llm_client.get_ollama_client")
     def test_response_error_fails_fast(self, mock_get_client, mock_settings):

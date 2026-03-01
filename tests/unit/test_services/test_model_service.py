@@ -1366,15 +1366,15 @@ class TestModelServiceLogModelLoadState:
         assert any("1 model(s) loaded" in r.message for r in caplog.records)
         assert any("test-model:8b" in r.message for r in caplog.records)
 
-    def test_warns_cold_start_when_target_not_loaded(self, model_service, caplog):
-        """Test warns about cold-start when target model is not loaded."""
-        with caplog.at_level(logging.WARNING, logger="src.services.model_service"):
+    def test_info_cold_start_when_target_not_loaded(self, model_service, caplog):
+        """Test logs INFO about cold-start when target model is not loaded (normal startup state)."""
+        with caplog.at_level(logging.INFO, logger="src.services.model_service"):
             with patch.object(model_service, "get_running_models", return_value=[]):
                 model_service.log_model_load_state(target_model="test-writer:8b")
 
-        warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
-        assert any("cold-start" in r.message.lower() for r in warn_records)
-        assert any("No models loaded" in r.message for r in warn_records)
+        info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+        assert any("cold-start" in r.message.lower() for r in info_records)
+        assert any("No models loaded" in r.message for r in info_records)
 
     def test_info_cold_start_when_different_model_loaded(self, model_service, caplog):
         """Test logs INFO about cold-start when a different model is loaded."""

@@ -274,7 +274,11 @@ class BaseAgent:
                             },
                             stream=True,
                         )
-                        response = consume_stream(stream)
+                        response = consume_stream(
+                            stream,
+                            inter_chunk_timeout=self.settings.streaming_inter_chunk_timeout,
+                            wall_clock_timeout=self.settings.streaming_wall_clock_timeout,
+                        )
                         duration = time.time() - start_time
 
                         # Extract token counts from streamed response
@@ -298,7 +302,7 @@ class BaseAgent:
 
                         logger.info(
                             f"{self.name}: Structured output received "
-                            f"({response_model.__name__}, {duration:.2f}s, "
+                            f"(model={self.model}, {response_model.__name__}, {duration:.2f}s, "
                             f"tokens: {prompt_tokens}+{completion_tokens}={total_tokens})"
                         )
                         circuit_breaker.record_success()
@@ -501,7 +505,11 @@ class BaseAgent:
                             },
                             stream=True,
                         )
-                        response = consume_stream(stream)
+                        response = consume_stream(
+                            stream,
+                            inter_chunk_timeout=self.settings.streaming_inter_chunk_timeout,
+                            wall_clock_timeout=self.settings.streaming_wall_clock_timeout,
+                        )
                         duration = time.time() - start_time
 
                         content: str = response["message"]["content"]
@@ -523,7 +531,7 @@ class BaseAgent:
 
                         logger.info(
                             f"{self.name}: LLM response received "
-                            f"({len(content)} chars, {duration:.2f}s, "
+                            f"(model={use_model}, {len(content)} chars, {duration:.2f}s, "
                             f"tokens: {prompt_tokens}+{completion_tokens}={total_tokens})"
                         )
 

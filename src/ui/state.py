@@ -120,6 +120,8 @@ class AppState:
     build_step: int = 0
     build_total_steps: int = 0
     build_message: str = ""
+    build_sub_current: int | None = None  # Sub-step within current entity (iteration)
+    build_sub_total: int | None = None  # Total sub-steps (max_iterations)
 
     # ========== Project List Cache ==========
     # Cache stores ProjectSummary objects from ProjectService.list_projects()
@@ -486,13 +488,23 @@ class AppState:
 
     # ========== Build Progress Methods ==========
 
-    def update_build_progress(self, step: int, total_steps: int, message: str) -> None:
+    def update_build_progress(
+        self,
+        step: int,
+        total_steps: int,
+        message: str,
+        *,
+        sub_current: int | None = None,
+        sub_total: int | None = None,
+    ) -> None:
         """Update build progress state (survives dialog destruction).
 
         Args:
             step: Current build step number (0-indexed or 1-indexed).
             total_steps: Total number of build steps (must be > 0).
             message: Human-readable progress message.
+            sub_current: Optional sub-step within current entity (e.g. iteration 2/4).
+            sub_total: Optional total sub-steps (e.g. max_iterations).
 
         Raises:
             ValueError: If total_steps is not positive or step is out of range.
@@ -505,6 +517,8 @@ class AppState:
         self.build_step = step
         self.build_total_steps = total_steps
         self.build_message = message
+        self.build_sub_current = sub_current
+        self.build_sub_total = sub_total
         logger.debug("Build progress updated: step %d/%d — %s", step, total_steps, message)
 
     def clear_build_progress(self) -> None:
@@ -513,6 +527,8 @@ class AppState:
         self.build_step = 0
         self.build_total_steps = 0
         self.build_message = ""
+        self.build_sub_current = None
+        self.build_sub_total = None
         logger.debug("Build progress cleared")
 
     # ========== Project List Cache Methods ==========

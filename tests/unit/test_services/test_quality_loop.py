@@ -663,8 +663,8 @@ class TestQualityLoopUnchangedOutput:
 
         # Judge should only be called once in the loop (iteration 0), then refine
         # returns unchanged output on iteration 1 and loop breaks before re-judging.
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert judge_calls == 2
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert judge_calls == 1
         assert result_scores.average == 6.0
         # Analytics should record early_stop_triggered=True
         analytics_call = mock_svc._log_refinement_analytics.call_args
@@ -714,8 +714,8 @@ class TestQualityLoopUnchangedOutput:
         # Iteration 0: create v1 → judge (6.0, below threshold)
         # Iteration 1: refine → v2 (different) → judge (6.0)
         # Iteration 2: refine → v2 (same as iteration 1) → unchanged detection → break
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert judge_calls == 3
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert judge_calls == 2
 
     def test_unchanged_output_different_entities_continues(self, mock_svc, config):
         """Different dicts from refine don't trigger unchanged detection."""
@@ -832,11 +832,11 @@ class TestQualityLoopB10SkipRedundantJudge:
         # Iteration 1: refine raises → scores preserved, no judge → refine_calls=1
         # Iteration 2: refine succeeds (v2) → judge (5.0) → judge_calls=2, refine_calls=2
         # Iteration 3: refine succeeds (v3) → judge (5.0) → judge_calls=3, refine_calls=3
-        # +1 for hail-mary fresh creation judge call (threshold not met)
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
         # judge should NOT have been called after iteration 1's refinement error
-        assert judge_calls == 4  # 3 in loop + 1 hail-mary
+        assert judge_calls == 3  # 3 in loop, hail-mary M3 skip
         assert refine_calls == 3
-        assert scoring_rounds == 4
+        assert scoring_rounds == 3
 
     def test_judge_error_allows_re_judge_on_next_iteration(self, mock_svc, config):
         """After judge error, the same entity IS re-judged (not skipped)."""
@@ -902,8 +902,8 @@ class TestQualityLoopB10SkipRedundantJudge:
         # Iteration 0: create → judge (5.0) → scoring_rounds=1
         # Iteration 1: refine raises → failed_refinements=1, scores preserved
         # Iteration 2: refine raises → failed_refinements=2, scores preserved
-        # Post-loop: hail-mary fires (5.0 < 8.0, max_iterations=3 > 1) → scoring_rounds=2
-        assert scoring_rounds == 2
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert scoring_rounds == 1
         # Verify analytics was called with the history tracking failed refinements
         analytics_call = mock_svc._log_refinement_analytics.call_args
         history = analytics_call[0][0]
@@ -1728,8 +1728,8 @@ class TestScorePlateauEarlyStop:
         )
 
         # Should stop after 2 scoring rounds in loop (7.0 → 7.0)
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert scoring_rounds == 3
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert scoring_rounds == 2
         analytics_call = mock_svc._log_refinement_analytics.call_args
         assert analytics_call.kwargs["early_stop_triggered"] is True
 
@@ -1815,8 +1815,8 @@ class TestScorePlateauEarlyStop:
         # With min_iterations=3, needs at least 3 scoring rounds
         # Scoring round 2 has only 2 iterations, doesn't meet min 3
         # Scoring round 3: len(history) == 3 >= max(2, 3), triggers
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert scoring_rounds == 4
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert scoring_rounds == 3
 
     def test_improving_scores_do_not_trigger_plateau(self, mock_svc, config):
         """Steadily improving scores never trigger score-plateau early-stop."""
@@ -1937,8 +1937,8 @@ class TestScorePlateauEarlyStop:
         )
 
         # All 3 iterations should run (0.2 difference > 0.1 tolerance)
-        # +1 for hail-mary fresh creation judge call (threshold not met)
-        assert scoring_rounds == 4
+        # Hail-mary creates same entity as best → M3 identical output skip (no extra judge call)
+        assert scoring_rounds == 3
 
 
 class TestFallbackWhenBestEntityNotFound:
@@ -1983,8 +1983,8 @@ class TestHailMaryStructuralGating:
     def test_hail_mary_skipped_when_temporal_plausibility_below_4(self, mock_svc):
         """Hail-mary is skipped when temporal_plausibility is the lowest dim below 4.0."""
         config = RefinementConfig(
-            quality_threshold=8.0,
-            quality_thresholds=_all_thresholds(8.0),
+            quality_threshold=9.0,
+            quality_thresholds=_all_thresholds(9.0),
             max_iterations=2,
             early_stopping_patience=10,
             early_stopping_min_iterations=10,
@@ -2058,14 +2058,13 @@ class TestHailMaryStructuralGating:
             feedback="Needs more coherence",
         )
 
-        entities = [{"name": "v1"}, {"name": "v2"}]
         create_calls = 0
 
         def create_fn(retries):
-            """Track creation calls."""
+            """Track creation calls; return different entities so hail-mary avoids M3 skip."""
             nonlocal create_calls
             create_calls += 1
-            return entities[0]
+            return {"name": f"v{create_calls}"}
 
         judge_count = 0
 
@@ -2079,7 +2078,7 @@ class TestHailMaryStructuralGating:
             entity_type="faction",
             create_fn=create_fn,
             judge_fn=judge_fn,
-            refine_fn=lambda e, s, i: entities[1],
+            refine_fn=lambda e, s, i: {"name": f"refined_v{i}"},
             get_name=lambda e: e["name"],
             serialize=lambda e: e.copy(),
             is_empty=lambda e: not e.get("name"),
@@ -2097,36 +2096,37 @@ class TestHailMaryStructuralGating:
     def test_hail_mary_proceeds_when_temporal_above_4(self, mock_svc):
         """Hail-mary proceeds when temporal_plausibility is lowest but >= 4.0."""
         config = RefinementConfig(
-            quality_threshold=8.0,
-            quality_thresholds=_all_thresholds(8.0),
+            quality_threshold=9.0,
+            quality_thresholds=_all_thresholds(9.0),
             max_iterations=2,
             early_stopping_patience=10,
             early_stopping_min_iterations=10,
         )
 
         # temporal_plausibility is lowest but at 4.0 (not below threshold)
+        # avg (excl temporal) = 8.0 < 9.0 threshold → entity does NOT pass
         borderline_scores = FactionQualityScores(
             coherence=8.0,
             influence=8.0,
             conflict_potential=8.0,
             distinctiveness=8.0,
-            temporal_plausibility=4.0,  # At threshold, not below
+            temporal_plausibility=4.0,  # At structural threshold, not below
             feedback="Temporal placement could be better",
         )
 
         create_calls = 0
 
         def create_fn(retries):
-            """Track creation calls."""
+            """Track creation calls; return different entities so hail-mary avoids M3 skip."""
             nonlocal create_calls
             create_calls += 1
-            return {"name": "v1"}
+            return {"name": f"v{create_calls}"}
 
         _entity, _scores, scoring_rounds = quality_refinement_loop(
             entity_type="faction",
             create_fn=create_fn,
             judge_fn=lambda e: borderline_scores,
-            refine_fn=lambda e, s, i: {"name": "v2"},
+            refine_fn=lambda e, s, i: {"name": f"refined_v{i}"},
             get_name=lambda e: e["name"],
             serialize=lambda e: e.copy(),
             is_empty=lambda e: not e.get("name"),
@@ -2143,8 +2143,8 @@ class TestHailMaryStructuralGating:
     def test_hail_mary_gating_logs_info(self, mock_svc, caplog):
         """Structural gating logs an info message when skipping hail-mary."""
         config = RefinementConfig(
-            quality_threshold=8.0,
-            quality_thresholds=_all_thresholds(8.0),
+            quality_threshold=9.0,
+            quality_thresholds=_all_thresholds(9.0),
             max_iterations=2,
             early_stopping_patience=10,
             early_stopping_min_iterations=10,
@@ -2713,7 +2713,7 @@ class TestHailMaryWinRateTracking:
 
         quality_refinement_loop(
             entity_type="character",
-            create_fn=lambda retries: {"name": "Hero"},
+            create_fn=lambda retries: {"name": f"Hero r{retries}"},
             judge_fn=judge_fn,
             refine_fn=lambda e, s, i: {"name": f"Hero v{i}"},
             get_name=lambda e: e["name"],
@@ -2749,7 +2749,7 @@ class TestHailMaryWinRateTracking:
 
         quality_refinement_loop(
             entity_type="character",
-            create_fn=lambda retries: {"name": "Hero"},
+            create_fn=lambda retries: {"name": f"Hero r{retries}"},
             judge_fn=judge_fn,
             refine_fn=lambda e, s, i: {"name": f"Hero v{i}"},
             get_name=lambda e: e["name"],
@@ -3285,14 +3285,15 @@ class TestDimensionFloor:
             dimension_minimum=6.0,
         )
 
-        # Average = (9+9+9+9+9+3)/6 = 8.0 >= 7.5, but min dim = 3.0 < 6.0
+        # Average (excl temporal) = (3+9+9+9+9)/5 = 7.8 >= 7.5, but min dim = 3.0 < 6.0
+        # Use depth as the floor-violating dim (temporal_plausibility is excluded from floor check)
         low_dim_scores = _make_mixed_scores(
-            depth=9.0,
+            depth=3.0,
             goals=9.0,
             flaws=9.0,
             uniqueness=9.0,
             arc_potential=9.0,
-            temporal_plausibility=3.0,
+            temporal_plausibility=9.0,
         )
 
         entity = {"name": "FloorTest"}
@@ -3459,13 +3460,14 @@ class TestDimensionFloor:
             dimension_minimum=6.0,
         )
 
+        # Use depth as the floor-violating dim (temporal_plausibility is excluded from floor check)
         scores = _make_mixed_scores(
-            depth=9.0,
+            depth=3.0,
             goals=9.0,
             flaws=9.0,
             uniqueness=9.0,
             arc_potential=9.0,
-            temporal_plausibility=3.0,
+            temporal_plausibility=9.0,
         )
 
         entity = {"name": "LogTest"}
@@ -3716,7 +3718,7 @@ class TestPrepareModelCallbacks:
 
         # Main loop iter 0: prep_creator, create, prep_judge, judge (below threshold)
         # Main loop iter 1: prep_creator before refine → unchanged detection → early stop
-        # Hail-mary: prep_creator, create, prep_judge, judge
+        # Hail-mary: prep_creator, create → identical output to best → judge skipped (M3)
         assert call_order == [
             "prepare_creator",
             "create",
@@ -3724,6 +3726,67 @@ class TestPrepareModelCallbacks:
             "judge",
             "prepare_creator",  # refine attempt (before unchanged detection breaks)
             "prepare_creator",  # hail-mary create
+            "create",
+            # prepare_judge + judge skipped: hail-mary produced identical output (M3)
+        ]
+
+    def test_prepare_judge_called_in_hail_mary_different_output(self, mock_svc, config):
+        """prepare_judge is called during hail-mary when fresh entity differs from best."""
+        config.max_iterations = 2
+        config.early_stopping_patience = 1
+        call_order: list[str] = []
+        create_call_count = 0
+
+        # Mock analytics_db for hail-mary
+        mock_svc.analytics_db = MagicMock()
+        mock_svc.analytics_db.get_hail_mary_win_rate.return_value = 0.5
+        mock_svc.analytics_db.record_hail_mary_attempt = MagicMock()
+
+        def prep_creator():
+            """Record prepare_creator call."""
+            call_order.append("prepare_creator")
+
+        def prep_judge():
+            """Record prepare_judge call."""
+            call_order.append("prepare_judge")
+
+        def create_fn(retries):
+            """Return different entity on hail-mary (3rd call)."""
+            nonlocal create_call_count
+            create_call_count += 1
+            call_order.append("create")
+            # First create returns "Hero"; hail-mary returns "Hero v2" (different)
+            if create_call_count >= 2:
+                return {"name": "Hero v2"}
+            return {"name": "Hero"}
+
+        def judge_fn(e):
+            """Record judge call and return low scores."""
+            call_order.append("judge")
+            return _make_scores(6.0)
+
+        quality_refinement_loop(
+            entity_type="character",
+            create_fn=create_fn,
+            judge_fn=judge_fn,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+            prepare_creator=prep_creator,
+            prepare_judge=prep_judge,
+        )
+
+        # Hail-mary produces different output, so prepare_judge and judge ARE called
+        assert "prepare_judge" in call_order
+        # Specifically check the tail of call_order for the hail-mary sequence
+        hail_mary_start = len(call_order) - 4  # last 4: prep_creator, create, prep_judge, judge
+        assert call_order[hail_mary_start:] == [
+            "prepare_creator",
             "create",
             "prepare_judge",
             "judge",
@@ -3774,19 +3837,19 @@ class TestH1ThresholdMetViaBestIteration:
         # dimension_minimum defaults to 6.0
 
         entities = [{"name": "v1"}, {"name": "v2"}]
-        # Iteration 1: avg=9.0 (temporal excluded) but temporal_plausibility=3.0
+        # Iteration 1: avg=8.6 (temporal excluded, (3+10+10+10+10)/5) but depth=3.0
         #   → below_floor (3.0 < 6.0) → threshold check FAILS despite high avg
-        #   → best_iteration=1, peak_score=9.0
-        # Iteration 2: avg=8.5, min=8.5 → all dims above floor
-        #   → monotonicity: 8.5 < 9.0 peak → revert entity to iter 1
+        #   → best_iteration=1, peak_score=8.6
+        # Iteration 2: avg=8.5, min_for_avg=8.5 → all dims above floor
+        #   → monotonicity: 8.5 < 8.6 peak → revert entity to iter 1
         #   → threshold: 8.5 >= 8.0 AND best_iteration(1) != current_iter(2) → H1 path
         iter1_scores = CharacterQualityScores(
-            depth=9.0,
-            goals=9.0,
-            flaws=9.0,
-            uniqueness=9.0,
-            arc_potential=9.0,
-            temporal_plausibility=3.0,  # below dimension_minimum 6.0
+            depth=3.0,  # below dimension_minimum 6.0 (included in floor check)
+            goals=10.0,
+            flaws=10.0,
+            uniqueness=10.0,
+            arc_potential=10.0,
+            temporal_plausibility=10.0,  # excluded from average/floor
             feedback="High avg but floor violation",
         )
         iter2_scores = _make_scores(8.5)
@@ -3822,9 +3885,10 @@ class TestH1ThresholdMetViaBestIteration:
             story_id="test-story",
         )
 
-        # Should return entity from best iteration (v1) with its scores (9.0)
+        # Should return entity from best iteration (v1) with its scores
+        # avg (excl temporal) = (3+10+10+10+10)/5 = 8.6
         assert result_entity == {"name": "v1"}
-        assert result_scores.average == 9.0
+        assert result_scores.average == pytest.approx(8.6)
         assert iterations == 2
 
 

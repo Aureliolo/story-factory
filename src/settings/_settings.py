@@ -309,6 +309,8 @@ class Settings:
     subprocess_timeout: int = 10  # Timeout for subprocess calls (ollama list, etc.)
     small_model_size_threshold_gb: float = 5.0  # Models under this size get capped timeout
     small_model_timeout_cap: float = 45.0  # Max timeout (s) for small models
+    streaming_inter_chunk_timeout: int = 120  # Max seconds between stream chunks
+    streaming_wall_clock_timeout: int = 600  # Max total seconds for entire generation
 
     # World quality refinement settings
     world_quality_enabled: bool = True  # Enable quality refinement for world generation
