@@ -363,6 +363,34 @@ class TestSettingsValidation:
         with pytest.raises(ValueError, match="small_model_timeout_cap must be positive"):
             settings.validate()
 
+    def test_validate_raises_on_streaming_inter_chunk_timeout_too_low(self):
+        """Should raise ValueError for streaming_inter_chunk_timeout below 10."""
+        settings = Settings()
+        settings.streaming_inter_chunk_timeout = 5
+        with pytest.raises(ValueError, match="streaming_inter_chunk_timeout must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_streaming_inter_chunk_timeout_too_high(self):
+        """Should raise ValueError for streaming_inter_chunk_timeout above 86400."""
+        settings = Settings()
+        settings.streaming_inter_chunk_timeout = 100000
+        with pytest.raises(ValueError, match="streaming_inter_chunk_timeout must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_streaming_wall_clock_timeout_too_low(self):
+        """Should raise ValueError for streaming_wall_clock_timeout below 10."""
+        settings = Settings()
+        settings.streaming_wall_clock_timeout = 0
+        with pytest.raises(ValueError, match="streaming_wall_clock_timeout must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_streaming_wall_clock_timeout_too_high(self):
+        """Should raise ValueError for streaming_wall_clock_timeout above 86400."""
+        settings = Settings()
+        settings.streaming_wall_clock_timeout = 100000
+        with pytest.raises(ValueError, match="streaming_wall_clock_timeout must be between"):
+            settings.validate()
+
     def test_validate_raises_on_non_bool_content_check_enabled(self):
         """Should raise ValueError for non-boolean content_check_enabled."""
         settings = Settings()

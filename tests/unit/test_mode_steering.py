@@ -1012,3 +1012,19 @@ class TestSelectModelPair:
         assert creator == "creator-model:8b"
         assert judge == "creator-model:8b"
         mock_pair_fits.assert_called_once_with(14.0, 18.0, 24.0)
+
+    @patch(
+        "src.services.model_mode_service._vram_budget.get_vram_snapshot",
+        side_effect=RuntimeError("nvidia-smi crashed"),
+    )
+    @patch("src.services.model_mode_service._modes.get_model_for_agent")
+    def test_vram_probe_exception_returns_original_pair(self, mock_get_model, _mock_snapshot):
+        """When VRAM probing raises, fall back to the resolved pair without error."""
+        mock_get_model.side_effect = ["creator-model:8b", "judge-model:8b"]
+
+        from src.services.model_mode_service._modes import select_model_pair
+
+        creator, judge = select_model_pair(MagicMock(), "writer", "judge")
+
+        assert creator == "creator-model:8b"
+        assert judge == "judge-model:8b"

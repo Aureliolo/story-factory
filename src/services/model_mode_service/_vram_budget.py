@@ -172,7 +172,7 @@ def pair_fits(
     judge_residency = min(available_vram_gb / judge_size_gb, 1.0)
 
     fits = creator_residency >= MIN_GPU_RESIDENCY and judge_residency >= MIN_GPU_RESIDENCY
-    if not fits:
+    if not fits:  # pragma: no cover — defensive: combined check above catches this
         logger.debug(
             "Pair does not fit: creator=%.1fGB (%.0f%%), judge=%.1fGB (%.0f%%), "
             "available=%.1fGB, min_residency=%.0f%%",

@@ -403,6 +403,38 @@ class TestH2IterationCallback:
         assert result_entity == entity
         assert scoring_rounds == 1
 
+    def test_callback_exception_is_swallowed(self, caplog):
+        """When iteration_callback raises, the loop continues with a warning."""
+        entity = {"name": "Grace"}
+        high_scores = _make_character_scores()
+
+        config = _make_config(max_iterations=1, dimension_minimum=0.0, threshold=7.5)
+        svc = _make_svc()
+
+        def exploding_callback(_cur: int, _max: int, _name: str) -> None:
+            """Raise to simulate callback failure."""
+            raise RuntimeError("UI crashed")
+
+        with caplog.at_level(logging.WARNING):
+            result_entity, _result_scores, scoring_rounds = quality_refinement_loop(
+                entity_type="character",
+                create_fn=lambda _retries: entity,
+                judge_fn=lambda _e: high_scores,
+                refine_fn=lambda e, s, i: e,
+                get_name=_get_name,
+                serialize=_serialize,
+                is_empty=_is_empty,
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=svc,
+                story_id="test-story",
+                iteration_callback=exploding_callback,
+            )
+
+        assert result_entity == entity
+        assert scoring_rounds == 1
+        assert any("iteration callback failed" in r.message for r in caplog.records)
+
 
 # ---------------------------------------------------------------------------
 # H3: Per-dimension regression logging
@@ -690,6 +722,17 @@ class TestResolveModelPairVRAM:
 
         with pytest.raises(ValueError, match="Unknown entity_type"):
             resolve_model_pair(svc, "nonexistent_type")
+
+    def test_entity_missing_from_judge_roles_raises_value_error(self):
+        """Entity in ENTITY_CREATOR_ROLES but missing from ENTITY_JUDGE_ROLES raises."""
+        from src.services.world_quality_service._model_resolver import resolve_model_pair
+
+        svc = self._make_service()
+        # Add 'widget' to creator roles but not judge roles
+        svc.ENTITY_CREATOR_ROLES["widget"] = "widget_creator"
+
+        with pytest.raises(ValueError, match="Unknown entity_type 'widget'"):
+            resolve_model_pair(svc, "widget")
 
 
 class TestMakeModelPreparers:
