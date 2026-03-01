@@ -624,3 +624,31 @@ class TestVramZeroRetry:
 
         # Just past boundary — fallback rejected, stays at 0.0
         assert snapshot.available_vram_gb == 0.0
+
+
+class TestLoadedModelVramQuery:
+    """Tests for the ollama ps() loaded model VRAM query in get_vram_snapshot."""
+
+    @patch("src.settings.get_installed_models_with_sizes", return_value={"test:8b": 4.5})
+    @patch("src.settings.get_available_vram", return_value=20.0)
+    def test_loaded_vram_from_ps_response(self, mock_vram, mock_models):
+        """Snapshot captures loaded model VRAM from ollama ps()."""
+        # Mock the ollama Client.ps() response
+        mock_model = type("MockModel", (), {"size": (5 * 1024**3)})()
+        mock_ps_response = type("MockPsResponse", (), {"models": [mock_model]})()
+
+        with patch("ollama.Client") as mock_client_cls:
+            mock_client_cls.return_value.ps.return_value = mock_ps_response
+            snapshot = get_vram_snapshot()
+
+        assert snapshot.loaded_model_vram_gb == pytest.approx(5.0, abs=0.1)
+
+    @patch("src.settings.get_installed_models_with_sizes", return_value={"test:8b": 4.5})
+    @patch("src.settings.get_available_vram", return_value=20.0)
+    def test_loaded_vram_defaults_zero_on_ps_error(self, mock_vram, mock_models):
+        """Snapshot loaded_model_vram_gb defaults to 0.0 when ps() fails."""
+        with patch("ollama.Client") as mock_client_cls:
+            mock_client_cls.return_value.ps.side_effect = ConnectionError("no ollama")
+            snapshot = get_vram_snapshot()
+
+        assert snapshot.loaded_model_vram_gb == 0.0

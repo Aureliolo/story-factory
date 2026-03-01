@@ -39,11 +39,11 @@ def story_state():
 # =========================================================================
 
 
-class TestExistingPairsNotCapped:
-    """A1: Verify all existing pairs are passed to the prompt (no 15-pair cap)."""
+class TestExistingPairsInPrompt:
+    """A1: Verify existing pairs are shown in the prompt (capped at 10 most recent)."""
 
-    def test_existing_pairs_not_capped(self, story_state):
-        """All existing pairs should appear in the prompt, not just the first 15."""
+    def test_existing_pairs_capped_at_10_most_recent(self, story_state):
+        """Only the 10 most recent existing pairs appear in the prompt to limit bloat."""
         from src.services.world_quality_service._relationship import _create_relationship
 
         svc = MagicMock()
@@ -53,17 +53,20 @@ class TestExistingPairsNotCapped:
             '"relation_type": "knows", "description": "They met once"}'
         }
 
-        # Create 20 existing pairs — all should appear
+        # Create 20 existing pairs — only last 10 should appear in prompt
         existing_rels = [(f"Entity{i}", f"Entity{i + 1}", "knows") for i in range(20)]
         entity_names = [f"Entity{i}" for i in range(25)]
 
         _create_relationship(svc, story_state, entity_names, existing_rels, 0.9)
 
         prompt_arg = svc.client.generate.call_args[1]["prompt"]
-        # Every pair must appear in the prompt
-        for src, tgt, rel_type in existing_rels:
+        # Last 10 pairs (most recent) must appear in the prompt
+        for src, tgt, rel_type in existing_rels[-10:]:
             expected = f"- {src} -> {tgt} ({rel_type})"
             assert expected in prompt_arg, f"Pair {expected} missing from prompt"
+        # First pair (oldest) should NOT appear — truncated
+        oldest = f"- {existing_rels[0][0]} -> {existing_rels[0][1]} ({existing_rels[0][2]})"
+        assert oldest not in prompt_arg, "Oldest pair should be truncated from prompt"
 
 
 class TestEntityFrequencyHintReturnsTuple:
