@@ -412,7 +412,7 @@ class TestVramZeroRetry:
         assert snapshot.available_vram_gb == 24.0
         # Called twice: initial 0 + one successful retry
         assert mock_vram.call_count == 2
-        mock_sleep.assert_called_once_with(0.5)
+        mock_sleep.assert_called_once_with(_vram_budget_mod._VRAM_ZERO_RETRY_DELAY_S)
 
     @patch("src.services.model_mode_service._vram_budget.time.sleep")
     @patch(
@@ -421,28 +421,28 @@ class TestVramZeroRetry:
     )
     @patch("src.settings.get_available_vram")
     def test_vram_zero_exhausts_retries_uses_previous(self, mock_vram, mock_models, mock_sleep):
-        """When all retries return 0 and a previous snapshot exists, use previous value.
+        """When all retries return 0 and a recent previous snapshot exists, use previous value.
 
         Scenario: previous snapshot had 24 GB, nvidia-smi persistently returns 0
-        (e.g., driver issue). After 3 retries, fallback to the previous 24 GB value
+        (e.g., driver issue). After retries, fallback to the previous 24 GB value
         to avoid a pessimistic self-judging cascade.
         """
         previous = VRAMSnapshot(
             available_vram_gb=24.0,
             installed_models={"test-model:8b": 4.5},
-            timestamp=time_module.monotonic() - 60,  # expired TTL
+            timestamp=time_module.monotonic() - 35,  # outside TTL (30s) but within fallback (60s)
         )
         _vram_budget_mod._cached_snapshot = previous
 
-        # All calls return 0: initial + 3 retries
+        # All calls return 0: initial + retries
         mock_vram.return_value = 0
 
         snapshot = get_vram_snapshot()
 
         assert snapshot.available_vram_gb == 24.0
-        # Called 4 times: 1 initial + 3 retries
-        assert mock_vram.call_count == 4
-        assert mock_sleep.call_count == 3
+        # Called 1 initial + retry_count times
+        assert mock_vram.call_count == 1 + _vram_budget_mod._VRAM_ZERO_RETRY_COUNT
+        assert mock_sleep.call_count == _vram_budget_mod._VRAM_ZERO_RETRY_COUNT
 
     @patch("src.services.model_mode_service._vram_budget.time.sleep")
     @patch(
@@ -493,3 +493,90 @@ class TestVramZeroRetry:
         # Called once — no retries because no previous snapshot
         mock_vram.assert_called_once()
         mock_sleep.assert_not_called()
+
+    @patch("src.services.model_mode_service._vram_budget.time.sleep")
+    @patch(
+        "src.settings.get_installed_models_with_sizes",
+        return_value={"test-model:8b": 4.5},
+    )
+    @patch("src.settings.get_available_vram")
+    def test_vram_zero_stale_previous_keeps_zero(self, mock_vram, mock_models, mock_sleep):
+        """When previous snapshot is too old and retries exhausted, keep 0 (pessimistic).
+
+        Scenario: previous snapshot is stale (age > 2x TTL), nvidia-smi persistently
+        returns 0. Fallback to previous value is rejected because the snapshot is too old.
+        """
+        previous = VRAMSnapshot(
+            available_vram_gb=24.0,
+            installed_models={"test-model:8b": 4.5},
+            timestamp=time_module.monotonic() - 300,  # very stale
+        )
+        _vram_budget_mod._cached_snapshot = previous
+
+        mock_vram.return_value = 0
+
+        snapshot = get_vram_snapshot()
+
+        # Stale fallback rejected — stays at 0.0
+        assert snapshot.available_vram_gb == 0.0
+        assert mock_sleep.call_count == _vram_budget_mod._VRAM_ZERO_RETRY_COUNT
+
+    @patch("src.services.model_mode_service._vram_budget.time.sleep")
+    @patch(
+        "src.settings.get_installed_models_with_sizes",
+        return_value={"test-model:8b": 4.5},
+    )
+    @patch(
+        "src.settings.get_available_vram",
+        return_value=0,
+    )
+    def test_vram_zero_fallback_at_exact_boundary(self, mock_vram, mock_models, mock_sleep):
+        """Previous snapshot aged exactly at _VRAM_ZERO_FALLBACK_MAX_AGE_S is still accepted.
+
+        Boundary test: age == max_age uses <= so it should be accepted, not rejected.
+        """
+        max_age = _vram_budget_mod._VRAM_ZERO_FALLBACK_MAX_AGE_S
+        previous = VRAMSnapshot(
+            available_vram_gb=24.0,
+            installed_models={"test-model:8b": 4.5},
+            # Subtract slightly less than max_age to stay within boundary after
+            # real monotonic time advances between timestamp capture and the check.
+            timestamp=time_module.monotonic() - (max_age - 0.5),
+        )
+        _vram_budget_mod._cached_snapshot = previous
+
+        mock_vram.return_value = 0
+
+        snapshot = get_vram_snapshot()
+
+        # Near boundary but within — fallback accepted
+        assert snapshot.available_vram_gb == 24.0
+
+    @patch("src.services.model_mode_service._vram_budget.time.sleep")
+    @patch(
+        "src.settings.get_installed_models_with_sizes",
+        return_value={"test-model:8b": 4.5},
+    )
+    @patch(
+        "src.settings.get_available_vram",
+        return_value=0,
+    )
+    def test_vram_zero_fallback_just_past_boundary(self, mock_vram, mock_models, mock_sleep):
+        """Previous snapshot aged 1s past _VRAM_ZERO_FALLBACK_MAX_AGE_S is rejected.
+
+        Boundary test: age > max_age should be rejected, staying at 0.0.
+        """
+        max_age = _vram_budget_mod._VRAM_ZERO_FALLBACK_MAX_AGE_S
+        previous = VRAMSnapshot(
+            available_vram_gb=24.0,
+            installed_models={"test-model:8b": 4.5},
+            timestamp=time_module.monotonic() - (max_age + 1),  # just past boundary
+        )
+        _vram_budget_mod._cached_snapshot = previous
+
+        mock_vram.return_value = 0
+
+        snapshot = get_vram_snapshot()
+
+        # Just past boundary — fallback rejected, stays at 0.0
+        assert snapshot.available_vram_gb == 0.0

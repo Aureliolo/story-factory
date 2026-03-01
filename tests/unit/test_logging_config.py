@@ -171,6 +171,11 @@ class TestSetupLogging:
             root_logger.handlers = original_handlers
             root_logger.setLevel(original_level)
 
+    def test_setup_logging_invalid_level_raises_value_error(self):
+        """setup_logging should raise ValueError for invalid level names."""
+        with pytest.raises(ValueError, match="Invalid log level"):
+            setup_logging(level="INVALID_LEVEL", log_file=None)
+
 
 class TestLogContext:
     """Tests for log_context context manager."""

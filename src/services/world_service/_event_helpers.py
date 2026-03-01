@@ -37,8 +37,10 @@ _LIFECYCLE_TEMPORAL_KEYS = ("birth", "death", "founding", "dissolution", "creati
 def _sanitize_event_text(text: str) -> str:
     """Strip Markdown artifacts and title prefixes from LLM event text.
 
-    Removes ``**bold**``, ``*italic*``, and leading ``Title:`` / ``Event Title:``
-    prefixes that LLMs sometimes inject into event descriptions and names.
+    Markdown bold/italic is stripped first so that wrapped prefixes like
+    ``**Event Title:**`` are reduced to plain ``Event Title:`` before the
+    title-prefix regex runs.  An extra ``.strip()`` before the prefix regex
+    handles residual whitespace left by markdown substitution.
 
     Args:
         text: Raw event text from LLM output.
@@ -46,9 +48,10 @@ def _sanitize_event_text(text: str) -> str:
     Returns:
         Cleaned text with Markdown formatting and title prefixes removed.
     """
-    text = _TITLE_PREFIX_RE.sub("", text.strip())
+    text = text.strip()
     text = _MD_BOLD_RE.sub(r"\1", text)
     text = _MD_ITALIC_RE.sub(r"\1", text)
+    text = _TITLE_PREFIX_RE.sub("", text.strip())
     return text.strip()
 
 

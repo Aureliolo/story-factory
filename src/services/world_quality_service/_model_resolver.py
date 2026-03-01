@@ -12,7 +12,11 @@ from typing import TYPE_CHECKING
 from src.services.model_mode_service._vram import MIN_GPU_RESIDENCY, prepare_model
 from src.services.model_mode_service._vram_budget import get_vram_snapshot, pair_fits
 from src.settings import RECOMMENDED_MODELS, get_available_vram, get_installed_models_with_sizes
-from src.utils.exceptions import VRAMAllocationError
+from src.utils.exceptions import (
+    DatabaseClosedError,
+    GenerationCancelledError,
+    VRAMAllocationError,
+)
 
 if TYPE_CHECKING:
     from src.services.world_quality_service import WorldQualityService
@@ -47,6 +51,14 @@ def _model_fits_in_vram(model_id: str) -> bool:
     except (ConnectionError, TimeoutError, FileNotFoundError, OSError, ValueError) as e:
         logger.debug("VRAM check failed for %s, assuming fits: %s", model_id, e)
         return True
+    except (
+        GenerationCancelledError,
+        DatabaseClosedError,
+        VRAMAllocationError,
+        MemoryError,
+        RecursionError,
+    ):
+        raise
     except Exception as e:
         logger.warning("Unexpected VRAM check failure for %s, assuming fits: %s", model_id, e)
         return True
@@ -164,7 +176,7 @@ def resolve_model_pair(service: WorldQualityService, entity_type: str) -> tuple[
                     snapshot.available_vram_gb,
                 )
                 judge = creator
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
             logger.warning(
                 "Could not check pair VRAM fit for %s (%s: %s) — "
                 "proceeding without pair validation, OOM risk may be elevated",
@@ -390,12 +402,14 @@ def make_model_preparers(
         try:
             prepare_model(service.mode_service, creator_model, role="creator")
         except VRAMAllocationError:
-            logger.warning(
-                "VRAMAllocationError preparing creator model '%s' for %s — "
-                "continuing without preparation",
-                creator_model,
-                entity_type,
-            )
+            raise  # Non-retryable — must propagate to stop the batch
+        except (
+            GenerationCancelledError,
+            DatabaseClosedError,
+            MemoryError,
+            RecursionError,
+        ):
+            raise
         except Exception as e:
             logger.warning(
                 "Failed to prepare creator model '%s' for VRAM "
@@ -409,12 +423,14 @@ def make_model_preparers(
         try:
             prepare_model(service.mode_service, judge_model, role="judge")
         except VRAMAllocationError:
-            logger.warning(
-                "VRAMAllocationError preparing judge model '%s' for %s — "
-                "continuing without preparation",
-                judge_model,
-                entity_type,
-            )
+            raise  # Non-retryable — must propagate to stop the batch
+        except (
+            GenerationCancelledError,
+            DatabaseClosedError,
+            MemoryError,
+            RecursionError,
+        ):
+            raise
         except Exception as e:
             logger.warning(
                 "Failed to prepare judge model '%s' for VRAM (continuing without preparation): %s",

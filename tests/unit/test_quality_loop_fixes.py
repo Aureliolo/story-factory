@@ -16,7 +16,11 @@ import pytest
 
 from src.memory.world_quality import CharacterQualityScores, RefinementConfig
 from src.services.world_quality_service._quality_loop import quality_refinement_loop
-from src.utils.exceptions import StoryFactoryError, VRAMAllocationError
+from src.utils.exceptions import (
+    GenerationCancelledError,
+    StoryFactoryError,
+    VRAMAllocationError,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -682,6 +686,18 @@ class TestResolveModelPairVRAM:
         assert creator == "creator-model:8b"
         assert judge == "judge-model:8b"
 
+    @patch(
+        "src.services.world_quality_service._model_resolver.get_vram_snapshot",
+        side_effect=TypeError("unexpected type from broken VRAM logic"),
+    )
+    def test_unexpected_exception_propagates_from_vram_check(self, mock_snapshot):
+        """TypeError (not in narrowed catch list) propagates instead of being swallowed."""
+        from src.services.world_quality_service._model_resolver import resolve_model_pair
+
+        svc = self._make_service()
+        with pytest.raises(TypeError, match="unexpected type"):
+            resolve_model_pair(svc, "character")
+
     @patch("src.services.world_quality_service._model_resolver.pair_fits", return_value=True)
     @patch("src.services.world_quality_service._model_resolver.get_vram_snapshot")
     def test_pair_fits_returns_both_models(self, mock_snapshot, mock_pair_fits):
@@ -790,8 +806,8 @@ class TestMakeModelPreparers:
     @patch("src.services.world_quality_service._model_resolver.prepare_model")
     @patch("src.services.world_quality_service._model_resolver.pair_fits", return_value=True)
     @patch("src.services.world_quality_service._model_resolver.get_vram_snapshot")
-    def test_vram_error_in_preparer_is_swallowed(self, _snapshot, _pair_fits, mock_prepare):
-        """VRAMAllocationError in a preparer closure is caught (non-fatal)."""
+    def test_vram_error_in_preparer_propagates(self, _snapshot, _pair_fits, mock_prepare):
+        """VRAMAllocationError in a preparer closure propagates (non-retryable)."""
         from src.services.world_quality_service._model_resolver import make_model_preparers
 
         snapshot = MagicMock()
@@ -804,6 +820,53 @@ class TestMakeModelPreparers:
         svc = self._make_service()
         prep_creator, _prep_judge = make_model_preparers(svc, "character")
 
-        # Must not raise — VRAMAllocationError is swallowed in the closure
+        # VRAMAllocationError must propagate — it's non-retryable
         assert prep_creator is not None
-        prep_creator()
+        with pytest.raises(VRAMAllocationError):
+            prep_creator()
+
+    @patch("src.services.world_quality_service._model_resolver.prepare_model")
+    @patch("src.services.world_quality_service._model_resolver.pair_fits", return_value=True)
+    @patch("src.services.world_quality_service._model_resolver.get_vram_snapshot")
+    def test_prepare_creator_propagates_generation_cancelled(
+        self, _snapshot, _pair_fits, mock_prepare
+    ):
+        """GenerationCancelledError in prepare_creator propagates (fatal, not swallowed)."""
+        from src.services.world_quality_service._model_resolver import make_model_preparers
+
+        snapshot = MagicMock()
+        snapshot.installed_models = {"creator-model:8b": 5.0, "judge-model:8b": 4.0}
+        snapshot.available_vram_gb = 20.0
+        _snapshot.return_value = snapshot
+
+        mock_prepare.side_effect = GenerationCancelledError("user cancelled")
+
+        svc = self._make_service()
+        prep_creator, _prep_judge = make_model_preparers(svc, "character")
+
+        assert prep_creator is not None
+        with pytest.raises(GenerationCancelledError, match="user cancelled"):
+            prep_creator()
+
+    @patch("src.services.world_quality_service._model_resolver.prepare_model")
+    @patch("src.services.world_quality_service._model_resolver.pair_fits", return_value=True)
+    @patch("src.services.world_quality_service._model_resolver.get_vram_snapshot")
+    def test_prepare_judge_propagates_generation_cancelled(
+        self, _snapshot, _pair_fits, mock_prepare
+    ):
+        """GenerationCancelledError in prepare_judge propagates (fatal, not swallowed)."""
+        from src.services.world_quality_service._model_resolver import make_model_preparers
+
+        snapshot = MagicMock()
+        snapshot.installed_models = {"creator-model:8b": 5.0, "judge-model:8b": 4.0}
+        snapshot.available_vram_gb = 20.0
+        _snapshot.return_value = snapshot
+
+        mock_prepare.side_effect = GenerationCancelledError("user cancelled")
+
+        svc = self._make_service()
+        _prep_creator, prep_judge = make_model_preparers(svc, "character")
+
+        assert prep_judge is not None
+        with pytest.raises(GenerationCancelledError, match="user cancelled"):
+            prep_judge()

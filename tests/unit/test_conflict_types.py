@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.memory.conflict_types import normalize_relation_type
+from src.memory.conflict_types import _reset_warned_types, normalize_relation_type
 
 
 class TestProseSentimentKeywordNormalization:
@@ -15,10 +15,10 @@ class TestProseSentimentKeywordNormalization:
         yield
         normalize_relation_type.cache_clear()
 
-    def test_normalize_admiration_to_trusts(self):
-        """normalize_relation_type('admiration') should map to 'trusts'."""
+    def test_normalize_admiration_to_admires(self):
+        """normalize_relation_type('admiration') should map to 'admires'."""
         result = normalize_relation_type("admiration")
-        assert result == "trusts"
+        assert result == "admires"
 
     def test_normalize_hostility_to_enemy_of(self):
         """normalize_relation_type('hostility') should map to 'enemy_of'."""
@@ -29,6 +29,21 @@ class TestProseSentimentKeywordNormalization:
         """normalize_relation_type('partnership') should map to 'allies_with'."""
         result = normalize_relation_type("partnership")
         assert result == "allies_with"
+
+    def test_reset_warned_types_clears_dedup_set(self):
+        """_reset_warned_types clears the warned-types dedup set."""
+        from src.memory.conflict_types import _warned_types
+
+        try:
+            # Add a sentinel to the dedup set
+            _warned_types.add("__test_sentinel__")
+            assert "__test_sentinel__" in _warned_types
+
+            _reset_warned_types()
+            assert "__test_sentinel__" not in _warned_types
+        finally:
+            # Ensure cleanup even if assertions fail
+            _warned_types.discard("__test_sentinel__")
 
     def test_validate_word_to_relation_raises_on_invalid(self, monkeypatch):
         """_validate_word_to_relation raises RuntimeError for unknown relation types."""

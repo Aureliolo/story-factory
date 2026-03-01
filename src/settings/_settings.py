@@ -875,9 +875,14 @@ class Settings:
         base_timeout = float(self.ollama_timeout)
         try:
             info = get_model_info(model_id)
-            size_gb = info["size_gb"]
-        except Exception:
-            logger.debug(f"Could not get model info for {model_id}, using base timeout")
+            size_gb = float(info["size_gb"])
+        except (KeyError, ValueError, TypeError) as e:
+            logger.debug(
+                "Could not get model info for %r (%s: %s), using base timeout",
+                model_id,
+                type(e).__name__,
+                e,
+            )
             return base_timeout
 
         if size_gb <= 0:

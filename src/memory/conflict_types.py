@@ -271,7 +271,7 @@ _WORD_TO_RELATION: dict[str, str] = {
     "threatens": "threatens",
     # L1: Prose sentiment keywords (formerly in separate _PROSE_SENTIMENT_KEYWORDS dict).
     # Merged here to use priority-based word-level matching instead of substring search.
-    "admiration": "trusts",
+    "admiration": "admires",
     "hostility": "enemy_of",
     "partnership": "allies_with",
     "cooperation": "allies_with",
@@ -399,6 +399,14 @@ CONFLICT_COLORS: dict[str, str] = {
 
 _warned_types: set[str] = set()
 _warned_types_lock = threading.Lock()
+
+
+def _reset_warned_types() -> None:
+    """Reset the warned-types dedup set (for test teardown)."""
+    with _warned_types_lock:
+        cleared_count = len(_warned_types)
+        _warned_types.clear()
+    logger.debug("Reset warned-types dedup set (cleared=%d)", cleared_count)
 
 
 @functools.lru_cache(maxsize=256)

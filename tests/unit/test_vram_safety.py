@@ -15,6 +15,8 @@ from src.services.model_mode_service._vram import (
 )
 from src.settings import Settings
 from src.utils.exceptions import (
+    DatabaseClosedError,
+    GenerationCancelledError,
     LLMError,
     VRAMAllocationError,
     WorldGenerationError,
@@ -962,3 +964,36 @@ class TestModelFitsUnexpectedException:
 
         assert result is True
         assert "Unexpected VRAM check failure" in caplog.text
+
+    @patch("src.services.world_quality_service._model_resolver.get_available_vram")
+    @patch("src.services.world_quality_service._model_resolver.get_installed_models_with_sizes")
+    def test_generation_cancelled_error_propagates(self, mock_installed, mock_vram):
+        """GenerationCancelledError propagates from _model_fits_in_vram (not caught)."""
+        from src.services.world_quality_service._model_resolver import _model_fits_in_vram
+
+        mock_installed.side_effect = GenerationCancelledError("user cancelled")
+
+        with pytest.raises(GenerationCancelledError, match="user cancelled"):
+            _model_fits_in_vram("test-model:8b")
+
+    @patch("src.services.world_quality_service._model_resolver.get_available_vram")
+    @patch("src.services.world_quality_service._model_resolver.get_installed_models_with_sizes")
+    def test_database_closed_error_propagates(self, mock_installed, mock_vram):
+        """DatabaseClosedError propagates from _model_fits_in_vram (not caught)."""
+        from src.services.world_quality_service._model_resolver import _model_fits_in_vram
+
+        mock_installed.side_effect = DatabaseClosedError("database closed")
+
+        with pytest.raises(DatabaseClosedError, match="database closed"):
+            _model_fits_in_vram("test-model:8b")
+
+    @patch("src.services.world_quality_service._model_resolver.get_available_vram")
+    @patch("src.services.world_quality_service._model_resolver.get_installed_models_with_sizes")
+    def test_vram_allocation_error_propagates(self, mock_installed, mock_vram):
+        """VRAMAllocationError propagates from _model_fits_in_vram (not caught)."""
+        from src.services.world_quality_service._model_resolver import _model_fits_in_vram
+
+        mock_installed.side_effect = VRAMAllocationError("GPU OOM", model_id="test:8b")
+
+        with pytest.raises(VRAMAllocationError, match="GPU OOM"):
+            _model_fits_in_vram("test-model:8b")

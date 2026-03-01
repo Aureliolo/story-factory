@@ -6014,8 +6014,8 @@ class TestMakeModelPreparers:
             # Should not raise — degrades gracefully with a warning
             prep_j()
 
-    def test_prepare_creator_graceful_on_vram_allocation_error(self, service):
-        """prepare_creator logs warning and continues when VRAMAllocationError is raised."""
+    def test_prepare_creator_propagates_vram_allocation_error(self, service):
+        """prepare_creator re-raises VRAMAllocationError (non-retryable)."""
         from src.utils.exceptions import VRAMAllocationError
 
         with (
@@ -6029,11 +6029,12 @@ class TestMakeModelPreparers:
             ),
         ):
             prep_c, _ = service._make_model_preparers("character")
-            # Should not raise — degrades gracefully with a warning
-            prep_c()
+            # VRAMAllocationError must propagate — it's non-retryable
+            with pytest.raises(VRAMAllocationError):
+                prep_c()
 
-    def test_prepare_judge_graceful_on_vram_allocation_error(self, service):
-        """prepare_judge logs warning and continues when VRAMAllocationError is raised."""
+    def test_prepare_judge_propagates_vram_allocation_error(self, service):
+        """prepare_judge re-raises VRAMAllocationError (non-retryable)."""
         from src.utils.exceptions import VRAMAllocationError
 
         with (
@@ -6047,5 +6048,6 @@ class TestMakeModelPreparers:
             ),
         ):
             _, prep_j = service._make_model_preparers("character")
-            # Should not raise — degrades gracefully with a warning
-            prep_j()
+            # VRAMAllocationError must propagate — it's non-retryable
+            with pytest.raises(VRAMAllocationError):
+                prep_j()

@@ -28,6 +28,9 @@ _VRAM_SNAPSHOT_TTL = 30.0
 # retrying avoids a pessimistic cascade into self-judging mode.
 _VRAM_ZERO_RETRY_COUNT = 3
 _VRAM_ZERO_RETRY_DELAY_S = 0.5
+_VRAM_ZERO_FALLBACK_MAX_AGE_S = (
+    2 * _VRAM_SNAPSHOT_TTL
+)  # Use previous snapshot only if younger than this
 
 
 @dataclass(frozen=True)
@@ -53,7 +56,7 @@ class VRAMSnapshot:
     Cached for ``_VRAM_SNAPSHOT_TTL`` seconds to avoid repeated subprocess calls.
     """
 
-    available_vram_gb: float  # Free VRAM from nvidia-smi (GiB converted to GB)
+    available_vram_gb: float  # Free VRAM from nvidia-smi in GiB (integer division of MiB/1024)
     installed_models: dict[str, float]  # model_id -> size_gb from ``ollama list``
     timestamp: float
 
@@ -84,9 +87,7 @@ def get_vram_snapshot() -> VRAMSnapshot:
                 now - _cached_snapshot.timestamp,
             )
             return _cached_snapshot
-
-    # Read previous snapshot under lock before starting (used for zero-retry fallback)
-    with _snapshot_lock:
+        # Capture previous snapshot under same lock to avoid TOCTOU race
         previous_snapshot = _cached_snapshot
 
     # Build fresh snapshot outside the lock (subprocess calls are slow)
@@ -133,14 +134,26 @@ def get_vram_snapshot() -> VRAMSnapshot:
                 )
                 break
         else:
-            # All retries exhausted — use previous snapshot value with warning
-            logger.warning(
-                "VRAM snapshot still 0 GB after %d retries — "
-                "using previous value %.1f GB to avoid self-judging cascade",
-                _VRAM_ZERO_RETRY_COUNT,
-                previous_snapshot.available_vram_gb,
-            )
-            available = previous_snapshot.available_vram_gb
+            # All retries exhausted — use previous snapshot value only if recent
+            previous_age_s = time.monotonic() - previous_snapshot.timestamp
+            if previous_age_s <= _VRAM_ZERO_FALLBACK_MAX_AGE_S:
+                logger.warning(
+                    "VRAM snapshot still 0 GB after %d retries — "
+                    "using previous value %.1f GB (age=%.1fs) to avoid self-judging cascade",
+                    _VRAM_ZERO_RETRY_COUNT,
+                    previous_snapshot.available_vram_gb,
+                    previous_age_s,
+                )
+                available = previous_snapshot.available_vram_gb
+            else:
+                logger.warning(
+                    "VRAM snapshot still 0 GB after %d retries and previous snapshot is stale "
+                    "(age=%.1fs > max %.1fs) — keeping 0.0 GB",
+                    _VRAM_ZERO_RETRY_COUNT,
+                    previous_age_s,
+                    _VRAM_ZERO_FALLBACK_MAX_AGE_S,
+                )
+                # available stays 0.0 — pessimistic but safe
 
     try:
         installed = get_installed_models_with_sizes()
