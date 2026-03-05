@@ -168,11 +168,10 @@ class TemporalValidationService:
 
         if lifecycle is None:
             logger.info(
-                "Entity '%s' (%s) has no lifecycle data — skipping temporal validation",
+                "Entity '%s' (%s) has no lifecycle data — temporal validation limited",
                 entity.name,
                 entity.type,
             )
-            return result
 
         # Build entity lookup for cross-reference
         entity_map = {e.id: e for e in all_entities}

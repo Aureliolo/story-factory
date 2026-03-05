@@ -177,11 +177,10 @@ class TestMissingLifecycleLogging:
     def test_missing_lifecycle_no_error_or_warning_added(
         self, validation_service: TemporalValidationService
     ) -> None:
-        """Entity with no lifecycle data returns early — no errors or warnings in result.
+        """Concept entity with no lifecycle data has no type-specific validator, so no warnings.
 
-        The INFO log is purely for observability — it should not pollute the
-        validation result.  With the early return on missing lifecycle, no
-        type-specific validators are reached.
+        The INFO log is purely for observability — concept entities have no
+        dedicated validator, so missing lifecycle produces no warnings.
         """
         entity = Entity(id="e1", name="Concept", type="concept", description="Abstract")
         result = validation_service.validate_entity(entity, None, [entity], [])
