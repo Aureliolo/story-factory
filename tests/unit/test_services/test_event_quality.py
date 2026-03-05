@@ -672,6 +672,44 @@ class TestGenerateEventWithQuality:
         assert mock_create.call_count == 2
 
 
+class TestEventDescriptionDedup:
+    """Tests for H4: existing_descriptions dedup at entry."""
+
+    @patch("src.services.world_quality_service._event._refine_event")
+    @patch("src.services.world_quality_service._event._judge_event_quality")
+    @patch("src.services.world_quality_service._event._create_event")
+    def test_duplicate_descriptions_removed_and_logged(
+        self, mock_create, mock_judge, mock_refine, service, story_state, caplog
+    ):
+        """Duplicate existing_descriptions are removed and a warning is logged."""
+        import logging
+
+        mock_create.return_value = {
+            "description": "Unique event",
+            "year": 1850,
+            "participants": [],
+            "consequences": [],
+        }
+        mock_judge.return_value = EventQualityScores(
+            significance=8.0,
+            temporal_plausibility=8.0,
+            causal_coherence=8.0,
+            narrative_potential=8.0,
+            entity_integration=8.0,
+            feedback="Good",
+        )
+
+        duped_descs = ["event A", "event B", "event A", "event C", "event B"]
+        with caplog.at_level(logging.WARNING, logger="src.services.world_quality_service._event"):
+            service.generate_event_with_quality(
+                story_state,
+                existing_descriptions=duped_descs,
+                entity_context="Test",
+            )
+
+        assert any("Removed 2 duplicate" in msg for msg in caplog.messages)
+
+
 class TestGenerateEventsWithQualityBatch:
     """Tests for generate_events_with_quality batch wrapper."""
 

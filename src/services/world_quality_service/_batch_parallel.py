@@ -287,28 +287,35 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
             for future in done_iter:
                 task_idx, task_start = pending.pop(future)
                 completed_count += 1
-                entity_elapsed = time.time() - task_start
-
                 try:
                     entity, scores, iterations = future.result()
+                    t_gen_end = time.time()
                     entity_name = get_name(entity)
 
                     if on_success:
                         on_success(entity)
 
+                    t_post_end = time.time()
+                    gen_time = t_gen_end - task_start
+                    post_time = t_post_end - t_gen_end
+                    total_time = t_post_end - task_start
+
                     # Only count as success after get_name and on_success pass
-                    completed_times.append(entity_elapsed)
+                    completed_times.append(total_time)
                     results.append((entity, scores))
                     consecutive_failures = 0
 
                     logger.info(
                         "%s '%s' complete after %d iteration(s), "
-                        "quality: %.1f, generation_time: %.2fs",
+                        "quality: %.1f, total_time: %.2fs "
+                        "(generation: %.2fs, post_processing: %.2fs)",
                         entity_type.capitalize(),
                         entity_name,
                         iterations,
                         scores.average,
-                        entity_elapsed,
+                        total_time,
+                        gen_time,
+                        post_time,
                     )
 
                     if progress_callback:
@@ -434,7 +441,12 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
         )
 
     _log_batch_summary(
-        results, entity_type, quality_threshold, time.time() - batch_start_time, get_name=get_name
+        results,
+        entity_type,
+        quality_threshold,
+        time.time() - batch_start_time,
+        get_name=get_name,
+        requested_count=count,
     )
 
     return results
@@ -947,6 +959,13 @@ def _generate_batch_phased[T, S: BaseQualityScores](
             _aggregate_errors(errors),
         )
 
-    _log_batch_summary(results, entity_type, quality_threshold, total_elapsed, get_name=get_name)
+    _log_batch_summary(
+        results,
+        entity_type,
+        quality_threshold,
+        total_elapsed,
+        get_name=get_name,
+        requested_count=count,
+    )
 
     return results

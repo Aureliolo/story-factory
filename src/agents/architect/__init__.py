@@ -199,7 +199,7 @@ class ArchitectAgent(BaseAgent):
         for line in world_response.split("\n"):
             if line.strip().startswith(("-", "*", "\u2022")):
                 rules.append(line.strip().lstrip("-*\u2022 "))
-        story_state.world_rules = rules[:10]
+        story_state.world_rules = [r for r in rules[:10] if r.strip()]
 
         # Create characters
         story_state.characters = self.create_characters(story_state)

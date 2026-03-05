@@ -507,8 +507,15 @@ def _create_relationship(
         )
         return {}
 
-    # Build forbidden pairs block with direction and type for clarity
+    # Build forbidden pairs block with direction and type for clarity.
+    # Limit to the 10 most recent to keep prompts concise and avoid bloat.
     existing_rel_strs = [f"- {s} -> {t} ({rt})" for s, t, rt in existing_rels]
+    if len(existing_rel_strs) > 10:
+        logger.debug(
+            "Truncating forbidden pairs in prompt from %d to 10 most recent",
+            len(existing_rel_strs),
+        )
+        existing_rel_strs = existing_rel_strs[-10:]
     existing_pairs_block = "\n".join(existing_rel_strs) if existing_rel_strs else "None"
 
     type_list = ", ".join(VALID_RELATIONSHIP_TYPES)

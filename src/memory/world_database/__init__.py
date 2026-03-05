@@ -657,6 +657,17 @@ class WorldDatabase:
         """
         return _cycles.remove_accepted_cycle(self, cycle_hash)
 
+    def clear_accepted_cycles(self) -> int:
+        """Delete all accepted cycles from the database.
+
+        Intended to be called during world rebuild so that stale accepted
+        cycles from previous builds do not carry over.
+
+        Returns:
+            Number of accepted cycles that were deleted.
+        """
+        return _cycles.clear_accepted_cycles(self)
+
     def get_accepted_cycles(self) -> set[str]:
         """Get all accepted cycle hashes.
 

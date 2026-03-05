@@ -96,6 +96,29 @@ def remove_accepted_cycle(db: WorldDatabase, cycle_hash: str) -> bool:
     return removed
 
 
+def clear_accepted_cycles(db: WorldDatabase) -> int:
+    """Delete all accepted cycles from the database.
+
+    Intended to be called during world rebuild so that stale accepted cycles
+    from previous builds do not carry over.
+
+    Args:
+        db: WorldDatabase instance.
+
+    Returns:
+        Number of accepted cycles that were deleted.
+    """
+    logger.info("Clearing all accepted cycles")
+    with db._lock:
+        db._ensure_open()
+        cursor = db.conn.cursor()
+        cursor.execute("DELETE FROM accepted_cycles")
+        db.conn.commit()
+        deleted: int = cursor.rowcount
+    logger.info("Cleared %d accepted cycle(s)", deleted)
+    return deleted
+
+
 def get_accepted_cycles(db: WorldDatabase) -> set[str]:
     """Get all accepted cycle hashes.
 

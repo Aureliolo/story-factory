@@ -268,11 +268,19 @@ class TestM3HailMaryIdenticalOutputSkip:
         config = _make_config(max_iterations=2, dimension_minimum=0.0, threshold=7.5)
         svc = _make_svc()
 
+        refine_call = 0
+
+        def refine_fn(e, s, i):
+            """Return a distinct entity each time to avoid identical-output early stop."""
+            nonlocal refine_call
+            refine_call += 1
+            return {"name": "Diana", "trait": "cunning", "version": refine_call}
+
         quality_refinement_loop(
             entity_type="character",
             create_fn=create_fn,
             judge_fn=counting_judge,
-            refine_fn=lambda e, s, i: dict(original),
+            refine_fn=refine_fn,
             get_name=_get_name,
             serialize=_serialize,
             is_empty=_is_empty,
@@ -664,6 +672,7 @@ class TestResolveModelPairVRAM:
         snapshot = MagicMock()
         snapshot.installed_models = {"creator-model:8b": 14.0, "judge-model:8b": 18.0}
         snapshot.available_vram_gb = 24.0
+        snapshot.loaded_model_vram_gb = 0.0
         mock_snapshot.return_value = snapshot
 
         svc = self._make_service()
@@ -870,3 +879,136 @@ class TestMakeModelPreparers:
         assert prep_judge is not None
         with pytest.raises(GenerationCancelledError, match="user cancelled"):
             prep_judge()
+
+
+# ---------------------------------------------------------------------------
+# H7: Hail-mary skip on identical refinement output
+# ---------------------------------------------------------------------------
+
+
+class TestH7HailMarySkipOnIdenticalOutput:
+    """When early stop is due to identical refinement output (not score plateau),
+    the hail-mary should be skipped entirely because the model is stuck."""
+
+    def test_hail_mary_skipped_when_refinement_produces_identical_output(self, caplog):
+        """Hail-mary is NOT attempted when early stop was due to identical output."""
+        entity = {"name": "Stuck-Model-Test", "version": 0}
+        low_scores = _make_character_scores(
+            depth=6.0,
+            goals=6.0,
+            flaws=6.0,
+            uniqueness=6.0,
+            arc_potential=6.0,
+        )
+
+        create_call_count = 0
+
+        def create_fn(_retries):
+            """Track creation calls to verify hail-mary is not attempted."""
+            nonlocal create_call_count
+            create_call_count += 1
+            return dict(entity)
+
+        def refine_fn(e, s, i):
+            """Return identical output to trigger stopped_identical_output."""
+            return dict(entity)
+
+        # max_iterations > 1 is required for hail-mary to be possible
+        config = _make_config(max_iterations=3, dimension_minimum=0.0, threshold=7.5)
+        svc = _make_svc()
+
+        with caplog.at_level(
+            logging.WARNING, logger="src.services.world_quality_service._quality_loop"
+        ):
+            _result, _scores, _rounds = quality_refinement_loop(
+                entity_type="character",
+                create_fn=create_fn,
+                judge_fn=lambda _e: low_scores,
+                refine_fn=refine_fn,
+                get_name=_get_name,
+                serialize=_serialize,
+                is_empty=_is_empty,
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=svc,
+                story_id="test-story",
+            )
+
+        # create_fn should be called only once (for the initial creation).
+        # If hail-mary were attempted, it would be called a second time.
+        assert create_call_count == 1
+
+        # Verify the warning log about skipping hail-mary
+        skip_messages = [r.message for r in caplog.records if "skipping hail-mary" in r.message]
+        assert any("model produced identical output" in m for m in skip_messages), (
+            f"Expected 'model produced identical output' in hail-mary skip messages, "
+            f"got: {skip_messages}"
+        )
+
+    def test_hail_mary_not_skipped_for_score_plateau(self):
+        """Hail-mary IS attempted when early stop was due to score plateau
+        (not identical output)."""
+        # Vary per-dimension scores each round to avoid triggering the
+        # identical-score early stop while keeping the average in plateau range.
+        judge_round = 0
+
+        def _plateau_judge(_e):
+            """Return alternating score distributions to trigger plateau without identical scores."""
+            nonlocal judge_round
+            judge_round += 1
+            if judge_round % 2 == 1:
+                return _make_character_scores(
+                    depth=6.0, goals=6.0, flaws=6.0, uniqueness=6.0, arc_potential=6.0
+                )
+            return _make_character_scores(
+                depth=6.2, goals=5.8, flaws=6.0, uniqueness=6.0, arc_potential=6.0
+            )
+
+        create_call_count = 0
+        refine_call = 0
+
+        def create_fn(_retries):
+            """Track creation calls to verify hail-mary is attempted."""
+            nonlocal create_call_count
+            create_call_count += 1
+            return {"name": "Plateau-Test", "version": create_call_count}
+
+        def refine_fn(e, s, i):
+            """Return different output to avoid identical-output early stop."""
+            nonlocal refine_call
+            refine_call += 1
+            return {"name": "Plateau-Test", "version": 100 + refine_call}
+
+        # Use tight plateau tolerance and low min iterations so score plateau
+        # triggers early stop
+        config = RefinementConfig(
+            max_iterations=3,
+            quality_threshold=7.5,
+            quality_thresholds={"character": 7.5},
+            dimension_minimum=0.0,
+            early_stopping_patience=5,
+            early_stopping_min_iterations=2,
+            score_plateau_tolerance=1.0,  # Wide tolerance to trigger plateau
+        )
+        svc = _make_svc()
+
+        quality_refinement_loop(
+            entity_type="character",
+            create_fn=create_fn,
+            judge_fn=_plateau_judge,
+            refine_fn=refine_fn,
+            get_name=_get_name,
+            serialize=_serialize,
+            is_empty=_is_empty,
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=svc,
+            story_id="test-story",
+        )
+
+        # With score plateau, create_fn should be called more than once
+        # (once for creation, once for hail-mary)
+        assert create_call_count >= 2, (
+            f"Expected hail-mary to be attempted (create_call_count >= 2), "
+            f"got create_call_count={create_call_count}"
+        )

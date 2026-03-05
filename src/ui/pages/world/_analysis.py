@@ -1,7 +1,9 @@
 """Analysis, health dashboard, and conflict map functions for the World page."""
 
+import hashlib
 import logging
 import sqlite3
+import time
 
 from nicegui import ui
 
@@ -46,13 +48,52 @@ def refresh_health_dashboard(page, notify: bool = True) -> None:
     if not page.state.world_db or not hasattr(page, "_health_container"):
         return
 
-    page._health_container.clear()
+    metrics = page.services.world.get_world_health_metrics(page.state.world_db)
+    logger.debug(
+        "Health metrics retrieved: score=%.1f, entities=%d, orphans=%d",
+        metrics.health_score,
+        metrics.total_entities,
+        metrics.orphan_count,
+    )
+
+    # Skip rebuild if metrics haven't changed since last refresh.
+    # Include entity-level detail (IDs and scores) and cycle edges so the hash
+    # catches changes that leave aggregate counts unchanged.
+    metrics_hash = hashlib.md5(
+        repr(
+            (
+                metrics.health_score,
+                metrics.total_entities,
+                metrics.orphan_count,
+                metrics.circular_count,
+                tuple(sorted((e["id"], e["quality_score"]) for e in metrics.low_quality_entities)),
+                tuple(
+                    sorted(
+                        tuple(
+                            (edge["source"], edge["type"], edge["target"])
+                            for edge in cycle["edges"]
+                        )
+                        for cycle in metrics.circular_relationships
+                    )
+                ),
+                metrics.temporal_error_count,
+                metrics.temporal_warning_count,
+            )
+        ).encode()
+    ).hexdigest()
+    last_hash = getattr(page, "_last_health_hash", None)
+    if metrics_hash == last_hash:
+        logger.debug("Health metrics unchanged (hash=%s), skipping rebuild", metrics_hash)
+        return
+    page._last_health_hash = metrics_hash
+
+    try:
+        page._health_container.clear()
+    except RuntimeError:
+        logger.debug("Health container no longer alive, skipping refresh")
+        return
+
     with page._health_container:
-        metrics = page.services.world.get_world_health_metrics(page.state.world_db)
-        logger.debug(
-            f"Health metrics retrieved: score={metrics.health_score:.1f}, "
-            f"entities={metrics.total_entities}, orphans={metrics.orphan_count}"
-        )
         dashboard = WorldHealthDashboard(
             metrics=metrics,
             on_fix_orphan=page._handle_fix_orphan,
@@ -182,7 +223,14 @@ async def handle_accept_circular(page, cycle: CycleInfo) -> None:
     ui.notify(f"Accepted circular chain: {cycle_desc}", type="positive")
 
     # Refresh dashboard to reflect the change
-    refresh_health_dashboard(page, notify=False)
+    try:
+        refresh_health_dashboard(page, notify=False)
+    except Exception as exc:
+        logger.debug(
+            "Dashboard refresh failed after accepting cycle, toast already shown: %s",
+            exc,
+            exc_info=True,
+        )
 
 
 async def handle_improve_quality(page, entity_id: str) -> None:
@@ -222,11 +270,19 @@ def _handle_validate_timeline(page) -> None:
     """Handle validate timeline button click.
 
     Invalidates cached health metrics and refreshes the dashboard
-    to trigger a fresh temporal validation.
+    to trigger a fresh temporal validation.  Debounced to 2 seconds
+    to prevent runaway refresh loops from rapid clicks.
 
     Args:
         page: WorldPage instance.
     """
+    now = time.time()
+    last_ts = getattr(page, "_last_validate_ts", 0)
+    if now - last_ts < 2:
+        logger.debug("Validate timeline debounced (%.1fs since last call)", now - last_ts)
+        return
+    page._last_validate_ts = now
+
     logger.debug("Validating timeline: invalidating cache and refreshing dashboard")
     page.services.world.invalidate_health_cache()
     refresh_health_dashboard(page, notify=True)

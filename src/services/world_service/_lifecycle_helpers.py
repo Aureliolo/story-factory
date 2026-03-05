@@ -174,6 +174,21 @@ def build_character_lifecycle(
             if death:
                 lifecycle["death"] = death
 
+    # Guard: death year before birth year — drop death data to prevent negative lifespan
+    if (
+        char.birth_year is not None
+        and char.death_year is not None
+        and char.death_year >= 0
+        and char.death_year < char.birth_year
+    ):
+        logger.warning(
+            "Character '%s' has death_year %d before birth_year %d — dropping death data",
+            char.name,
+            char.death_year,
+            char.birth_year,
+        )
+        lifecycle.pop("death", None)
+
     if char.temporal_notes:
         lifecycle["temporal_notes"] = char.temporal_notes
 

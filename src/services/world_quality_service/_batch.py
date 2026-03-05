@@ -204,7 +204,12 @@ def _generate_batch[T, S: BaseQualityScores](
         )
 
     _log_batch_summary(
-        results, entity_type, quality_threshold, time.time() - batch_start_time, get_name=get_name
+        results,
+        entity_type,
+        quality_threshold,
+        time.time() - batch_start_time,
+        get_name=get_name,
+        requested_count=count,
     )
 
     return results
@@ -331,7 +336,12 @@ def _review_batch[T, S: BaseQualityScores](
         )
 
     _log_batch_summary(
-        results, entity_type, quality_threshold, time.time() - batch_start_time, get_name=get_name
+        results,
+        entity_type,
+        quality_threshold,
+        time.time() - batch_start_time,
+        get_name=get_name,
+        requested_count=count,
     )
 
     return results
@@ -351,23 +361,7 @@ def generate_factions_with_quality(
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable | None = None,
 ) -> list[tuple[dict[str, Any], FactionQualityScores]]:
-    """Generate multiple factions with quality refinement.
-
-    Args:
-        svc: WorldQualityService instance.
-        story_state: Current story state.
-        name_provider: Callable returning current entity names from DB (live query).
-        count: Number of factions to generate.
-        location_provider: Callable returning current location names (live query).
-        cancel_check: Optional callable that returns True to cancel generation.
-        progress_callback: Optional callback to receive progress updates.
-
-    Returns:
-        List of (faction_dict, QualityScores) tuples.
-
-    Raises:
-        WorldGenerationError: If no factions could be generated.
-    """
+    """Generate *count* factions with quality refinement."""
     batch_names: list[str] = []
     return _generate_batch(
         svc=svc,
@@ -393,22 +387,7 @@ def generate_items_with_quality(
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable | None = None,
 ) -> list[tuple[dict[str, Any], ItemQualityScores]]:
-    """Generate multiple items with quality refinement.
-
-    Args:
-        svc: WorldQualityService instance.
-        story_state: Current story state.
-        name_provider: Callable returning current entity names from DB (live query).
-        count: Number of items to generate.
-        cancel_check: Optional callable that returns True to cancel generation.
-        progress_callback: Optional callback to receive progress updates.
-
-    Returns:
-        List of (item_dict, QualityScores) tuples.
-
-    Raises:
-        WorldGenerationError: If no items could be generated.
-    """
+    """Generate *count* items with quality refinement."""
     batch_names: list[str] = []
     return _generate_batch(
         svc=svc,
@@ -432,22 +411,7 @@ def generate_concepts_with_quality(
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable | None = None,
 ) -> list[tuple[dict[str, Any], ConceptQualityScores]]:
-    """Generate multiple concepts with quality refinement.
-
-    Args:
-        svc: WorldQualityService instance.
-        story_state: Current story state.
-        name_provider: Callable returning current entity names from DB (live query).
-        count: Number of concepts to generate.
-        cancel_check: Optional callable that returns True to cancel generation.
-        progress_callback: Optional callback to receive progress updates.
-
-    Returns:
-        List of (concept_dict, QualityScores) tuples.
-
-    Raises:
-        WorldGenerationError: If no concepts could be generated.
-    """
+    """Generate *count* concepts with quality refinement."""
     batch_names: list[str] = []
     return _generate_batch(
         svc=svc,
@@ -472,23 +436,9 @@ def generate_events_with_quality(
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable | None = None,
 ) -> list[tuple[dict[str, Any], EventQualityScores]]:
-    """Generate multiple events with quality refinement.
+    """Generate *count* events with quality refinement.
 
-    Args:
-        svc: WorldQualityService instance.
-        story_state: Current story state.
-        existing_descriptions: Descriptions of existing events to avoid duplicates.
-        entity_context_provider: Callable returning fresh entity context string.
-            Cached by content hash to avoid rebuilding when content is unchanged.
-        count: Number of events to generate.
-        cancel_check: Optional callable that returns True to cancel generation.
-        progress_callback: Optional callback to receive progress updates.
-
-    Returns:
-        List of (event_dict, QualityScores) tuples.
-
-    Raises:
-        WorldGenerationError: If no events could be generated.
+    *entity_context_provider* is cached by content hash to avoid rebuilding.
     """
     descriptions = existing_descriptions.copy()
     rejected: list[str] = []
@@ -537,24 +487,11 @@ def generate_characters_with_quality(
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable | None = None,
 ) -> list[tuple[Character, CharacterQualityScores]]:
-    """Generate multiple characters with quality refinement.
+    """Generate *count* characters with quality refinement.
 
     Uses parallel generation when count > 1 and concurrent requests are enabled.
-
-    Args:
-        svc: WorldQualityService instance.
-        story_state: Current story state.
-        name_provider: Callable returning current entity names from DB (live query).
-        count: Number of characters to generate.
-        custom_instructions: Optional custom instructions to refine generation.
-        cancel_check: Optional callable that returns True to cancel generation.
-        progress_callback: Optional callback to receive progress updates.
-
-    Returns:
-        List of (Character, QualityScores) tuples.
-
-    Raises:
-        WorldGenerationError: If no characters could be generated.
+    When creator != judge, a phased pipeline (batch creates then batch judges)
+    reduces GPU model swaps.
     """
     import threading
 
@@ -576,8 +513,105 @@ def generate_characters_with_quality(
             seen = set(provider_names)
             return provider_names + [n for n in batch_names if n not in seen]
 
+    # ── Phased pipeline callables ───────────────────────────────────────
+    # These are used only when creator != judge to enable the two-phase
+    # batch pipeline (batch creates → batch judges → refine failures).
+
+    config = svc.get_config()
+
+    def _create_only(_i: int) -> Character | None:
+        """Create a single character without judging."""
+        try:
+            result: Character = svc._create_character(
+                story_state,
+                _get_names(),
+                config.creator_temperature,
+                custom_instructions,
+            )
+            return result
+        except (WorldGenerationError, ValueError) as e:
+            logger.warning("Phased character create failed: %s", e)
+            raise
+
+    def _is_empty_char(char: Character) -> bool:
+        """Check if a character is empty."""
+        return not char.name
+
+    def _judge_only(char: Character) -> CharacterQualityScores:
+        """Judge a single character without creating or refining."""
+        scores: CharacterQualityScores = svc._judge_character_quality(
+            char,
+            story_state,
+            config.judge_temperature,
+        )
+        return scores
+
+    def _refine_with_initial(
+        initial_char: Character,
+    ) -> tuple[Character, CharacterQualityScores, int]:
+        """Run the full quality refinement loop with an initial character."""
+        from src.services.world_quality_service._quality_loop import quality_refinement_loop
+
+        prep_creator, prep_judge = svc._make_model_preparers("character")
+        return quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: svc._create_character(
+                story_state,
+                _get_names(),
+                config.creator_temperature,
+                custom_instructions,
+            ),
+            judge_fn=lambda char: svc._judge_character_quality(
+                char,
+                story_state,
+                config.judge_temperature,
+            ),
+            refine_fn=lambda char, scores, iteration: svc._refine_character(
+                char,
+                scores,
+                story_state,
+                config.get_refinement_temperature(iteration),
+            ),
+            get_name=lambda char: char.name,
+            serialize=lambda char: char.model_dump(),
+            is_empty=_is_empty_char,
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=svc,
+            story_id=story_state.id,
+            initial_entity=initial_char,
+            prepare_creator=prep_creator,
+            prepare_judge=prep_judge,
+        )
+
+    # Resolve model preparers and determine whether models differ.
+    _phased_kwargs: dict[str, Any] = {}
+
     # Use parallel generation when count > 1 and concurrency is enabled
     max_workers = min(svc.settings.llm_max_concurrent_requests, count)
+
+    if max_workers > 1:
+        try:
+            prep_creator, prep_judge = svc._make_model_preparers("character")
+            if prep_creator is not None or prep_judge is not None:
+                _phased_kwargs = {
+                    "create_only_fn": _create_only,
+                    "judge_only_fn": _judge_only,
+                    "is_empty_fn": _is_empty_char,
+                    "refine_with_initial_fn": _refine_with_initial,
+                    "prepare_creator_fn": prep_creator,
+                    "prepare_judge_fn": prep_judge,
+                }
+                logger.debug(
+                    "Phased pipeline callables prepared for character batch (creator != judge)"
+                )
+        except (ValueError, KeyError, LookupError) as e:
+            logger.warning(
+                "Failed to resolve model preparers for character phased pipeline: %s. "
+                "Falling back to non-phased generation.",
+                e,
+            )
+
     if count > 1 and max_workers > 1:
         logger.info(
             "Using parallel character generation: %d characters with max_workers=%d",
@@ -596,6 +630,7 @@ def generate_characters_with_quality(
             cancel_check=cancel_check,
             progress_callback=progress_callback,
             max_workers=max_workers,
+            **_phased_kwargs,
         )
 
     return _generate_batch(
@@ -620,22 +655,7 @@ def generate_locations_with_quality(
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable | None = None,
 ) -> list[tuple[dict[str, Any], LocationQualityScores]]:
-    """Generate multiple locations with quality refinement.
-
-    Args:
-        svc: WorldQualityService instance.
-        story_state: Current story state.
-        name_provider: Callable returning current entity names from DB (live query).
-        count: Number of locations to generate.
-        cancel_check: Optional callable that returns True to cancel generation.
-        progress_callback: Optional callback to receive progress updates.
-
-    Returns:
-        List of (location_dict, QualityScores) tuples.
-
-    Raises:
-        WorldGenerationError: If no locations could be generated.
-    """
+    """Generate *count* locations with quality refinement."""
     batch_names: list[str] = []
     return _generate_batch(
         svc=svc,
@@ -660,33 +680,10 @@ def generate_relationships_with_quality(
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable | None = None,
 ) -> list[tuple[dict[str, Any], RelationshipQualityScores]]:
-    """Generate multiple relationships with quality refinement.
+    """Generate *count* relationships with quality refinement.
 
-    Uses parallel generation (up to ``llm_max_concurrent_requests`` workers)
-    with a thread-safe deduplication list. Each worker gets a point-in-time
-    snapshot of existing relationships; the ``_is_duplicate_relationship()``
-    check in the quality refinement loop rejects duplicates from the snapshot,
-    and the atomic ``append_if_new_pair()`` dedup catches any duplicates that
-    concurrent workers may produce from identical snapshots.
-
-    When the creator and judge models differ, a **phased pipeline** is used:
-    batch all creates under one model load, then batch all judges under
-    another model load, reducing GPU swaps from ~2N to ~4.
-
-    Args:
-        svc: WorldQualityService instance.
-        story_state: Current story state.
-        entity_names_provider: Callable returning fresh entity names from DB.
-        existing_rels: Existing (source, target, relation_type) 3-tuples to avoid duplicates.
-        count: Number of relationships to generate.
-        cancel_check: Optional callable that returns True to cancel generation.
-        progress_callback: Optional callback to receive progress updates.
-
-    Returns:
-        List of (relationship_dict, QualityScores) tuples.
-
-    Raises:
-        WorldGenerationError: If no relationships could be generated.
+    Uses parallel generation with thread-safe deduplication. When creator !=
+    judge, a phased pipeline batches creates then judges to reduce GPU swaps.
     """
     from src.memory.conflict_types import normalize_relation_type
     from src.services.world_quality_service._batch_parallel import (
@@ -857,7 +854,7 @@ def generate_relationships_with_quality(
         except (ValueError, KeyError, LookupError) as e:
             logger.warning(
                 "Failed to resolve model preparers for phased pipeline: %s. "
-                "Falling back to sequential path.",
+                "Falling back to non-phased generation.",
                 e,
             )
 
@@ -889,23 +886,7 @@ def review_characters_batch(
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable | None = None,
 ) -> list[tuple[Character, CharacterQualityScores]]:
-    """Review multiple characters from the Architect with quality refinement.
-
-    Each character is judged and refined if below the quality threshold.
-
-    Args:
-        svc: WorldQualityService instance.
-        characters: List of Character objects to review.
-        story_state: Current story state.
-        cancel_check: Optional callable that returns True to cancel.
-        progress_callback: Optional callback to receive progress updates.
-
-    Returns:
-        List of (reviewed_character, quality_scores) tuples.
-
-    Raises:
-        WorldGenerationError: If no characters could be reviewed.
-    """
+    """Review Architect-generated characters with quality refinement."""
     return _review_batch(
         svc=svc,
         entities=characters,
@@ -933,23 +914,7 @@ def review_chapters_batch(
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable | None = None,
 ) -> list[tuple[Chapter, ChapterQualityScores]]:
-    """Review multiple chapters from the Architect with quality refinement.
-
-    Each chapter is judged and refined if below the quality threshold.
-
-    Args:
-        svc: WorldQualityService instance.
-        chapters: List of Chapter objects to review.
-        story_state: Current story state.
-        cancel_check: Optional callable that returns True to cancel.
-        progress_callback: Optional callback to receive progress updates.
-
-    Returns:
-        List of (reviewed_chapter, quality_scores) tuples.
-
-    Raises:
-        WorldGenerationError: If no chapters could be reviewed.
-    """
+    """Review Architect-generated chapters with quality refinement."""
     return _review_batch(
         svc=svc,
         entities=chapters,

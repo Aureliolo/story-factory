@@ -118,6 +118,8 @@ class TemporalValidationService:
     - Factions are founded before members join
     - Items are created within valid time periods
     - Era references match the calendar
+    - Lifespans are non-negative (death/destruction not before birth/founding)
+    - Missing temporal data is reported for visibility
     """
 
     def __init__(self, settings: Settings):
@@ -163,6 +165,13 @@ class TemporalValidationService:
         lifecycle = None
         if entity.attributes:
             lifecycle = extract_lifecycle_from_attributes(entity.attributes)
+
+        if lifecycle is None:
+            logger.info(
+                "Entity '%s' (%s) has no lifecycle data — temporal validation limited",
+                entity.name,
+                entity.type,
+            )
 
         # Build entity lookup for cross-reference
         entity_map = {e.id: e for e in all_entities}
@@ -736,30 +745,52 @@ class TemporalValidationService:
         result: TemporalValidationResult,
         max_lifespan: int = 200,
     ) -> None:
-        """Warn when an entity's computed lifespan exceeds a plausible maximum.
+        """Validate impossible and implausible lifespan durations.
+
+        Raises an ERROR for negative lifespans (death before birth) and a
+        WARNING when the lifespan exceeds *max_lifespan* years.
 
         Args:
             entity: The entity being validated.
             lifecycle: Extracted lifecycle data.
-            result: TemporalValidationResult to append warnings to.
-            max_lifespan: Maximum reasonable lifespan in years (default 200).
+            result: TemporalValidationResult to append issues to.
+            max_lifespan: Maximum reasonable lifespan before a warning is emitted.
         """
         lifespan = lifecycle.lifespan
-        if lifespan is not None and lifespan > max_lifespan:
-            warning = TemporalValidationIssue(
-                entity_id=entity.id,
-                entity_name=entity.name,
-                entity_type=entity.type,
-                error_type=TemporalErrorType.LIFESPAN_IMPLAUSIBLE,
-                severity=TemporalErrorSeverity.WARNING,
-                message=(
-                    f"{entity.type.capitalize()} '{entity.name}' has implausible "
-                    f"lifespan of {lifespan} years (max reasonable: {max_lifespan})"
-                ),
-                suggestion="Verify birth/death or founding/destruction years for plausibility",
-            )
-            result.warnings.append(warning)
-            logger.warning("Temporal warning: %s", warning.message)
+        if lifespan is not None:
+            if lifespan < 0:
+                # Death year before birth year — logically impossible
+                error = TemporalValidationIssue(
+                    entity_id=entity.id,
+                    entity_name=entity.name,
+                    entity_type=entity.type,
+                    error_type=TemporalErrorType.LIFESPAN_IMPLAUSIBLE,
+                    severity=TemporalErrorSeverity.ERROR,
+                    message=(
+                        f"{entity.type.capitalize()} '{entity.name}' has negative "
+                        f"lifespan of {lifespan} years (death before birth)"
+                    ),
+                    suggestion="Swap birth/death years or correct the data",
+                )
+                result.errors.append(error)
+                logger.error("Temporal error: %s", error.message)
+            elif lifespan > max_lifespan:
+                warning = TemporalValidationIssue(
+                    entity_id=entity.id,
+                    entity_name=entity.name,
+                    entity_type=entity.type,
+                    error_type=TemporalErrorType.LIFESPAN_IMPLAUSIBLE,
+                    severity=TemporalErrorSeverity.WARNING,
+                    message=(
+                        f"{entity.type.capitalize()} '{entity.name}' has implausible "
+                        f"lifespan of {lifespan} years (max reasonable: {max_lifespan})"
+                    ),
+                    suggestion=(
+                        "Verify birth/death or founding/destruction years for plausibility"
+                    ),
+                )
+                result.warnings.append(warning)
+                logger.warning("Temporal warning: %s", warning.message)
 
     def calculate_temporal_consistency_score(self, result: TemporalValidationResult) -> float:
         """Calculate a temporal consistency score (0-10) from validation result.

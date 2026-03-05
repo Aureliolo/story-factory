@@ -139,6 +139,41 @@ class TestAcceptedCyclesRoundTrip:
             world_db.remove_accepted_cycle("ghijklmnopqrstuv")
 
 
+class TestClearAcceptedCycles:
+    """Tests for clear_accepted_cycles."""
+
+    @pytest.fixture
+    def world_db(self, tmp_path):
+        """Create and yield a WorldDatabase, closing it after the test."""
+        db = WorldDatabase(tmp_path / "test_clear.db")
+        yield db
+        db.close()
+
+    def test_clear_removes_all_accepted_cycles(self, world_db):
+        """clear_accepted_cycles should remove all accepted cycles."""
+        hashes = ["aaaa000000000000", "bbbb000000000000", "cccc000000000000"]
+        for h in hashes:
+            world_db.accept_cycle(h)
+        assert len(world_db.get_accepted_cycles()) == 3
+
+        deleted = world_db.clear_accepted_cycles()
+        assert deleted == 3
+        assert world_db.get_accepted_cycles() == set()
+
+    def test_clear_on_empty_returns_zero(self, world_db):
+        """clear_accepted_cycles on empty table should return 0."""
+        deleted = world_db.clear_accepted_cycles()
+        assert deleted == 0
+        assert world_db.get_accepted_cycles() == set()
+
+    def test_clear_is_idempotent(self, world_db):
+        """Calling clear_accepted_cycles twice should not error."""
+        world_db.accept_cycle("abcdef0123456789")
+        world_db.clear_accepted_cycles()
+        deleted = world_db.clear_accepted_cycles()
+        assert deleted == 0
+
+
 class TestHealthMetricsFilterAcceptedCycles:
     """Tests for filtering accepted cycles from health metrics."""
 

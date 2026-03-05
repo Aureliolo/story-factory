@@ -74,7 +74,7 @@ def get_calendar_from_world_db(world_db: WorldDatabase) -> WorldCalendar | None:
 
 
 def clear_world_db(world_db: WorldDatabase) -> None:
-    """Clear all entities, relationships, and events from world database."""
+    """Clear all entities, relationships, events, and accepted cycles from world database."""
     # Delete events first (they reference entities via participants)
     world_db.clear_events()
 
@@ -89,3 +89,6 @@ def clear_world_db(world_db: WorldDatabase) -> None:
     logger.info(f"Deleting {len(entities)} existing entities...")
     for entity in entities:
         world_db.delete_entity(entity.id)
+
+    # Clear stale accepted cycles from previous builds
+    world_db.clear_accepted_cycles()

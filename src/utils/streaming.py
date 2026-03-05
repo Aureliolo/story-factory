@@ -40,6 +40,7 @@ class StreamTimeoutError(TimeoutError):
         elapsed_seconds: float = 0.0,
         timeout_type: Literal["inter_chunk", "wall_clock"] = "inter_chunk",
     ):
+        """Initialize with timeout details for diagnostic logging."""
         super().__init__(message)
         self.partial_content_length = partial_content_length
         self.elapsed_seconds = elapsed_seconds

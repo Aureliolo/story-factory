@@ -1,10 +1,14 @@
 """Tests for the world quality service formatting utilities."""
 
+import logging
+from typing import Any
+
 from src.services.world_quality_service._formatting import (
     calculate_eta,
     check_name_completeness,
     format_existing_names_warning,
     format_properties,
+    log_batch_summary,
 )
 
 
@@ -193,3 +197,83 @@ class TestCheckNameCompleteness:
     def test_whitespace_only_returns_true(self):
         """Whitespace-only name stripped to empty words returns True."""
         assert check_name_completeness("   ") is True
+
+
+# ---------------------------------------------------------------------------
+# M6: log_batch_summary with requested_count parameter
+# ---------------------------------------------------------------------------
+
+
+class _FakeScores:
+    """Minimal mock scores for log_batch_summary tests."""
+
+    def __init__(self, average: float) -> None:
+        """Create fake scores with the given average."""
+        self.average = average
+
+
+class TestLogBatchSummary:
+    """Tests for log_batch_summary including the requested_count parameter."""
+
+    def test_empty_results(self, caplog):
+        """Empty results logs 0 entities produced."""
+        with caplog.at_level(logging.INFO, logger="src.services.world_quality_service._formatting"):
+            log_batch_summary([], "character", 7.5, 10.0)
+        assert any("0 entities produced" in r.message for r in caplog.records)
+
+    def test_summary_without_requested_count(self, caplog):
+        """Summary without requested_count shows passed/total."""
+        results: list[tuple[Any, Any]] = [
+            ({"name": "A"}, _FakeScores(8.0)),
+            ({"name": "B"}, _FakeScores(6.0)),
+        ]
+        with caplog.at_level(logging.INFO, logger="src.services.world_quality_service._formatting"):
+            log_batch_summary(results, "character", 7.5, 5.0)
+        summary_msgs = [r.message for r in caplog.records if "Batch character" in r.message]
+        assert len(summary_msgs) == 1
+        assert "passed=1/2" in summary_msgs[0]
+        assert "requested=" not in summary_msgs[0]
+
+    def test_summary_with_requested_count_different_from_total(self, caplog):
+        """When requested_count differs from total, it is included in summary."""
+        results: list[tuple[Any, Any]] = [
+            ({"name": "A"}, _FakeScores(8.0)),
+        ]
+        with caplog.at_level(logging.INFO, logger="src.services.world_quality_service._formatting"):
+            log_batch_summary(results, "character", 7.5, 5.0, requested_count=3)
+        summary_msgs = [r.message for r in caplog.records if "Batch character" in r.message]
+        assert len(summary_msgs) == 1
+        assert "passed=1/1" in summary_msgs[0]
+        assert "requested=3" in summary_msgs[0]
+
+    def test_summary_with_requested_count_equal_to_total(self, caplog):
+        """When requested_count equals total, it is not redundantly shown."""
+        results: list[tuple[Any, Any]] = [
+            ({"name": "A"}, _FakeScores(8.0)),
+            ({"name": "B"}, _FakeScores(9.0)),
+        ]
+        with caplog.at_level(logging.INFO, logger="src.services.world_quality_service._formatting"):
+            log_batch_summary(results, "character", 7.5, 5.0, requested_count=2)
+        summary_msgs = [r.message for r in caplog.records if "Batch character" in r.message]
+        assert len(summary_msgs) == 1
+        assert "passed=2/2" in summary_msgs[0]
+        assert "requested=" not in summary_msgs[0]
+
+    def test_summary_with_get_name_callable(self, caplog):
+        """get_name callable is used for failed entity names."""
+        results: list[tuple[Any, Any]] = [
+            ({"label": "FailEntity"}, _FakeScores(5.0)),
+        ]
+        with caplog.at_level(
+            logging.WARNING, logger="src.services.world_quality_service._formatting"
+        ):
+            log_batch_summary(
+                results,
+                "character",
+                7.5,
+                5.0,
+                get_name=lambda e: e.get("label", "Unknown"),
+            )
+        summary_msgs = [r.message for r in caplog.records if "Batch character" in r.message]
+        assert len(summary_msgs) == 1
+        assert "FailEntity" in summary_msgs[0]

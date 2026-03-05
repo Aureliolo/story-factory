@@ -110,6 +110,16 @@ def generate_event_with_quality(
     if rejected_descriptions is None:
         rejected_descriptions = []
 
+    # Deduplicate existing descriptions at entry to prevent contamination
+    # from callers passing accumulated duplicates across batch iterations.
+    original_count = len(existing_descriptions)
+    existing_descriptions = list(dict.fromkeys(existing_descriptions))
+    if len(existing_descriptions) < original_count:
+        logger.warning(
+            "Removed %d duplicate existing descriptions",
+            original_count - len(existing_descriptions),
+        )
+
     # Combine existing + rejected for dedup checking and prompt injection
     all_known = existing_descriptions + rejected_descriptions
 
