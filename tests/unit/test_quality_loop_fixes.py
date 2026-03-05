@@ -672,6 +672,7 @@ class TestResolveModelPairVRAM:
         snapshot = MagicMock()
         snapshot.installed_models = {"creator-model:8b": 14.0, "judge-model:8b": 18.0}
         snapshot.available_vram_gb = 24.0
+        snapshot.loaded_model_vram_gb = 0.0
         mock_snapshot.return_value = snapshot
 
         svc = self._make_service()
@@ -947,13 +948,21 @@ class TestH7HailMarySkipOnIdenticalOutput:
     def test_hail_mary_not_skipped_for_score_plateau(self):
         """Hail-mary IS attempted when early stop was due to score plateau
         (not identical output)."""
-        low_scores = _make_character_scores(
-            depth=6.0,
-            goals=6.0,
-            flaws=6.0,
-            uniqueness=6.0,
-            arc_potential=6.0,
-        )
+        # Vary per-dimension scores each round to avoid triggering the
+        # identical-score early stop while keeping the average in plateau range.
+        judge_round = 0
+
+        def _plateau_judge(_e):
+            """Return alternating score distributions to trigger plateau without identical scores."""
+            nonlocal judge_round
+            judge_round += 1
+            if judge_round % 2 == 1:
+                return _make_character_scores(
+                    depth=6.0, goals=6.0, flaws=6.0, uniqueness=6.0, arc_potential=6.0
+                )
+            return _make_character_scores(
+                depth=6.2, goals=5.8, flaws=6.0, uniqueness=6.0, arc_potential=6.0
+            )
 
         create_call_count = 0
         refine_call = 0
@@ -986,7 +995,7 @@ class TestH7HailMarySkipOnIdenticalOutput:
         quality_refinement_loop(
             entity_type="character",
             create_fn=create_fn,
-            judge_fn=lambda _e: low_scores,
+            judge_fn=_plateau_judge,
             refine_fn=refine_fn,
             get_name=_get_name,
             serialize=_serialize,

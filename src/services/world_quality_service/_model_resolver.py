@@ -169,9 +169,13 @@ def resolve_model_pair(service: WorldQualityService, entity_type: str) -> tuple[
                 snapshot.available_vram_gb,
                 evictable_vram_gb=snapshot.loaded_model_vram_gb,
             ):
+                effective_vram = snapshot.available_vram_gb + max(
+                    snapshot.loaded_model_vram_gb, 0.0
+                )
                 logger.warning(
                     "Model pair does not fit for %s: creator=%s (%.1fGB) + "
-                    "judge=%s (%.1fGB), available=%.1fGB. "
+                    "judge=%s (%.1fGB), available=%.1fGB, "
+                    "evictable=%.1fGB, effective=%.1fGB. "
                     "Falling back to self-judging.",
                     entity_type,
                     creator,
@@ -179,6 +183,8 @@ def resolve_model_pair(service: WorldQualityService, entity_type: str) -> tuple[
                     judge,
                     judge_size,
                     snapshot.available_vram_gb,
+                    snapshot.loaded_model_vram_gb,
+                    effective_vram,
                 )
                 judge = creator
         except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:

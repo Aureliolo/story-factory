@@ -3739,6 +3739,10 @@ class TestPrepareModelCallbacks:
         assert "judge" in call_order
         # Hail-mary create is called (entity same as best → judge skipped)
         assert call_order.count("create") >= 2
+        assert call_order.count("prepare_creator") >= 2
+        # The final create (hail-mary) must be preceded by prepare_creator
+        hail_mary_create_idx = [i for i, op in enumerate(call_order) if op == "create"][-1]
+        assert call_order[hail_mary_create_idx - 1] == "prepare_creator"
 
     def test_prepare_judge_called_in_hail_mary_different_output(self, mock_svc, config):
         """prepare_judge is called during hail-mary when fresh entity differs from best."""
@@ -4005,6 +4009,8 @@ class TestReconstructEntityPydanticModel:
         config.early_stopping_patience = 5
 
         class SimpleEntity(BaseModel):
+            """Minimal Pydantic model for reconstruction tests."""
+
             name: str
 
         v1 = SimpleEntity(name="v1")
@@ -4046,6 +4052,8 @@ class TestReconstructEntityPydanticModel:
         config.early_stopping_patience = 5
 
         class SimpleEntity(BaseModel):
+            """Minimal Pydantic model for monotonicity revert tests."""
+
             name: str
 
         v1 = SimpleEntity(name="v1")

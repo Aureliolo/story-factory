@@ -118,6 +118,8 @@ class TemporalValidationService:
     - Factions are founded before members join
     - Items are created within valid time periods
     - Era references match the calendar
+    - Lifespans are non-negative (death/destruction not before birth/founding)
+    - Missing temporal data is reported for visibility
     """
 
     def __init__(self, settings: Settings):
@@ -170,6 +172,7 @@ class TemporalValidationService:
                 entity.name,
                 entity.type,
             )
+            return result
 
         # Build entity lookup for cross-reference
         entity_map = {e.id: e for e in all_entities}
@@ -743,13 +746,16 @@ class TemporalValidationService:
         result: TemporalValidationResult,
         max_lifespan: int = 200,
     ) -> None:
-        """Warn when an entity's computed lifespan exceeds a plausible maximum.
+        """Validate impossible and implausible lifespan durations.
+
+        Raises an ERROR for negative lifespans (death before birth) and a
+        WARNING when the lifespan exceeds *max_lifespan* years.
 
         Args:
             entity: The entity being validated.
             lifecycle: Extracted lifecycle data.
-            result: TemporalValidationResult to append warnings to.
-            max_lifespan: Maximum reasonable lifespan in years (default 200).
+            result: TemporalValidationResult to append issues to.
+            max_lifespan: Maximum reasonable lifespan before a warning is emitted.
         """
         lifespan = lifecycle.lifespan
         if lifespan is not None:

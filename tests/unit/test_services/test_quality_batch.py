@@ -502,7 +502,7 @@ class TestCharacterPhasedCallables:
 
         call_kwargs = mock_parallel.call_args[1]
         assert "create_only_fn" not in call_kwargs
-        assert any("Falling back to sequential" in msg for msg in caplog.messages)
+        assert any("Falling back to non-phased generation" in msg for msg in caplog.messages)
 
     def test_phased_create_only_reraises_on_error(self):
         """_create_only re-raises WorldGenerationError from _create_character."""

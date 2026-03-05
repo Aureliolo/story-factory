@@ -152,6 +152,7 @@ class TestConsumeStreamHttpcoreErrors:
         """Return an iterator that raises exc on the first iteration."""
 
         def _gen():
+            """Yield nothing; raise exc immediately to simulate stream failure."""
             raise exc
             yield  # type: ignore[unreachable]  # makes _gen a generator
 
@@ -213,6 +214,7 @@ class TestConsumeStreamHttpcoreErrors:
         import httpcore
 
         def _partial_stream():
+            """Yield partial content then raise to simulate mid-stream failure."""
             yield MockStreamChunk(content="partial ")
             raise httpcore.ReadError("dropped mid-stream")
 

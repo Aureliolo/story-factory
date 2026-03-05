@@ -608,7 +608,7 @@ def generate_characters_with_quality(
         except (ValueError, KeyError, LookupError) as e:
             logger.warning(
                 "Failed to resolve model preparers for character phased pipeline: %s. "
-                "Falling back to sequential path.",
+                "Falling back to non-phased generation.",
                 e,
             )
 
@@ -854,7 +854,7 @@ def generate_relationships_with_quality(
         except (ValueError, KeyError, LookupError) as e:
             logger.warning(
                 "Failed to resolve model preparers for phased pipeline: %s. "
-                "Falling back to sequential path.",
+                "Falling back to non-phased generation.",
                 e,
             )
 

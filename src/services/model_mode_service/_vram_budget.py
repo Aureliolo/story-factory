@@ -174,9 +174,8 @@ def get_vram_snapshot() -> VRAMSnapshot:
 
         from src.settings import Settings
 
-        instance = getattr(Settings, "_instance", None)
-        host = instance.ollama_url if instance else "http://localhost:11434"
-        client = _ollama.Client(host=host)
+        settings = Settings.load(use_cache=True)
+        client = _ollama.Client(host=settings.ollama_url)
         ps_response = client.ps()
         running_models: list[Any] = getattr(ps_response, "models", None) or []
         for model_info in running_models:
@@ -188,8 +187,15 @@ def get_vram_snapshot() -> VRAMSnapshot:
                 loaded_vram,
                 len(running_models or []),
             )
+    except (ConnectionError, TimeoutError, FileNotFoundError, OSError, ValueError) as e:
+        logger.warning("Could not query loaded models via ollama ps(): %s", e)
+        loaded_vram = 0.0
     except Exception as e:
-        logger.debug("Could not query loaded models via ollama ps(): %s", e)
+        logger.warning(
+            "Unexpected error querying loaded models via ollama ps(): %s: %s",
+            type(e).__name__,
+            e,
+        )
         loaded_vram = 0.0
 
     snapshot = VRAMSnapshot(
@@ -299,6 +305,8 @@ def plan_vram_budget(
     creator_size_gb: float,
     judge_size_gb: float,
     available_vram_gb: float,
+    *,
+    evictable_vram_gb: float = 0.0,
 ) -> VRAMBudget:
     """Plan VRAM allocation for a creator+judge model pair.
 
@@ -306,6 +314,8 @@ def plan_vram_budget(
         creator_size_gb: Creator model size in GB.
         judge_size_gb: Judge model size in GB.
         available_vram_gb: Available GPU VRAM in GB.
+        evictable_vram_gb: VRAM currently occupied by loaded models that can
+            be evicted (via ``keep_alive=0``).  Forwarded to ``pair_fits()``.
 
     Returns:
         VRAMBudget with allocation details and fit assessment.
@@ -322,7 +332,12 @@ def plan_vram_budget(
     else:
         residency_judge = 1.0
 
-    fits = pair_fits(creator_size_gb, judge_size_gb, available_vram_gb)
+    fits = pair_fits(
+        creator_size_gb,
+        judge_size_gb,
+        available_vram_gb,
+        evictable_vram_gb=evictable_vram_gb,
+    )
 
     budget = VRAMBudget(
         total_vram_gb=available_vram_gb,

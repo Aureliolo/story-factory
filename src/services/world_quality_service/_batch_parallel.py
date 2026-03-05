@@ -287,8 +287,6 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
             for future in done_iter:
                 task_idx, task_start = pending.pop(future)
                 completed_count += 1
-                entity_elapsed = time.time() - task_start
-
                 try:
                     entity, scores, iterations = future.result()
                     t_gen_end = time.time()
@@ -300,9 +298,10 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
                     t_post_end = time.time()
                     gen_time = t_gen_end - task_start
                     post_time = t_post_end - t_gen_end
+                    total_time = t_post_end - task_start
 
                     # Only count as success after get_name and on_success pass
-                    completed_times.append(entity_elapsed)
+                    completed_times.append(total_time)
                     results.append((entity, scores))
                     consecutive_failures = 0
 
@@ -314,7 +313,7 @@ def _generate_batch_parallel[T, S: BaseQualityScores](
                         entity_name,
                         iterations,
                         scores.average,
-                        entity_elapsed,
+                        total_time,
                         gen_time,
                         post_time,
                     )

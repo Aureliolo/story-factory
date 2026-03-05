@@ -33,6 +33,14 @@ def clear_warned_context_models():
     embedding_service_mod._warned_context_models.clear()
 
 
+@pytest.fixture(autouse=True)
+def clear_truncation_warned():
+    """Clear the module-level truncation warned set before each test."""
+    embedding_service_mod._truncation_warned.clear()
+    yield
+    embedding_service_mod._truncation_warned.clear()
+
+
 @pytest.fixture
 def embedding_settings():
     """Create a Settings instance with a fake embedding model."""
@@ -105,7 +113,6 @@ class TestEmbedEntityTruncation:
 
     def test_embed_entity_truncation_logs_info_detail(self, service, mock_db, caplog):
         """First truncation per entity should emit INFO log with model/context detail."""
-        embedding_service_mod._truncation_warned.clear()
         long_entity = Entity(
             id="ent-info-log",
             type="character",

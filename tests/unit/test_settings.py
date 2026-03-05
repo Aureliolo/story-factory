@@ -2903,8 +2903,8 @@ class TestWP1WP2SettingsValidation:
         settings = Settings()
         assert settings.world_quality_dimension_minimum == 6.0
 
-    def test_dimension_minimum_equal_to_threshold_is_valid(self):
-        """dimension_minimum == quality_threshold should pass validation."""
+    def test_dimension_minimum_equal_to_lowest_per_entity_threshold_is_valid(self):
+        """dimension_minimum equal to the lowest per-entity threshold should pass validation."""
         settings = Settings()
         settings.world_quality_dimension_minimum = 7.0
         settings.world_quality_threshold = 7.5

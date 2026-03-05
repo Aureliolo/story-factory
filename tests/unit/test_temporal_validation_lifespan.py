@@ -177,22 +177,17 @@ class TestMissingLifecycleLogging:
     def test_missing_lifecycle_no_error_or_warning_added(
         self, validation_service: TemporalValidationService
     ) -> None:
-        """Entity with no lifecycle data does not add INFO to result errors/warnings.
+        """Entity with no lifecycle data returns early — no errors or warnings in result.
 
         The INFO log is purely for observability — it should not pollute the
-        validation result.  (Individual type validators may still add their own
-        MISSING_TEMPORAL_DATA warnings.)
+        validation result.  With the early return on missing lifecycle, no
+        type-specific validators are reached.
         """
         entity = Entity(id="e1", name="Concept", type="concept", description="Abstract")
         result = validation_service.validate_entity(entity, None, [entity], [])
 
-        # The concept validator does not add any warnings for missing lifecycle
-        # (concepts just return early), so the INFO log should be the only trace.
-        # We verify that no ERROR was added by the INFO log itself.
-        for issue in result.errors:
-            assert issue.error_type != TemporalErrorType.MISSING_TEMPORAL_DATA or (
-                issue.severity != TemporalErrorSeverity.ERROR
-            )
+        assert result.error_count == 0
+        assert result.warning_count == 0
 
     def test_entity_with_lifecycle_no_info_log(
         self, validation_service: TemporalValidationService, caplog: pytest.LogCaptureFixture

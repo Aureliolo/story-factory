@@ -412,7 +412,13 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                                 creator_model,
                             )
                     except Exception:
-                        pass  # Non-critical diagnostic — don't disrupt the loop
+                        logger.debug(
+                            "%s '%s': failed to resolve creator/judge model for "
+                            "self-judging diagnostic; continuing",
+                            entity_type.capitalize(),
+                            get_name(entity),
+                            exc_info=True,
+                        )
                     early_stopped = True
                     break
 
