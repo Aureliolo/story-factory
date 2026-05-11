@@ -29,7 +29,7 @@ def _ensure_vis_network_loaded() -> None:
     """
     # vis-network version tracked in /package.json for Dependabot
     ui.add_body_html(
-        '<script src="https://unpkg.com/vis-network@10.0.2/standalone/umd/vis-network.min.js"></script>'
+        '<script src="https://unpkg.com/vis-network@10.0.3/standalone/umd/vis-network.min.js"></script>'
     )
 
 
