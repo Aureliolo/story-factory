@@ -9,13 +9,13 @@ Complete story context, serialized to JSON.
 
 ```python
 class StoryState(BaseModel):
-    id: str                              # UUID
+    id: str  # UUID
     created_at: datetime
     updated_at: datetime
     project_name: str
     project_description: str
     last_saved: datetime | None
-    world_db_path: str                   # SQLite file path
+    world_db_path: str  # SQLite file path
 
     interview_history: list[dict[str, str]]
     reviews: list[dict[str, Any]]
@@ -189,7 +189,7 @@ class EventParticipant(BaseModel):
 ### CalendarMonth
 ```python
 class CalendarMonth(BaseModel):
-    name: str           # e.g., "Frostfall"
+    name: str  # e.g., "Frostfall"
     days: int = 30
     description: str = ""
 ```
@@ -197,7 +197,7 @@ class CalendarMonth(BaseModel):
 ### HistoricalEra
 ```python
 class HistoricalEra(BaseModel):
-    name: str           # e.g., "Age of Dragons"
+    name: str  # e.g., "Age of Dragons"
     start_year: int
     end_year: int | None = None
     description: str = ""
@@ -288,11 +288,13 @@ class VramStrategy(str, Enum):
     PARALLEL = "parallel"
     ADAPTIVE = "adaptive"
 
+
 class LearningTrigger(str, Enum):
     OFF = "off"
     AFTER_PROJECT = "after_project"
     PERIODIC = "periodic"
     CONTINUOUS = "continuous"
+
 
 class AutonomyLevel(str, Enum):
     MANUAL = "manual"
@@ -301,11 +303,12 @@ class AutonomyLevel(str, Enum):
     AGGRESSIVE = "aggressive"
     EXPERIMENTAL = "experimental"
 
+
 class ModelSizeTier(str, Enum):
-    LARGE = "large"    # 20GB+
+    LARGE = "large"  # 20GB+
     MEDIUM = "medium"  # 8-20GB
-    SMALL = "small"    # 3-8GB
-    TINY = "tiny"      # <3GB
+    SMALL = "small"  # 3-8GB
+    TINY = "tiny"  # <3GB
 ```
 
 ### GenerationMode
@@ -330,11 +333,13 @@ class QualityScores(BaseModel):
     instruction_following: float | None
     consistency_score: float | None
 
+
 class PerformanceMetrics(BaseModel):
     tokens_generated: int | None
     time_seconds: float | None
     tokens_per_second: float | None
     vram_used_gb: float | None
+
 
 class GenerationScore(BaseModel):
     project_id: str
@@ -398,7 +403,7 @@ class TemporalValidationIssue(BaseModel):
     entity_name: str
     entity_type: str
     error_type: TemporalErrorType  # predates_dependency, invalid_era, anachronism,
-                                   # post_destruction, invalid_date, lifespan_overlap, founding_order
+    # post_destruction, invalid_date, lifespan_overlap, founding_order
     severity: TemporalErrorSeverity  # warning, error
     message: str
     related_entity_id: str | None

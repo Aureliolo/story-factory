@@ -64,7 +64,9 @@ Shared Instructor client for structured LLM outputs in services.
 
 ```python
 client = get_instructor_client(settings)
-result = generate_structured(settings, model, prompt, ResponseModel, system_prompt="...", temperature=0.1)
+result = generate_structured(
+    settings, model, prompt, ResponseModel, system_prompt="...", temperature=0.1
+)
 ```
 
 ## Service Packages

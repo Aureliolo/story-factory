@@ -12,13 +12,10 @@ When creating or modifying AI agents, follow these guidelines:
    ```python
    from agents.base import BaseAgent
 
+
    class MyAgent(BaseAgent):
        def __init__(self, settings: Settings):
-           super().__init__(
-               name="MyAgent",
-               role="agent_role",
-               settings=settings
-           )
+           super().__init__(name="MyAgent", role="agent_role", settings=settings)
    ```
 
 2. **Agent Responsibilities**: Each agent has a specific role
@@ -57,6 +54,7 @@ When creating or modifying AI agents, follow these guidelines:
 4. **Logging**: Log all significant operations
    ```python
    import logging
+
    logger = logging.getLogger(__name__)
 
    logger.debug(f"Generating content with prompt: {prompt[:100]}...")
@@ -126,6 +124,7 @@ When creating or modifying AI agents, follow these guidelines:
    ```python
    from unittest.mock import patch, MagicMock
 
+
    @pytest.fixture
    def mock_ollama(self):
        with patch("agents.base.ollama.Client") as mock_client:
@@ -157,6 +156,7 @@ WRITER_SYSTEM_PROMPT = """You are a creative writer specializing in storytelling
 Your task is to generate engaging prose content for stories.
 Follow the style and tone established in the story context."""
 
+
 class WriterAgent(BaseAgent):
     """Agent responsible for generating prose content."""
 
@@ -170,11 +170,7 @@ class WriterAgent(BaseAgent):
         )
 
     @handle_ollama_errors
-    def write_chapter(
-        self,
-        story_state: StoryState,
-        chapter_number: int
-    ) -> str:
+    def write_chapter(self, story_state: StoryState, chapter_number: int) -> str:
         """Generate a chapter based on story state."""
         logger.info(f"Writing chapter {chapter_number}")
 

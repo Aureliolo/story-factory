@@ -114,9 +114,7 @@ def _save_settings(self):
     # Record for undo
     self.state.record_action(
         UndoAction(
-            action_type=ActionType.UPDATE_SETTINGS,
-            data=new_snapshot,
-            inverse_data=old_snapshot
+            action_type=ActionType.UPDATE_SETTINGS, data=new_snapshot, inverse_data=old_snapshot
         )
     )
 ```

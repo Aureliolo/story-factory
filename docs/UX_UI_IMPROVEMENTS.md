@@ -56,7 +56,7 @@ empty_state(
     title="No projects yet",
     description="Create a new project to get started.",
     action_text="Create Project",
-    on_action=create_project_handler
+    on_action=create_project_handler,
 )
 ```
 
@@ -71,7 +71,7 @@ confirmation_dialog(
     message="Are you sure? This cannot be undone.",
     on_confirm=delete_handler,
     confirm_text="Delete",
-    cancel_text="Cancel"
+    cancel_text="Cancel",
 )
 ```
 

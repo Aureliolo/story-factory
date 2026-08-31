@@ -75,6 +75,7 @@ from nicegui import ui
 from ui.state import AppState
 from services import ServiceContainer
 
+
 class SettingsPage:
     """Settings page for configuring the application."""
 
@@ -84,32 +85,30 @@ class SettingsPage:
 
     def build(self):
         """Build the settings page UI."""
-        with ui.card().classes('w-full'):
-            ui.label('Settings').classes('text-2xl font-bold')
+        with ui.card().classes("w-full"):
+            ui.label("Settings").classes("text-2xl font-bold")
 
-            with ui.row().classes('w-full gap-4'):
+            with ui.row().classes("w-full gap-4"):
                 self._build_model_settings()
                 self._build_preferences()
 
     def _build_model_settings(self):
         """Build model configuration section."""
-        with ui.column().classes('flex-1'):
-            ui.label('Model Settings').classes('text-xl')
+        with ui.column().classes("flex-1"):
+            ui.label("Model Settings").classes("text-xl")
 
             models = self.services.model.list_installed()
-            ui.select(
-                models,
-                label='Default Model',
-                on_change=self._on_model_change
-            ).bind_value(self.app_state, 'selected_model')
+            ui.select(models, label="Default Model", on_change=self._on_model_change).bind_value(
+                self.app_state, "selected_model"
+            )
 
     async def _on_model_change(self, event):
         """Handle model selection change."""
         try:
             await self.services.model.validate_model(event.value)
-            ui.notify('Model updated successfully', type='positive')
+            ui.notify("Model updated successfully", type="positive")
         except Exception as e:
-            ui.notify(f'Error: {str(e)}', type='negative')
+            ui.notify(f"Error: {str(e)}", type="negative")
 ```
 
 ### Styling
