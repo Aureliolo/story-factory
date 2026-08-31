@@ -23,9 +23,10 @@ NiceGUI provides two testing approaches via pytest plugins:
 ```python
 from nicegui.testing import User
 
+
 async def test_page_loads(user: User):
-    await user.open('/settings')
-    await user.should_see('Ollama URL')
+    await user.open("/settings")
+    await user.should_see("Ollama URL")
     user.find(ui.button).click()
 ```
 
@@ -38,9 +39,10 @@ async def test_page_loads(user: User):
 ```python
 from nicegui.testing import Screen
 
+
 def test_graph_renders(screen: Screen):
-    screen.open('/world')
-    screen.should_contain('graph-container')
+    screen.open("/world")
+    screen.should_contain("graph-container")
 ```
 
 ## Proposed Test Structure
@@ -89,7 +91,8 @@ markers = [
 ```python
 import pytest
 
-pytest_plugins = ['nicegui.testing.user_plugin']
+pytest_plugins = ["nicegui.testing.user_plugin"]
+
 
 @pytest.fixture
 def test_services():
@@ -129,39 +132,41 @@ async def test_graph_component_builds(user: User, test_services):
     """Graph component builds without errors."""
     from ui.components.graph import GraphComponent
 
-    @ui.page('/test-graph')
+    @ui.page("/test-graph")
     def test_page():
         graph = GraphComponent(height=300)
         graph.build()
 
-    await user.open('/test-graph')
+    await user.open("/test-graph")
     # If we get here without exception, build succeeded
+
 
 async def test_graph_with_world_db(user: User, test_world_db):
     """Graph renders with world database."""
     from ui.components.graph import mini_graph
 
-    @ui.page('/test-mini-graph')
+    @ui.page("/test-mini-graph")
     def test_page():
         mini_graph(test_world_db, height=200)
 
-    await user.open('/test-mini-graph')
-    await user.should_see('graph-container')
+    await user.open("/test-mini-graph")
+    await user.should_see("graph-container")
 ```
 
 ```python
 # tests/component/test_pages/test_write_page.py
 async def test_write_page_loads(user: User, test_services):
     """Write page loads with project selected."""
-    await user.open('/')
-    await user.should_see('No Project Selected')
+    await user.open("/")
+    await user.should_see("No Project Selected")
+
 
 async def test_fundamentals_tab(user: User, test_services, test_project):
     """Fundamentals tab shows interview section."""
     # Setup project in state
-    await user.open('/')
-    await user.should_see('Interview')
-    await user.should_see('World Overview')
+    await user.open("/")
+    await user.should_see("Interview")
+    await user.should_see("World Overview")
 ```
 
 ### Phase 4: CI Integration
@@ -179,13 +184,11 @@ For features requiring actual browser (vis-network):
 # tests/e2e/test_graph_browser.py
 def test_vis_network_initializes(screen: Screen):
     """vis-network graph initializes in browser."""
-    screen.open('/world')
+    screen.open("/world")
     screen.wait(1)  # Wait for JS
 
     # Check vis-network is loaded
-    result = screen.selenium.execute_script(
-        "return typeof vis !== 'undefined'"
-    )
+    result = screen.selenium.execute_script("return typeof vis !== 'undefined'")
     assert result is True
 ```
 

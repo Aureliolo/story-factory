@@ -60,6 +60,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from services.story_service import StoryService
 
+
 class TestStoryService:
     """Tests for StoryService."""
 

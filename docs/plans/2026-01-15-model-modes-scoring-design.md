@@ -59,14 +59,14 @@ A flexible model orchestration system with three core capabilities:
 ```python
 @dataclass
 class GenerationMode:
-    id: str                          # Unique identifier
-    name: str                        # Display name
-    description: str                 # User-facing description
-    agent_models: dict[str, str]     # agent_role → model_id
+    id: str  # Unique identifier
+    name: str  # Display name
+    description: str  # User-facing description
+    agent_models: dict[str, str]  # agent_role → model_id
     agent_temperatures: dict[str, float]
-    vram_strategy: str               # "sequential", "parallel", "adaptive"
-    is_preset: bool                  # Built-in vs user-created
-    is_experimental: bool            # For learning mode (tries variations)
+    vram_strategy: str  # "sequential", "parallel", "adaptive"
+    is_preset: bool  # Built-in vs user-created
+    is_experimental: bool  # For learning mode (tries variations)
 ```
 
 ### VRAM Strategies
@@ -306,12 +306,12 @@ class ScoreCollector:
 class TuningRecommendation:
     id: str
     timestamp: datetime
-    recommendation_type: str    # "model_swap", "temp_adjust", "mode_change"
+    recommendation_type: str  # "model_swap", "temp_adjust", "mode_change"
     current_value: str
     suggested_value: str
-    reason: str                 # Human-readable explanation
-    confidence: float           # 0-1, based on sample size and variance
-    evidence: dict              # Supporting statistics
+    reason: str  # Human-readable explanation
+    confidence: float  # 0-1, based on sample size and variance
+    evidence: dict  # Supporting statistics
 
     # For model swaps
     affected_role: str | None
@@ -475,11 +475,8 @@ Respond in JSON:
 ```python
 # In StoryOrchestrator
 
-async def _post_chapter_hook(
-    self,
-    chapter: Chapter,
-    agent_outputs: dict[str, AgentOutput]
-):
+
+async def _post_chapter_hook(self, chapter: Chapter, agent_outputs: dict[str, AgentOutput]):
     """Called after each chapter completes the write-edit-continuity loop."""
 
     # 1. Collect performance metrics
@@ -491,9 +488,7 @@ async def _post_chapter_hook(
     )
 
     # 3. Derive consistency score from continuity issues
-    consistency_score = self._calculate_consistency_score(
-        agent_outputs.get("continuity")
-    )
+    consistency_score = self._calculate_consistency_score(agent_outputs.get("continuity"))
 
     # 4. Wait for quality scores
     quality_scores = await quality_task
@@ -505,7 +500,7 @@ async def _post_chapter_hook(
         mode=self.current_mode,
         metrics=metrics,
         quality_scores=quality_scores,
-        consistency_score=consistency_score
+        consistency_score=consistency_score,
     )
 
     # 6. Check if tuning should run
@@ -513,10 +508,8 @@ async def _post_chapter_hook(
         recommendations = await self.mode_service.get_recommendations()
         await self._handle_recommendations(recommendations)
 
-async def _handle_recommendations(
-    self,
-    recommendations: list[TuningRecommendation]
-):
+
+async def _handle_recommendations(self, recommendations: list[TuningRecommendation]):
     """Process tuning recommendations based on autonomy level."""
 
     autonomy = self.settings.learning_autonomy

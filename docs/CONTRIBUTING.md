@@ -259,6 +259,7 @@ logger.error("Error messages for failures")
        """Test successful story creation."""
        pass
 
+
    def test_create_story_with_invalid_input():
        """Test story creation with invalid input."""
        pass
@@ -267,6 +268,7 @@ logger.error("Error messages for failures")
 3. **Mock external dependencies**:
    ```python
    from unittest.mock import patch, MagicMock
+
 
    @patch("src.agents.base.ollama.Client")
    def test_agent_generation(mock_ollama):
@@ -278,9 +280,11 @@ logger.error("Error messages for failures")
    ```python
    import pytest
 
+
    @pytest.fixture
    def sample_story_state():
        return StoryState(title="Test Story")
+
 
    def test_something(sample_story_state):
        # Use the fixture
@@ -460,11 +464,7 @@ Show concrete examples:
 
 ```python
 # Good: Shows actual usage
-story_service.create_story(
-    title="My Story",
-    genre="Fantasy",
-    length="novel"
-)
+story_service.create_story(title="My Story", genre="Fantasy", length="novel")
 
 # Bad: Abstract description
 story_service.create_story(parameters)

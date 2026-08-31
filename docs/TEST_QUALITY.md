@@ -76,7 +76,9 @@ Tests for BaseAgent use a proper subclass pattern instead of `type: ignore`:
 ```python
 class MockedBaseAgent(BaseAgent):
     """BaseAgent subclass with MagicMock client for testing."""
+
     client: MagicMock  # Override type to MagicMock for testing
+
 
 def create_mock_agent(**overrides: Any) -> MockedBaseAgent:
     """Create a BaseAgent with mocked internals for testing."""

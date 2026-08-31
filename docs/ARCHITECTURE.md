@@ -322,6 +322,7 @@ story-factory/
 # ui/state.py
 class AppState:
     """Centralized UI state."""
+
     # Current project
     project_id: str | None = None
     project: StoryState | None = None
@@ -362,6 +363,7 @@ class ServiceContainer:
     - Easy dependency management
     - Consistent settings across services
     """
+
     def __init__(self, settings: Settings | None = None):
         self.settings = settings or Settings.load()
         self.embedding = EmbeddingService(self.settings)
@@ -375,7 +377,8 @@ class ServiceContainer:
         self.context_retrieval = ContextRetrievalService(self.settings, self.embedding)
         self.timeline = TimelineService(self.settings)
         self.story = StoryService(
-            self.settings, mode_service=self.mode,
+            self.settings,
+            mode_service=self.mode,
             context_retrieval=self.context_retrieval,
             timeline=self.timeline,
         )
@@ -389,6 +392,7 @@ class ServiceContainer:
         self.world_template = WorldTemplateService(self.settings)
         self.content_guidelines = ContentGuidelinesService(self.settings)
         self.calendar = CalendarService(self.settings)
+
 
 # main.py - Services created once and passed to UI
 settings = Settings.load()
@@ -457,6 +461,7 @@ Services use explicit error handling with custom exceptions:
 ```python
 # Ollama connection errors
 from src.utils.error_handling import handle_ollama_errors
+
 
 @handle_ollama_errors(default_return=None)
 def get_models() -> list[str]:
@@ -669,6 +674,7 @@ communities = world_db.get_communities()
 ```python
 from src.utils.error_handling import handle_ollama_errors, retry_with_fallback
 
+
 @handle_ollama_errors(default_return=None)
 @retry_with_fallback(max_retries=3)
 async def generate_content(prompt: str) -> str:
@@ -708,6 +714,7 @@ class AppState:
 **Implementation**:
 ```python
 from functools import lru_cache
+
 
 @lru_cache(maxsize=10)
 def get_orchestrator(project_id: str) -> StoryOrchestrator:
@@ -758,6 +765,7 @@ class BaseAgent:
         # Implemented by base class
         pass
 
+
 class WriterAgent(BaseAgent):
     def _before_generate(self):
         # Writer-specific setup
@@ -777,15 +785,9 @@ class WriterAgent(BaseAgent):
 ```python
 def write_all_chapters(self) -> Generator[WorkflowEvent, None, None]:
     for chapter_num in range(1, total_chapters + 1):
-        yield WorkflowEvent(
-            agent_name="Writer",
-            message=f"Writing chapter {chapter_num}..."
-        )
+        yield WorkflowEvent(agent_name="Writer", message=f"Writing chapter {chapter_num}...")
         chapter = self._write_chapter(chapter_num)
-        yield WorkflowEvent(
-            agent_name="Writer",
-            message=f"Chapter {chapter_num} complete"
-        )
+        yield WorkflowEvent(agent_name="Writer", message=f"Chapter {chapter_num} complete")
 ```
 
 ## Performance Considerations
